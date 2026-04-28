@@ -102,8 +102,12 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const cfg = dbFromEnv();
-  if (!cfg) return json({ error: "env missing" }, 500);
+  const cfg = dbFromEnv({ requireServiceRole: true });
+  if (!cfg)
+    return json(
+      { error: "SUPABASE_SERVICE_ROLE_KEY required (RLS bypass for patient PII)" },
+      500
+    );
 
   const provider = Deno.env.get("SMS_PROVIDER") ?? "mock";
 

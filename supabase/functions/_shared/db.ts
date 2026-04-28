@@ -8,11 +8,16 @@ export interface DbConfig {
   key: string; // service_role for server-side writes
 }
 
-export function dbFromEnv(): DbConfig | null {
+export function dbFromEnv(
+  options: { requireServiceRole?: boolean } = {}
+): DbConfig | null {
   const url = Deno.env.get("SUPABASE_URL");
-  const key =
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
-    Deno.env.get("SUPABASE_ANON_KEY");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (options.requireServiceRole) {
+    if (!url || !serviceKey) return null;
+    return { url, key: serviceKey };
+  }
+  const key = serviceKey ?? Deno.env.get("SUPABASE_ANON_KEY");
   if (!url || !key) return null;
   return { url, key };
 }
