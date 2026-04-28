@@ -14,16 +14,26 @@
 //   • Marks any logs that have passed their scheduled time without being
 //     taken as 'missed'.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { corsHeaders } from "../_shared/cors.ts";
+import { dbFromEnv, dbInsert, dbSelect, dbUpdate } from "../_shared/db.ts";
 
 interface ScheduledLog {
   id: string;
   patient_id: string;
   schedule_id: string;
   scheduled_at: string;
-  patient: { phone: string | null; full_name: string | null } | null;
-  schedule: { medication: string; dose: string } | null;
+}
+
+interface PatientRow {
+  id: string;
+  phone: string | null;
+  full_name: string | null;
+}
+
+interface ScheduleRow {
+  id: string;
+  medication: string;
+  dose: string;
 }
 
 const REMINDER_BODY = (
@@ -92,58 +102,99 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const supaUrl = Deno.env.get("SUPABASE_URL");
-  const supaKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supaUrl || !supaKey) return json({ error: "env missing" }, 500);
+  const cfg = dbFromEnv({ requireServiceRole: true });
+  if (!cfg)
+    return json(
+      { error: "SUPABASE_SERVICE_ROLE_KEY required (RLS bypass for patient PII)" },
+      500
+    );
 
   const provider = Deno.env.get("SMS_PROVIDER") ?? "mock";
-  const supabase = createClient(supaUrl, supaKey);
 
   const now = new Date();
   const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
 
-  const { data: due, error } = await supabase
-    .from("adherence_logs")
-    .select(
-      "id, patient_id, schedule_id, scheduled_at, patient:profiles!adherence_logs_patient_id_fkey(phone, full_name), schedule:adherence_schedules!adherence_logs_schedule_id_fkey(medication, dose)"
-    )
-    .eq("status", "scheduled")
-    .gte("scheduled_at", now.toISOString())
-    .lte("scheduled_at", inOneHour.toISOString())
-    .limit(500);
+  let due: ScheduledLog[];
+  try {
+    due = await dbSelect<ScheduledLog>(
+      cfg,
+      "adherence_logs",
+      `select=id,patient_id,schedule_id,scheduled_at&status=eq.scheduled&scheduled_at=gte.${now.toISOString()}&scheduled_at=lte.${inOneHour.toISOString()}&limit=500`
+    );
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
 
-  if (error) return json({ error: error.message }, 500);
+  // Hydrate patient + schedule rows in one batch each (no joins via REST).
+  const patientIds = [...new Set(due.map((d) => d.patient_id))];
+  const scheduleIds = [...new Set(due.map((d) => d.schedule_id))];
+  let patients: PatientRow[];
+  let schedules: ScheduleRow[];
+  try {
+    patients =
+      patientIds.length === 0
+        ? []
+        : await dbSelect<PatientRow>(
+            cfg,
+            "profiles",
+            `select=id,phone,full_name&id=in.(${patientIds.join(",")})`
+          );
+    schedules =
+      scheduleIds.length === 0
+        ? []
+        : await dbSelect<ScheduleRow>(
+            cfg,
+            "adherence_schedules",
+            `select=id,medication,dose&id=in.(${scheduleIds.join(",")})`
+          );
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+  const patientById = new Map(patients.map((p) => [p.id, p]));
+  const scheduleById = new Map(schedules.map((s) => [s.id, s]));
 
   let sent = 0;
-  for (const row of (due ?? []) as unknown as ScheduledLog[]) {
-    if (!row.patient?.phone || !row.schedule) continue;
-    const body = REMINDER_BODY(
-      row.schedule.medication,
-      row.schedule.dose,
-      row.patient.full_name
-    );
-    const result = await sendSms(provider, row.patient.phone, body);
-    await supabase.from("sms_outbox").insert({
-      to_phone: row.patient.phone,
-      body,
-      status: provider === "mock" ? "mocked" : result.ok ? "sent" : "failed",
-      provider,
-      provider_response: result.payload as object,
-      patient_id: row.patient_id,
-      schedule_id: row.schedule_id,
-      sent_at: new Date().toISOString(),
-    });
+  for (const row of due) {
+    const patient = patientById.get(row.patient_id);
+    const schedule = scheduleById.get(row.schedule_id);
+    if (!patient?.phone || !schedule) continue;
+    const body = REMINDER_BODY(schedule.medication, schedule.dose, patient.full_name);
+    const result = await sendSms(provider, patient.phone, body);
+    try {
+      await dbInsert(
+        cfg,
+        "sms_outbox",
+        {
+          to_phone: patient.phone,
+          body,
+          status: provider === "mock" ? "mocked" : result.ok ? "sent" : "failed",
+          provider,
+          provider_response: result.payload as object,
+          patient_id: row.patient_id,
+          schedule_id: row.schedule_id,
+          sent_at: new Date().toISOString(),
+        },
+        { returning: false }
+      );
+    } catch (err) {
+      // Audit-trail write failed; don't break the send loop for remaining patients.
+      console.error("sms_outbox insert failed:", err);
+    }
     sent += 1;
   }
 
   // Mark anything overdue as missed.
   const cutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000); // 6 h grace
-  const { error: missErr } = await supabase
-    .from("adherence_logs")
-    .update({ status: "missed" })
-    .eq("status", "scheduled")
-    .lte("scheduled_at", cutoff.toISOString());
-  if (missErr) return json({ error: missErr.message, sent }, 500);
+  try {
+    await dbUpdate(
+      cfg,
+      "adherence_logs",
+      `status=eq.scheduled&scheduled_at=lte.${cutoff.toISOString()}`,
+      { status: "missed" }
+    );
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : String(err), sent }, 500);
+  }
 
   return json({ provider, sent });
 });

@@ -12,8 +12,8 @@
 //
 // All assistant replies are persisted to the chatbot_messages table.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { corsHeaders } from "../_shared/cors.ts";
+import { dbFromEnv, dbInsert } from "../_shared/db.ts";
 import { detectLocale, type Locale } from "../_shared/i18n.ts";
 
 interface Body {
@@ -82,19 +82,24 @@ Deno.serve(async (req) => {
     }
 
     // Persist the assistant message (best effort).
-    const supaUrl = Deno.env.get("SUPABASE_URL");
-    const supaKey =
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
-      Deno.env.get("SUPABASE_ANON_KEY");
-    if (supaUrl && supaKey) {
-      const supabase = createClient(supaUrl, supaKey);
-      await supabase.from("chatbot_messages").insert({
-        session_id: body.session_id,
-        user_id: body.user_id ?? null,
-        role: "assistant",
-        content: reply,
-        language,
-      });
+    const cfg = dbFromEnv();
+    if (cfg) {
+      try {
+        await dbInsert(
+          cfg,
+          "chatbot_messages",
+          {
+            session_id: body.session_id,
+            user_id: body.user_id ?? null,
+            role: "assistant",
+            content: reply,
+            language,
+          },
+          { returning: false }
+        );
+      } catch (err) {
+        console.error("chatbot persist failed:", err);
+      }
     }
 
     return json({ reply, language });
