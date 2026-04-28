@@ -124,22 +124,28 @@ Deno.serve(async (req) => {
   // Hydrate patient + schedule rows in one batch each (no joins via REST).
   const patientIds = [...new Set(due.map((d) => d.patient_id))];
   const scheduleIds = [...new Set(due.map((d) => d.schedule_id))];
-  const patients =
-    patientIds.length === 0
-      ? []
-      : await dbSelect<PatientRow>(
-          cfg,
-          "profiles",
-          `select=id,phone,full_name&id=in.(${patientIds.join(",")})`
-        );
-  const schedules =
-    scheduleIds.length === 0
-      ? []
-      : await dbSelect<ScheduleRow>(
-          cfg,
-          "adherence_schedules",
-          `select=id,medication,dose&id=in.(${scheduleIds.join(",")})`
-        );
+  let patients: PatientRow[];
+  let schedules: ScheduleRow[];
+  try {
+    patients =
+      patientIds.length === 0
+        ? []
+        : await dbSelect<PatientRow>(
+            cfg,
+            "profiles",
+            `select=id,phone,full_name&id=in.(${patientIds.join(",")})`
+          );
+    schedules =
+      scheduleIds.length === 0
+        ? []
+        : await dbSelect<ScheduleRow>(
+            cfg,
+            "adherence_schedules",
+            `select=id,medication,dose&id=in.(${scheduleIds.join(",")})`
+          );
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
   const patientById = new Map(patients.map((p) => [p.id, p]));
   const scheduleById = new Map(schedules.map((s) => [s.id, s]));
 
@@ -150,21 +156,26 @@ Deno.serve(async (req) => {
     if (!patient?.phone || !schedule) continue;
     const body = REMINDER_BODY(schedule.medication, schedule.dose, patient.full_name);
     const result = await sendSms(provider, patient.phone, body);
-    await dbInsert(
-      cfg,
-      "sms_outbox",
-      {
-        to_phone: patient.phone,
-        body,
-        status: provider === "mock" ? "mocked" : result.ok ? "sent" : "failed",
-        provider,
-        provider_response: result.payload as object,
-        patient_id: row.patient_id,
-        schedule_id: row.schedule_id,
-        sent_at: new Date().toISOString(),
-      },
-      { returning: false }
-    );
+    try {
+      await dbInsert(
+        cfg,
+        "sms_outbox",
+        {
+          to_phone: patient.phone,
+          body,
+          status: provider === "mock" ? "mocked" : result.ok ? "sent" : "failed",
+          provider,
+          provider_response: result.payload as object,
+          patient_id: row.patient_id,
+          schedule_id: row.schedule_id,
+          sent_at: new Date().toISOString(),
+        },
+        { returning: false }
+      );
+    } catch (err) {
+      // Audit-trail write failed; don't break the send loop for remaining patients.
+      console.error("sms_outbox insert failed:", err);
+    }
     sent += 1;
   }
 

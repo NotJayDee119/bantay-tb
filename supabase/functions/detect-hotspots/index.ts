@@ -176,16 +176,21 @@ Deno.serve(async (req) => {
       .filter((h) => h.severity === "high")
       .map((h) => h.id);
     if (highIds.length > 0) {
-      const coordinators = await dbSelect<{ id: string }>(
-        cfg,
-        "profiles",
-        "select=id&role=eq.tb_coordinator"
-      );
-      const alerts = coordinators.flatMap((c) =>
-        highIds.map((hid) => ({ hotspot_id: hid, recipient_id: c.id }))
-      );
-      if (alerts.length > 0) {
-        await dbInsert(cfg, "hotspot_alerts", alerts, { returning: false });
+      try {
+        const coordinators = await dbSelect<{ id: string }>(
+          cfg,
+          "profiles",
+          "select=id&role=eq.tb_coordinator"
+        );
+        const alerts = coordinators.flatMap((c) =>
+          highIds.map((hid) => ({ hotspot_id: hid, recipient_id: c.id }))
+        );
+        if (alerts.length > 0) {
+          await dbInsert(cfg, "hotspot_alerts", alerts, { returning: false });
+        }
+      } catch (err) {
+        // Best-effort fan-out; hotspots already inserted, don't fail the request.
+        console.error("hotspot alert notification failed:", err);
       }
     }
   }
