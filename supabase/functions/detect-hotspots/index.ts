@@ -6,8 +6,8 @@
 //
 // Defaults: 90-day window, eps=1.2 km, minPts=8.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { corsHeaders } from "../_shared/cors.ts";
+import { dbFromEnv, dbInsert, dbSelect } from "../_shared/db.ts";
 
 interface Body {
   trigger?: string;
@@ -94,14 +94,10 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const supaUrl = Deno.env.get("SUPABASE_URL");
-  const supaKey =
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
-    Deno.env.get("SUPABASE_ANON_KEY");
-  if (!supaUrl || !supaKey) {
+  const cfg = dbFromEnv();
+  if (!cfg) {
     return json({ error: "Supabase env not configured" }, 500);
   }
-  const supabase = createClient(supaUrl, supaKey);
 
   let body: Body = {};
   try {
@@ -116,14 +112,18 @@ Deno.serve(async (req) => {
   const since = new Date();
   since.setDate(since.getDate() - windowDays);
 
-  const { data: cases, error } = await supabase
-    .from("cases")
-    .select("id, barangay_psgc, jitter_lat, jitter_lon")
-    .gte("reported_at", since.toISOString())
-    .limit(20000);
-  if (error) return json({ error: error.message }, 500);
+  let cases: CaseRow[];
+  try {
+    cases = await dbSelect<CaseRow>(
+      cfg,
+      "cases",
+      `select=id,barangay_psgc,jitter_lat,jitter_lon&reported_at=gte.${since.toISOString()}&limit=20000`
+    );
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
 
-  const points: DbPoint[] = (cases ?? []).map((c: CaseRow) => ({
+  const points: DbPoint[] = cases.map((c: CaseRow) => ({
     id: c.id,
     barangay_psgc: c.barangay_psgc,
     lat: c.jitter_lat,
@@ -160,27 +160,32 @@ Deno.serve(async (req) => {
   });
 
   if (inserts.length > 0) {
-    const { data: inserted, error: ie } = await supabase
-      .from("hotspots")
-      .insert(inserts)
-      .select("id, severity");
-    if (ie) return json({ error: ie.message }, 500);
+    let inserted: { id: string; severity: string }[];
+    try {
+      inserted = await dbInsert<{ id: string; severity: string }>(
+        cfg,
+        "hotspots",
+        inserts as unknown as { id: string; severity: string }[]
+      );
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
 
     // Notify TB Coordinators about HIGH severity clusters.
-    const highIds = (inserted ?? [])
-      .filter((h: { severity: string }) => h.severity === "high")
-      .map((h: { id: string }) => h.id);
+    const highIds = inserted
+      .filter((h) => h.severity === "high")
+      .map((h) => h.id);
     if (highIds.length > 0) {
-      const { data: coordinators } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("role", "tb_coordinator");
-      const alerts = (coordinators ?? []).flatMap(
-        (c: { id: string }) =>
-          highIds.map((hid: string) => ({ hotspot_id: hid, recipient_id: c.id }))
+      const coordinators = await dbSelect<{ id: string }>(
+        cfg,
+        "profiles",
+        "select=id&role=eq.tb_coordinator"
+      );
+      const alerts = coordinators.flatMap((c) =>
+        highIds.map((hid) => ({ hotspot_id: hid, recipient_id: c.id }))
       );
       if (alerts.length > 0) {
-        await supabase.from("hotspot_alerts").insert(alerts);
+        await dbInsert(cfg, "hotspot_alerts", alerts, { returning: false });
       }
     }
   }
