@@ -1,0 +1,1276 @@
+[
+  {
+    "psgc": 112402001,
+    "name": "Acacia",
+    "area_km2": 12.27,
+    "lon": 125.600739,
+    "lat": 7.195498
+  },
+  {
+    "psgc": 112402002,
+    "name": "Agdao",
+    "area_km2": 0.37,
+    "lon": 125.623949,
+    "lat": 7.084452
+  },
+  {
+    "psgc": 112402003,
+    "name": "Alambre",
+    "area_km2": 2.94,
+    "lon": 125.468472,
+    "lat": 7.059796
+  },
+  {
+    "psgc": 112402056,
+    "name": "Alejandra Navarro (Lasang)",
+    "area_km2": 6.45,
+    "lon": 125.658452,
+    "lat": 7.26436
+  },
+  {
+    "psgc": 112402197,
+    "name": "Alfonso Angliongto Sr.",
+    "area_km2": 2.49,
+    "lon": 125.632501,
+    "lat": 7.108931
+  },
+  {
+    "psgc": 112402174,
+    "name": "Angalan",
+    "area_km2": 4.85,
+    "lon": 125.460333,
+    "lat": 7.118134
+  },
+  {
+    "psgc": 112402004,
+    "name": "Atan-Awe",
+    "area_km2": 2.87,
+    "lon": 125.402617,
+    "lat": 6.978899
+  },
+  {
+    "psgc": 112402175,
+    "name": "Baganihan",
+    "area_km2": 19.16,
+    "lon": 125.244893,
+    "lat": 7.450543
+  },
+  {
+    "psgc": 112402176,
+    "name": "Bago Aplaya",
+    "area_km2": 2.6,
+    "lon": 125.532133,
+    "lat": 7.04143
+  },
+  {
+    "psgc": 112402005,
+    "name": "Bago Gallera",
+    "area_km2": 6.27,
+    "lon": 125.520671,
+    "lat": 7.052409
+  },
+  {
+    "psgc": 112402006,
+    "name": "Bago Oshiro",
+    "area_km2": 8.73,
+    "lon": 125.500759,
+    "lat": 7.067622
+  },
+  {
+    "psgc": 112402007,
+    "name": "Baguio (Pob.)",
+    "area_km2": 8.65,
+    "lon": 125.398452,
+    "lat": 7.173647
+  },
+  {
+    "psgc": 112402009,
+    "name": "Balengaeng",
+    "area_km2": 3.93,
+    "lon": 125.459581,
+    "lat": 7.1339
+  },
+  {
+    "psgc": 112402010,
+    "name": "Baliok",
+    "area_km2": 2.56,
+    "lon": 125.500264,
+    "lat": 7.045287
+  },
+  {
+    "psgc": 112402012,
+    "name": "Bangkas Heights",
+    "area_km2": 2.12,
+    "lon": 125.487511,
+    "lat": 7.0535
+  },
+  {
+    "psgc": 112402177,
+    "name": "Bantol",
+    "area_km2": 19.78,
+    "lon": 125.358513,
+    "lat": 7.296942
+  },
+  {
+    "psgc": 112402013,
+    "name": "Baracatan",
+    "area_km2": 10.71,
+    "lon": 125.423184,
+    "lat": 6.978849
+  },
+  {
+    "psgc": 112402134,
+    "name": "Barangay 1-A (Pob.)",
+    "area_km2": 0.13,
+    "lon": 125.606321,
+    "lat": 7.06168
+  },
+  {
+    "psgc": 112402143,
+    "name": "Barangay 10-A (Pob.)",
+    "area_km2": 0.91,
+    "lon": 125.603143,
+    "lat": 7.08195
+  },
+  {
+    "psgc": 112402144,
+    "name": "Barangay 11-B (Pob.)",
+    "area_km2": 0.16,
+    "lon": 125.610947,
+    "lat": 7.077382
+  },
+  {
+    "psgc": 112402145,
+    "name": "Barangay 12-B (Pob.)",
+    "area_km2": 0.13,
+    "lon": 125.611729,
+    "lat": 7.079969
+  },
+  {
+    "psgc": 112402146,
+    "name": "Barangay 13-B (Pob.)",
+    "area_km2": 0.19,
+    "lon": 125.61418,
+    "lat": 7.079685
+  },
+  {
+    "psgc": 112402147,
+    "name": "Barangay 14-B (Pob.)",
+    "area_km2": 0.12,
+    "lon": 125.616824,
+    "lat": 7.078645
+  },
+  {
+    "psgc": 112402148,
+    "name": "Barangay 15-B (Pob.)",
+    "area_km2": 0.32,
+    "lon": 125.619059,
+    "lat": 7.080925
+  },
+  {
+    "psgc": 112402149,
+    "name": "Barangay 16-B (Pob.)",
+    "area_km2": 0.05,
+    "lon": 125.616993,
+    "lat": 7.083425
+  },
+  {
+    "psgc": 112402150,
+    "name": "Barangay 17-B (Pob.)",
+    "area_km2": 0.06,
+    "lon": 125.61639,
+    "lat": 7.084161
+  },
+  {
+    "psgc": 112402151,
+    "name": "Barangay 18-B (Pob.)",
+    "area_km2": 0.21,
+    "lon": 125.614743,
+    "lat": 7.085346
+  },
+  {
+    "psgc": 112402152,
+    "name": "Barangay 19-B (Pob.)",
+    "area_km2": 2.26,
+    "lon": 125.605101,
+    "lat": 7.093432
+  },
+  {
+    "psgc": 112402135,
+    "name": "Barangay 2-A (Pob.)",
+    "area_km2": 0.24,
+    "lon": 125.605023,
+    "lat": 7.065841
+  },
+  {
+    "psgc": 112402153,
+    "name": "Barangay 20-B (Pob.)",
+    "area_km2": 0.44,
+    "lon": 125.613335,
+    "lat": 7.090101
+  },
+  {
+    "psgc": 112402154,
+    "name": "Barangay 21-C (Pob.)",
+    "area_km2": 0.08,
+    "lon": 125.619855,
+    "lat": 7.067148
+  },
+  {
+    "psgc": 112402155,
+    "name": "Barangay 22-C (Pob.)",
+    "area_km2": 0.11,
+    "lon": 125.621517,
+    "lat": 7.069061
+  },
+  {
+    "psgc": 112402156,
+    "name": "Barangay 23-C (Pob.)",
+    "area_km2": 0.18,
+    "lon": 125.624075,
+    "lat": 7.071746
+  },
+  {
+    "psgc": 112402157,
+    "name": "Barangay 24-C (Pob.)",
+    "area_km2": 0.1,
+    "lon": 125.617517,
+    "lat": 7.069622
+  },
+  {
+    "psgc": 112402158,
+    "name": "Barangay 25-C (Pob.)",
+    "area_km2": 0.03,
+    "lon": 125.619648,
+    "lat": 7.070201
+  },
+  {
+    "psgc": 112402159,
+    "name": "Barangay 26-C (Pob.)",
+    "area_km2": 0.08,
+    "lon": 125.622254,
+    "lat": 7.073152
+  },
+  {
+    "psgc": 112402160,
+    "name": "Barangay 27-C (Pob.)",
+    "area_km2": 0.29,
+    "lon": 125.622641,
+    "lat": 7.07564
+  },
+  {
+    "psgc": 112402161,
+    "name": "Barangay 28-C (Pob.)",
+    "area_km2": 0.15,
+    "lon": 125.618831,
+    "lat": 7.0725
+  },
+  {
+    "psgc": 112402162,
+    "name": "Barangay 29-C (Pob.)",
+    "area_km2": 0.1,
+    "lon": 125.615265,
+    "lat": 7.072454
+  },
+  {
+    "psgc": 112402136,
+    "name": "Barangay 3-A (Pob.)",
+    "area_km2": 0.22,
+    "lon": 125.607096,
+    "lat": 7.067948
+  },
+  {
+    "psgc": 112402163,
+    "name": "Barangay 30-C (Pob.)",
+    "area_km2": 0.2,
+    "lon": 125.615763,
+    "lat": 7.075225
+  },
+  {
+    "psgc": 112402164,
+    "name": "Barangay 31-D (Pob.)",
+    "area_km2": 0.12,
+    "lon": 125.617838,
+    "lat": 7.06554
+  },
+  {
+    "psgc": 112402165,
+    "name": "Barangay 32-D (Pob.)",
+    "area_km2": 0.16,
+    "lon": 125.614244,
+    "lat": 7.0708
+  },
+  {
+    "psgc": 112402166,
+    "name": "Barangay 33-D (Pob.)",
+    "area_km2": 0.1,
+    "lon": 125.61452,
+    "lat": 7.067624
+  },
+  {
+    "psgc": 112402167,
+    "name": "Barangay 34-D (Pob.)",
+    "area_km2": 0.2,
+    "lon": 125.611666,
+    "lat": 7.069894
+  },
+  {
+    "psgc": 112402168,
+    "name": "Barangay 35-D (Pob.)",
+    "area_km2": 0.07,
+    "lon": 125.611309,
+    "lat": 7.066464
+  },
+  {
+    "psgc": 112402169,
+    "name": "Barangay 36-D (Pob.)",
+    "area_km2": 0.07,
+    "lon": 125.613723,
+    "lat": 7.065484
+  },
+  {
+    "psgc": 112402170,
+    "name": "Barangay 37-D (Pob.)",
+    "area_km2": 0.13,
+    "lon": 125.614132,
+    "lat": 7.063459
+  },
+  {
+    "psgc": 112402171,
+    "name": "Barangay 38-D (Pob.)",
+    "area_km2": 0.11,
+    "lon": 125.610561,
+    "lat": 7.064379
+  },
+  {
+    "psgc": 112402172,
+    "name": "Barangay 39-D (Pob.)",
+    "area_km2": 0.16,
+    "lon": 125.610056,
+    "lat": 7.061564
+  },
+  {
+    "psgc": 112402137,
+    "name": "Barangay 4-A (Pob.)",
+    "area_km2": 0.2,
+    "lon": 125.608971,
+    "lat": 7.071498
+  },
+  {
+    "psgc": 112402173,
+    "name": "Barangay 40-D (Pob.)",
+    "area_km2": 0.11,
+    "lon": 125.607777,
+    "lat": 7.05951
+  },
+  {
+    "psgc": 112402138,
+    "name": "Barangay 5-A (Pob.)",
+    "area_km2": 0.26,
+    "lon": 125.59968,
+    "lat": 7.069133
+  },
+  {
+    "psgc": 112402139,
+    "name": "Barangay 6-A (Pob.)",
+    "area_km2": 0.11,
+    "lon": 125.602417,
+    "lat": 7.070545
+  },
+  {
+    "psgc": 112402140,
+    "name": "Barangay 7-A (Pob.)",
+    "area_km2": 0.21,
+    "lon": 125.60394,
+    "lat": 7.072681
+  },
+  {
+    "psgc": 112402141,
+    "name": "Barangay 8-A (Pob.)",
+    "area_km2": 0.54,
+    "lon": 125.597914,
+    "lat": 7.074774
+  },
+  {
+    "psgc": 112402142,
+    "name": "Barangay 9-A (Pob.)",
+    "area_km2": 0.81,
+    "lon": 125.600809,
+    "lat": 7.078612
+  },
+  {
+    "psgc": 112402014,
+    "name": "Bato",
+    "area_km2": 9.94,
+    "lon": 125.471594,
+    "lat": 7.035467
+  },
+  {
+    "psgc": 112402015,
+    "name": "Bayabas",
+    "area_km2": 12.9,
+    "lon": 125.438849,
+    "lat": 7.028068
+  },
+  {
+    "psgc": 112402016,
+    "name": "Biao Escuela",
+    "area_km2": 12.15,
+    "lon": 125.520978,
+    "lat": 7.161999
+  },
+  {
+    "psgc": 112402017,
+    "name": "Biao Guianga",
+    "area_km2": 6.08,
+    "lon": 125.498889,
+    "lat": 7.153267
+  },
+  {
+    "psgc": 112402018,
+    "name": "Biao Joaquin",
+    "area_km2": 4.99,
+    "lon": 125.495395,
+    "lat": 7.183386
+  },
+  {
+    "psgc": 112402019,
+    "name": "Binugao",
+    "area_km2": 6.1,
+    "lon": 125.472842,
+    "lat": 6.976931
+  },
+  {
+    "psgc": 112402020,
+    "name": "Bucana",
+    "area_km2": 4.58,
+    "lon": 125.600375,
+    "lat": 7.052515
+  },
+  {
+    "psgc": 112402178,
+    "name": "Buda",
+    "area_km2": 19.47,
+    "lon": 125.278753,
+    "lat": 7.534447
+  },
+  {
+    "psgc": 112402021,
+    "name": "Buhangin (Pob.)",
+    "area_km2": 5.7,
+    "lon": 125.613722,
+    "lat": 7.106863
+  },
+  {
+    "psgc": 112402022,
+    "name": "Bunawan (Pob.)",
+    "area_km2": 7.18,
+    "lon": 125.643938,
+    "lat": 7.236596
+  },
+  {
+    "psgc": 112402023,
+    "name": "Cabantian",
+    "area_km2": 10.12,
+    "lon": 125.615604,
+    "lat": 7.132141
+  },
+  {
+    "psgc": 112402024,
+    "name": "Cadalian",
+    "area_km2": 7.12,
+    "lon": 125.374448,
+    "lat": 7.148176
+  },
+  {
+    "psgc": 112402026,
+    "name": "Calinan (Pob.)",
+    "area_km2": 8.77,
+    "lon": 125.455711,
+    "lat": 7.190893
+  },
+  {
+    "psgc": 112402027,
+    "name": "Callawa",
+    "area_km2": 14.0,
+    "lon": 125.557488,
+    "lat": 7.209373
+  },
+  {
+    "psgc": 112402028,
+    "name": "Camansi",
+    "area_km2": 3.33,
+    "lon": 125.438507,
+    "lat": 7.083169
+  },
+  {
+    "psgc": 112402029,
+    "name": "Carmen",
+    "area_km2": 7.72,
+    "lon": 125.3413,
+    "lat": 7.111668
+  },
+  {
+    "psgc": 112402030,
+    "name": "Catalunan Grande",
+    "area_km2": 15.88,
+    "lon": 125.531976,
+    "lat": 7.090995
+  },
+  {
+    "psgc": 112402031,
+    "name": "Catalunan Pequeño",
+    "area_km2": 6.18,
+    "lon": 125.525174,
+    "lat": 7.074235
+  },
+  {
+    "psgc": 112402032,
+    "name": "Catigan",
+    "area_km2": 23.93,
+    "lon": 125.416451,
+    "lat": 7.006792
+  },
+  {
+    "psgc": 112402033,
+    "name": "Cawayan",
+    "area_km2": 8.66,
+    "lon": 125.411439,
+    "lat": 7.154205
+  },
+  {
+    "psgc": 112402179,
+    "name": "Centro (San Juan)",
+    "area_km2": 0.37,
+    "lon": 125.636967,
+    "lat": 7.091706
+  },
+  {
+    "psgc": 112402034,
+    "name": "Colosas",
+    "area_km2": 106.46,
+    "lon": 125.50459,
+    "lat": 7.514083
+  },
+  {
+    "psgc": 112402035,
+    "name": "Communal",
+    "area_km2": 4.81,
+    "lon": 125.629968,
+    "lat": 7.140554
+  },
+  {
+    "psgc": 112402036,
+    "name": "Crossing Bayabas",
+    "area_km2": 0.74,
+    "lon": 125.495875,
+    "lat": 7.024145
+  },
+  {
+    "psgc": 112402037,
+    "name": "Dacudao",
+    "area_km2": 13.1,
+    "lon": 125.470144,
+    "lat": 7.221479
+  },
+  {
+    "psgc": 112402038,
+    "name": "Dalag",
+    "area_km2": 33.18,
+    "lon": 125.254201,
+    "lat": 7.222027
+  },
+  {
+    "psgc": 112402039,
+    "name": "Dalagdag",
+    "area_km2": 3.45,
+    "lon": 125.509971,
+    "lat": 7.241786
+  },
+  {
+    "psgc": 112402040,
+    "name": "Daliao",
+    "area_km2": 1.86,
+    "lon": 125.507637,
+    "lat": 7.013425
+  },
+  {
+    "psgc": 112402041,
+    "name": "Daliaon Plantation",
+    "area_km2": 10.34,
+    "lon": 125.39708,
+    "lat": 7.081194
+  },
+  {
+    "psgc": 112402180,
+    "name": "Datu Salumay",
+    "area_km2": 20.03,
+    "lon": 125.263112,
+    "lat": 7.493915
+  },
+  {
+    "psgc": 112402042,
+    "name": "Dominga",
+    "area_km2": 8.04,
+    "lon": 125.484069,
+    "lat": 7.245508
+  },
+  {
+    "psgc": 112402043,
+    "name": "Dumoy",
+    "area_km2": 5.01,
+    "lon": 125.514539,
+    "lat": 7.031228
+  },
+  {
+    "psgc": 112402044,
+    "name": "Eden",
+    "area_km2": 8.36,
+    "lon": 125.399981,
+    "lat": 7.029527
+  },
+  {
+    "psgc": 112402045,
+    "name": "Fatima (Benowang)",
+    "area_km2": 27.23,
+    "lon": 125.53486,
+    "lat": 7.274104
+  },
+  {
+    "psgc": 112402047,
+    "name": "Gatungan",
+    "area_km2": 7.99,
+    "lon": 125.599696,
+    "lat": 7.219368
+  },
+  {
+    "psgc": 112402181,
+    "name": "Gov. Paciano Bangoy",
+    "area_km2": 0.89,
+    "lon": 125.619341,
+    "lat": 7.090672
+  },
+  {
+    "psgc": 112402182,
+    "name": "Gov. Vicente Duterte",
+    "area_km2": 0.46,
+    "lon": 125.63002,
+    "lat": 7.088232
+  },
+  {
+    "psgc": 112402048,
+    "name": "Gumalang",
+    "area_km2": 15.07,
+    "lon": 125.401481,
+    "lat": 7.218856
+  },
+  {
+    "psgc": 112402183,
+    "name": "Gumitan",
+    "area_km2": 56.11,
+    "lon": 125.353231,
+    "lat": 7.397679
+  },
+  {
+    "psgc": 112402049,
+    "name": "Ilang",
+    "area_km2": 5.19,
+    "lon": 125.645954,
+    "lat": 7.175533
+  },
+  {
+    "psgc": 112402184,
+    "name": "Inayangan",
+    "area_km2": 17.93,
+    "lon": 125.444315,
+    "lat": 7.268808
+  },
+  {
+    "psgc": 112402050,
+    "name": "Indangan",
+    "area_km2": 12.72,
+    "lon": 125.599062,
+    "lat": 7.16737
+  },
+  {
+    "psgc": 112402185,
+    "name": "Kap. Tomas Monteverde, Sr.",
+    "area_km2": 0.19,
+    "lon": 125.622873,
+    "lat": 7.078907
+  },
+  {
+    "psgc": 112402051,
+    "name": "Kilate",
+    "area_km2": 6.57,
+    "lon": 125.441189,
+    "lat": 7.049876
+  },
+  {
+    "psgc": 112402052,
+    "name": "Lacson",
+    "area_km2": 9.91,
+    "lon": 125.436102,
+    "lat": 7.216393
+  },
+  {
+    "psgc": 112402053,
+    "name": "Lamanan",
+    "area_km2": 19.96,
+    "lon": 125.433932,
+    "lat": 7.244069
+  },
+  {
+    "psgc": 112402054,
+    "name": "Lampianao",
+    "area_km2": 9.22,
+    "lon": 125.524823,
+    "lat": 7.224124
+  },
+  {
+    "psgc": 112402055,
+    "name": "Langub",
+    "area_km2": 9.93,
+    "lon": 125.557877,
+    "lat": 7.106705
+  },
+  {
+    "psgc": 112402186,
+    "name": "Lapu-lapu",
+    "area_km2": 0.62,
+    "lon": 125.642857,
+    "lat": 7.096971
+  },
+  {
+    "psgc": 112402187,
+    "name": "Leon Garcia, Sr.",
+    "area_km2": 0.28,
+    "lon": 125.626792,
+    "lat": 7.08135
+  },
+  {
+    "psgc": 112402057,
+    "name": "Lizada",
+    "area_km2": 4.26,
+    "lon": 125.494013,
+    "lat": 7.00095
+  },
+  {
+    "psgc": 112402058,
+    "name": "Los Amigos",
+    "area_km2": 4.63,
+    "lon": 125.476587,
+    "lat": 7.141173
+  },
+  {
+    "psgc": 112402059,
+    "name": "Lubogan",
+    "area_km2": 2.46,
+    "lon": 125.493402,
+    "lat": 7.036296
+  },
+  {
+    "psgc": 112402060,
+    "name": "Lumiad",
+    "area_km2": 26.58,
+    "lon": 125.437701,
+    "lat": 7.388396
+  },
+  {
+    "psgc": 112402061,
+    "name": "Ma-a",
+    "area_km2": 11.79,
+    "lon": 125.586758,
+    "lat": 7.083996
+  },
+  {
+    "psgc": 112402062,
+    "name": "Mabuhay",
+    "area_km2": 12.47,
+    "lon": 125.52776,
+    "lat": 7.31666
+  },
+  {
+    "psgc": 112402188,
+    "name": "Magsaysay",
+    "area_km2": 41.89,
+    "lon": 125.26183,
+    "lat": 7.330979
+  },
+  {
+    "psgc": 112402063,
+    "name": "Magtuod",
+    "area_km2": 8.23,
+    "lon": 125.564115,
+    "lat": 7.127107
+  },
+  {
+    "psgc": 112402064,
+    "name": "Mahayag",
+    "area_km2": 7.54,
+    "lon": 125.624783,
+    "lat": 7.221883
+  },
+  {
+    "psgc": 112402065,
+    "name": "Malabog",
+    "area_km2": 86.87,
+    "lon": 125.421935,
+    "lat": 7.333651
+  },
+  {
+    "psgc": 112402066,
+    "name": "Malagos",
+    "area_km2": 9.78,
+    "lon": 125.423892,
+    "lat": 7.189022
+  },
+  {
+    "psgc": 112402067,
+    "name": "Malamba",
+    "area_km2": 102.1,
+    "lon": 125.337077,
+    "lat": 7.463172
+  },
+  {
+    "psgc": 112402068,
+    "name": "Manambulan",
+    "area_km2": 7.38,
+    "lon": 125.447418,
+    "lat": 7.100523
+  },
+  {
+    "psgc": 112402069,
+    "name": "Mandug",
+    "area_km2": 10.39,
+    "lon": 125.577195,
+    "lat": 7.167307
+  },
+  {
+    "psgc": 112402070,
+    "name": "Manuel Guianga",
+    "area_km2": 10.06,
+    "lon": 125.408911,
+    "lat": 7.100893
+  },
+  {
+    "psgc": 112402071,
+    "name": "Mapula",
+    "area_km2": 73.44,
+    "lon": 125.420044,
+    "lat": 7.428921
+  },
+  {
+    "psgc": 112402072,
+    "name": "Marapangi",
+    "area_km2": 6.05,
+    "lon": 125.474533,
+    "lat": 7.014736
+  },
+  {
+    "psgc": 112402073,
+    "name": "Marilog",
+    "area_km2": 172.62,
+    "lon": 125.301219,
+    "lat": 7.396003
+  },
+  {
+    "psgc": 112402074,
+    "name": "Matina Aplaya",
+    "area_km2": 3.16,
+    "lon": 125.574874,
+    "lat": 7.04587
+  },
+  {
+    "psgc": 112402078,
+    "name": "Matina Biao",
+    "area_km2": 10.43,
+    "lon": 125.533285,
+    "lat": 7.136122
+  },
+  {
+    "psgc": 112402075,
+    "name": "Matina Crossing",
+    "area_km2": 5.06,
+    "lon": 125.578357,
+    "lat": 7.059554
+  },
+  {
+    "psgc": 112402077,
+    "name": "Matina Pangi",
+    "area_km2": 5.68,
+    "lon": 125.563639,
+    "lat": 7.077468
+  },
+  {
+    "psgc": 112402189,
+    "name": "Megkawayan",
+    "area_km2": 18.79,
+    "lon": 125.445344,
+    "lat": 7.30122
+  },
+  {
+    "psgc": 112402079,
+    "name": "Mintal",
+    "area_km2": 6.93,
+    "lon": 125.488895,
+    "lat": 7.087554
+  },
+  {
+    "psgc": 112402080,
+    "name": "Mudiang",
+    "area_km2": 5.13,
+    "lon": 125.622725,
+    "lat": 7.179147
+  },
+  {
+    "psgc": 112402081,
+    "name": "Mulig",
+    "area_km2": 10.08,
+    "lon": 125.467447,
+    "lat": 7.077689
+  },
+  {
+    "psgc": 112402082,
+    "name": "New Carmen",
+    "area_km2": 11.16,
+    "lon": 125.557982,
+    "lat": 7.159897
+  },
+  {
+    "psgc": 112402083,
+    "name": "New Valencia",
+    "area_km2": 8.8,
+    "lon": 125.54945,
+    "lat": 7.19013
+  },
+  {
+    "psgc": 112402086,
+    "name": "Pampanga",
+    "area_km2": 0.84,
+    "lon": 125.648383,
+    "lat": 7.116214
+  },
+  {
+    "psgc": 112402087,
+    "name": "Panacan",
+    "area_km2": 10.76,
+    "lon": 125.641528,
+    "lat": 7.156482
+  },
+  {
+    "psgc": 112402088,
+    "name": "Panalum",
+    "area_km2": 9.99,
+    "lon": 125.501399,
+    "lat": 7.342934
+  },
+  {
+    "psgc": 112402089,
+    "name": "Pandaitan",
+    "area_km2": 32.75,
+    "lon": 125.526865,
+    "lat": 7.404674
+  },
+  {
+    "psgc": 112402090,
+    "name": "Pangyan",
+    "area_km2": 8.8,
+    "lon": 125.499367,
+    "lat": 7.218786
+  },
+  {
+    "psgc": 112402091,
+    "name": "Paquibato (Pob.)",
+    "area_km2": 37.57,
+    "lon": 125.466305,
+    "lat": 7.367033
+  },
+  {
+    "psgc": 112402092,
+    "name": "Paradise Embak",
+    "area_km2": 22.76,
+    "lon": 125.518426,
+    "lat": 7.368613
+  },
+  {
+    "psgc": 112402190,
+    "name": "Rafael Castillo",
+    "area_km2": 0.53,
+    "lon": 125.637652,
+    "lat": 7.099702
+  },
+  {
+    "psgc": 112402097,
+    "name": "Riverside",
+    "area_km2": 5.59,
+    "lon": 125.476609,
+    "lat": 7.163026
+  },
+  {
+    "psgc": 112402098,
+    "name": "Salapawan",
+    "area_km2": 29.25,
+    "lon": 125.484421,
+    "lat": 7.454353
+  },
+  {
+    "psgc": 112402099,
+    "name": "Salaysay",
+    "area_km2": 45.94,
+    "lon": 125.287368,
+    "lat": 7.261934
+  },
+  {
+    "psgc": 112402191,
+    "name": "Saloy",
+    "area_km2": 21.43,
+    "lon": 125.40959,
+    "lat": 7.288326
+  },
+  {
+    "psgc": 112402192,
+    "name": "San Antonio",
+    "area_km2": 0.87,
+    "lon": 125.630655,
+    "lat": 7.095601
+  },
+  {
+    "psgc": 112402100,
+    "name": "San Isidro (Licanan)",
+    "area_km2": 7.89,
+    "lon": 125.631487,
+    "lat": 7.252078
+  },
+  {
+    "psgc": 112402193,
+    "name": "Santo Niño",
+    "area_km2": 0.82,
+    "lon": 125.509617,
+    "lat": 7.082152
+  },
+  {
+    "psgc": 112402101,
+    "name": "Sasa",
+    "area_km2": 7.59,
+    "lon": 125.650902,
+    "lat": 7.129736
+  },
+  {
+    "psgc": 112402102,
+    "name": "Sibulan",
+    "area_km2": 17.2,
+    "lon": 125.373933,
+    "lat": 6.989571
+  },
+  {
+    "psgc": 112402104,
+    "name": "Sirawan",
+    "area_km2": 8.92,
+    "lon": 125.47034,
+    "lat": 6.995857
+  },
+  {
+    "psgc": 112402105,
+    "name": "Sirib",
+    "area_km2": 20.67,
+    "lon": 125.387017,
+    "lat": 7.111944
+  },
+  {
+    "psgc": 112402106,
+    "name": "Suawan (Tuli)",
+    "area_km2": 44.41,
+    "lon": 125.325639,
+    "lat": 7.219135
+  },
+  {
+    "psgc": 112402107,
+    "name": "Subasta",
+    "area_km2": 12.21,
+    "lon": 125.438218,
+    "lat": 7.141734
+  },
+  {
+    "psgc": 112402108,
+    "name": "Sumimao",
+    "area_km2": 28.48,
+    "lon": 125.498657,
+    "lat": 7.271403
+  },
+  {
+    "psgc": 112402110,
+    "name": "Tacunan",
+    "area_km2": 7.89,
+    "lon": 125.522051,
+    "lat": 7.114491
+  },
+  {
+    "psgc": 112402112,
+    "name": "Tagakpan",
+    "area_km2": 7.09,
+    "lon": 125.434668,
+    "lat": 7.119829
+  },
+  {
+    "psgc": 112402113,
+    "name": "Tagluno",
+    "area_km2": 6.0,
+    "lon": 125.447768,
+    "lat": 7.062215
+  },
+  {
+    "psgc": 112402114,
+    "name": "Tagurano",
+    "area_km2": 5.69,
+    "lon": 125.406608,
+    "lat": 7.045743
+  },
+  {
+    "psgc": 112402115,
+    "name": "Talandang",
+    "area_km2": 12.91,
+    "lon": 125.521196,
+    "lat": 7.190657
+  },
+  {
+    "psgc": 112402116,
+    "name": "Talomo (Pob.)",
+    "area_km2": 6.72,
+    "lon": 125.550629,
+    "lat": 7.055635
+  },
+  {
+    "psgc": 112402117,
+    "name": "Talomo River",
+    "area_km2": 9.15,
+    "lon": 125.477595,
+    "lat": 7.191362
+  },
+  {
+    "psgc": 112402118,
+    "name": "Tamayong",
+    "area_km2": 19.64,
+    "lon": 125.359544,
+    "lat": 7.106313
+  },
+  {
+    "psgc": 112402119,
+    "name": "Tambobong",
+    "area_km2": 13.1,
+    "lon": 125.352874,
+    "lat": 7.198304
+  },
+  {
+    "psgc": 112402120,
+    "name": "Tamugan",
+    "area_km2": 11.49,
+    "lon": 125.382121,
+    "lat": 7.238576
+  },
+  {
+    "psgc": 112402121,
+    "name": "Tapak",
+    "area_km2": 117.57,
+    "lon": 125.416671,
+    "lat": 7.509772
+  },
+  {
+    "psgc": 112402122,
+    "name": "Tawan-tawan",
+    "area_km2": 10.1,
+    "lon": 125.370302,
+    "lat": 7.171933
+  },
+  {
+    "psgc": 112402123,
+    "name": "Tibuloy",
+    "area_km2": 7.61,
+    "lon": 125.439166,
+    "lat": 6.981934
+  },
+  {
+    "psgc": 112402124,
+    "name": "Tibungco",
+    "area_km2": 7.96,
+    "lon": 125.63695,
+    "lat": 7.198751
+  },
+  {
+    "psgc": 112402125,
+    "name": "Tigatto",
+    "area_km2": 7.36,
+    "lon": 125.59431,
+    "lat": 7.125123
+  },
+  {
+    "psgc": 112402126,
+    "name": "Toril (Pob.)",
+    "area_km2": 1.7,
+    "lon": 125.499791,
+    "lat": 7.017531
+  },
+  {
+    "psgc": 112402127,
+    "name": "Tugbok (Pob.)",
+    "area_km2": 9.96,
+    "lon": 125.482645,
+    "lat": 7.108796
+  },
+  {
+    "psgc": 112402128,
+    "name": "Tungakalan",
+    "area_km2": 17.32,
+    "lon": 125.407983,
+    "lat": 7.063757
+  },
+  {
+    "psgc": 112402194,
+    "name": "Ubalde",
+    "area_km2": 0.06,
+    "lon": 125.635151,
+    "lat": 7.094818
+  },
+  {
+    "psgc": 112402129,
+    "name": "Ula",
+    "area_km2": 9.79,
+    "lon": 125.49836,
+    "lat": 7.130724
+  },
+  {
+    "psgc": 112402198,
+    "name": "Vicente Hizon Sr.",
+    "area_km2": 2.58,
+    "lon": 125.644948,
+    "lat": 7.108896
+  },
+  {
+    "psgc": 112402195,
+    "name": "Waan",
+    "area_km2": 6.26,
+    "lon": 125.579258,
+    "lat": 7.126484
+  },
+  {
+    "psgc": 112402131,
+    "name": "Wangan",
+    "area_km2": 12.41,
+    "lon": 125.443623,
+    "lat": 7.167538
+  },
+  {
+    "psgc": 112402196,
+    "name": "Wilfredo Aquino",
+    "area_km2": 0.64,
+    "lon": 125.62428,
+    "lat": 7.09406
+  },
+  {
+    "psgc": 112402133,
+    "name": "Wines",
+    "area_km2": 8.82,
+    "lon": 125.386883,
+    "lat": 7.196023
+  }
+]
