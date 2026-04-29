@@ -105,9 +105,23 @@ Deno.serve(async (req) => {
   } catch {
     body = {};
   }
-  const windowDays = body.window_days ?? 90;
-  const epsKm = body.eps_km ?? 1.2;
-  const minPts = body.min_pts ?? 8;
+
+  // Resolve thresholds: explicit body overrides > app_settings.dbscan > defaults.
+  const defaults = { window_days: 90, eps_km: 1.2, min_pts: 8 };
+  let stored: typeof defaults = defaults;
+  try {
+    const rows = await dbSelect<{ value: typeof defaults }>(
+      cfg,
+      "app_settings",
+      "select=value&key=eq.dbscan&limit=1"
+    );
+    if (rows[0]?.value) stored = { ...defaults, ...rows[0].value };
+  } catch (_err) {
+    // table may not exist on older deployments; fall back to defaults silently.
+  }
+  const windowDays = body.window_days ?? stored.window_days;
+  const epsKm = body.eps_km ?? stored.eps_km;
+  const minPts = body.min_pts ?? stored.min_pts;
 
   const since = new Date();
   since.setDate(since.getDate() - windowDays);
