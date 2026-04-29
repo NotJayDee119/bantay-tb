@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Bell, CheckCheck } from "lucide-react";
 import { Badge, Button, Card, PageHeader, Spinner } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../hooks/useAuth";
 import { formatDateTime } from "../../lib/utils";
 import barangays from "../../data/barangays.json";
 import { toast } from "sonner";
@@ -27,24 +28,32 @@ const SEVERITY_TONE: Record<"low" | "medium" | "high", "warning" | "danger"> = {
 };
 
 export function Alerts() {
+  const { profile } = useAuth();
+  const recipientId = profile?.id;
   const [list, setList] = useState<AlertRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  async function load() {
+  // Scope every query to the current user's alerts. Staff RLS grants visibility
+  // into all recipients' rows, so without an explicit filter a "Mark all read"
+  // would silently overwrite other coordinators' inbox state.
+  const load = useCallback(async () => {
+    if (!recipientId) return;
     setLoading(true);
     const { data, error } = await supabase
       .from("hotspot_alerts")
       .select(
         "id, read_at, created_at, hotspot_id, hotspots(barangay_psgc, case_count, severity, radius_km, detected_at)"
       )
+      .eq("recipient_id", recipientId)
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) toast.error(error.message);
     setList((data ?? []) as unknown as AlertRow[]);
     setLoading(false);
-  }
+  }, [recipientId]);
 
   useEffect(() => {
+    if (!recipientId) return;
     load();
     const ch = supabase
       .channel("alerts-page")
@@ -57,24 +66,28 @@ export function Alerts() {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, []);
+  }, [recipientId, load]);
 
   async function markRead(id: string) {
+    if (!recipientId) return;
     const { error } = await supabase
       .from("hotspot_alerts")
       .update({ read_at: new Date().toISOString() })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("recipient_id", recipientId);
     if (error) toast.error(error.message);
     else load();
   }
 
   async function markAllRead() {
+    if (!recipientId) return;
     const ids = list.filter((a) => !a.read_at).map((a) => a.id);
     if (ids.length === 0) return;
     const { error } = await supabase
       .from("hotspot_alerts")
       .update({ read_at: new Date().toISOString() })
-      .in("id", ids);
+      .in("id", ids)
+      .eq("recipient_id", recipientId);
     if (error) toast.error(error.message);
     else {
       toast.success(`Marked ${ids.length} alert(s) as read`);

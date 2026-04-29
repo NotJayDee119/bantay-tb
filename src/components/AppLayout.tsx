@@ -81,13 +81,18 @@ export function AppLayout() {
   const [unreadAlerts, setUnreadAlerts] = useState(0);
 
   const role = profile?.role;
+  const userId = profile?.id;
   useEffect(() => {
     if (role !== "tb_coordinator" && role !== "barangay_admin") return;
+    if (!userId) return;
     let cancelled = false;
+    // Scope to the current user's alerts; staff RLS would otherwise inflate
+    // the badge with other recipients' unread rows.
     async function refresh() {
       const { count } = await supabase
         .from("hotspot_alerts")
         .select("id", { count: "exact", head: true })
+        .eq("recipient_id", userId)
         .is("read_at", null);
       if (!cancelled) setUnreadAlerts(count ?? 0);
     }
@@ -104,7 +109,7 @@ export function AppLayout() {
       cancelled = true;
       supabase.removeChannel(ch);
     };
-  }, [role]);
+  }, [role, userId]);
 
   if (loading) {
     return (
