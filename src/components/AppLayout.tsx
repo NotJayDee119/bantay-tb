@@ -10,7 +10,6 @@ import {
   LogOut,
   MapPinned,
   Pill,
-  Settings,
   Upload,
   Users,
   type LucideIcon,
@@ -60,12 +59,6 @@ const NAV: NavItem[] = [
     roles: STAFF_ROLES,
   },
   {
-    to: "/app/dots-admin",
-    label: "DOTS Centers",
-    icon: MapPinned,
-    roles: ["tb_coordinator", "barangay_admin"],
-  },
-  {
     to: "/app/import",
     label: "Bulk Import",
     icon: Upload,
@@ -74,12 +67,6 @@ const NAV: NavItem[] = [
   { to: "/app/adherence", label: "Adherence", icon: Pill },
   { to: "/app/chatbot", label: "Chatbot", icon: Bot },
   { to: "/app/education", label: "Health Education", icon: BookOpen },
-  {
-    to: "/app/settings",
-    label: "Settings",
-    icon: Settings,
-    roles: ["tb_coordinator", "barangay_admin"],
-  },
   {
     to: "/app/users",
     label: "Users",
