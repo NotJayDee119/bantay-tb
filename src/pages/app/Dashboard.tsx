@@ -278,9 +278,9 @@ function tilesFor(role: AppRole | undefined, s: Stats): FrameworkTile[] {
     case "health_worker":
       return [CDS, ADHERENCE, GIS, ANALYTICS];
     case "barangay_admin":
-      return [ACF, TRENDS, ALERTS];
+      return [ACF, TRENDS, ALERTS, GIS];
     case "tb_coordinator":
-      return [TRENDS, GIS, ALERTS, ANALYTICS, CDS, IMPORT];
+      return [TRENDS, GIS, ALERTS, ANALYTICS, IMPORT];
     case "patient":
       return [];
   }

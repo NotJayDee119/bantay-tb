@@ -32,8 +32,11 @@ interface NavItem {
 }
 
 // Sidebar visibility per the BANTAY-TB conceptual framework.
-//   tb_coordinator  : full city-wide surveillance — sees everything.
-//   barangay_admin  : Active Case Finding (encode + trends) + Hotspot Alerts.
+//   tb_coordinator  : city-wide surveillance — Map, Hotspots, Alerts, Cases,
+//                     Analytics, DOTS Centers admin, Bulk Import, Settings,
+//                     Users (no CDS / Adherence / Health Education — those are
+//                     for clinicians and patients respectively).
+//   barangay_admin  : Active Case Finding (encode + trends), GIS Map, Alerts.
 //   health_worker   : CDS + Adherence/Alerts + GIS Heatmap + AI Analytics.
 //   patient         : Adherence (self-report) + Chatbot + Health Education.
 const NAV: NavItem[] = [
@@ -42,7 +45,7 @@ const NAV: NavItem[] = [
     to: "/app/map",
     label: "GIS Map",
     icon: MapPinned,
-    roles: ["tb_coordinator", "health_worker"],
+    roles: ["tb_coordinator", "barangay_admin", "health_worker"],
   },
   {
     to: "/app/hotspots",
@@ -67,7 +70,7 @@ const NAV: NavItem[] = [
     to: "/app/cds",
     label: "Decision Support",
     icon: Stethoscope,
-    roles: ["tb_coordinator", "health_worker"],
+    roles: ["health_worker"],
   },
   {
     to: "/app/analytics",
@@ -91,7 +94,7 @@ const NAV: NavItem[] = [
     to: "/app/adherence",
     label: "Adherence",
     icon: Pill,
-    roles: ["tb_coordinator", "health_worker", "patient"],
+    roles: ["health_worker", "patient"],
   },
   {
     to: "/app/chatbot",
@@ -103,7 +106,7 @@ const NAV: NavItem[] = [
     to: "/app/education",
     label: "Health Education",
     icon: BookOpen,
-    roles: ["tb_coordinator", "patient"],
+    roles: ["patient"],
   },
   {
     to: "/app/settings",
