@@ -33,9 +33,10 @@ interface NavItem {
 
 // Sidebar visibility per the BANTAY-TB conceptual framework.
 //   tb_coordinator  : city-wide surveillance — Map, Hotspots, Alerts, Cases,
-//                     Analytics, DOTS Centers admin, Bulk Import, Settings,
-//                     Users (no CDS / Adherence / Health Education — those are
-//                     for clinicians and patients respectively).
+//                     Analytics, DOTS Centers admin, Bulk Import, Chatbot,
+//                     Settings, Users. (CDS, Adherence, and Health Education
+//                     are explicitly excluded; those are for clinicians and
+//                     patients respectively.)
 //   barangay_admin  : Active Case Finding (encode + trends), GIS Map, Alerts.
 //   health_worker   : CDS + Adherence/Alerts + GIS Heatmap + AI Analytics.
 //   patient         : Adherence (self-report) + Chatbot + Health Education.
