@@ -56,7 +56,10 @@ Deno.serve(async (req) => {
     let reply: string;
     if (apiKey) {
       const model = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      const baseUrl =
+        Deno.env.get("OPENAI_BASE_URL")?.replace(/\/+$/, "") ??
+        "https://api.openai.com";
+      const res = await fetch(`${baseUrl}/v1/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

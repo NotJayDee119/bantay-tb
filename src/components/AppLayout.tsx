@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Activity,
   AlertTriangle,
+  BarChart3,
   Bell,
   BookOpen,
   Bot,
@@ -64,6 +65,12 @@ const NAV: NavItem[] = [
     to: "/app/cds",
     label: "Decision Support",
     icon: Stethoscope,
+    roles: STAFF_ROLES,
+  },
+  {
+    to: "/app/analytics",
+    label: "Analytics",
+    icon: BarChart3,
     roles: STAFF_ROLES,
   },
   {

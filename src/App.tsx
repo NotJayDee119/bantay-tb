@@ -23,6 +23,7 @@ import { HealthEducation } from "./pages/app/HealthEducation";
 import { Cds } from "./pages/app/Cds";
 import { DotsCentersAdmin } from "./pages/app/DotsCentersAdmin";
 import { SettingsPage } from "./pages/app/SettingsPage";
+import { Analytics } from "./pages/app/Analytics";
 import { Users } from "./pages/app/Users";
 import { Spinner } from "./components/ui";
 
@@ -137,6 +138,16 @@ export default function App() {
         />
         <Route path="chatbot" element={<Chatbot />} />
         <Route path="education" element={<HealthEducation />} />
+        <Route
+          path="analytics"
+          element={
+            <RequireRole
+              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
+            >
+              <Analytics />
+            </RequireRole>
+          }
+        />
         <Route
           path="settings"
           element={
