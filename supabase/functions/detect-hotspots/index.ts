@@ -191,12 +191,15 @@ Deno.serve(async (req) => {
       .map((h) => h.id);
     if (highIds.length > 0) {
       try {
-        const coordinators = await dbSelect<{ id: string }>(
+        // Notify everyone whose dashboard exposes the Alerts inbox.
+        // Per the BANTAY-TB framework: tb_coordinator, barangay_admin, and
+        // health_worker (BHWs / nurses / doctors monitoring adherence + alerts).
+        const recipients = await dbSelect<{ id: string }>(
           cfg,
           "profiles",
-          "select=id&role=eq.tb_coordinator"
+          "select=id&role=in.(tb_coordinator,barangay_admin,health_worker)"
         );
-        const alerts = coordinators.flatMap((c) =>
+        const alerts = recipients.flatMap((c) =>
           highIds.map((hid) => ({ hotspot_id: hid, recipient_id: c.id }))
         );
         if (alerts.length > 0) {
