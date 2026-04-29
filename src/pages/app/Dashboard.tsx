@@ -133,9 +133,16 @@ export function Dashboard() {
       <FrameworkTiles role={role} stats={s} />
 
       {/* Stat cards: relevant for all staff. Patients don't see them
-          because the framework tiles for patients don't include surveillance. */}
+          because the framework tiles for patients don't include surveillance.
+          Missed doses is only relevant to health_worker (they own adherence
+          per the framework); barangay_admin and tb_coordinator don't see it. */}
       {role && role !== "patient" && (
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          className={
+            "mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 " +
+            (role === "health_worker" ? "lg:grid-cols-4" : "lg:grid-cols-3")
+          }
+        >
           <StatCard
             icon={ClipboardList}
             label="Total cases"
@@ -154,12 +161,14 @@ export function Dashboard() {
             value={s.activeHotspots}
             tone="bg-amber-50 text-amber-800"
           />
-          <StatCard
-            icon={Pill}
-            label="Missed doses"
-            value={s.pendingAdherence}
-            tone="bg-red-50 text-red-700"
-          />
+          {role === "health_worker" && (
+            <StatCard
+              icon={Pill}
+              label="Missed doses"
+              value={s.pendingAdherence}
+              tone="bg-red-50 text-red-700"
+            />
+          )}
         </div>
       )}
 
