@@ -138,7 +138,7 @@ export function Hotspots() {
     <>
       <PageHeader
         title="Hotspot Detection"
-        subtitle="DBSCAN clustering across the last 90 days. Re-runs automatically when new cases are imported."
+        subtitle="DBSCAN clustering across the configured lookback window. Re-runs automatically when new cases are imported."
         actions={
           <Button
             variant="secondary"
