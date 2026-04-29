@@ -164,7 +164,7 @@ export function Hotspots() {
           >
             <TileLayer
               attribution='&copy; OpenStreetMap'
-              url="https://{s}.tile.openstreetmap.org/{z}/{y}/{x}.png"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             {list.map((h) => (
               <CircleMarker

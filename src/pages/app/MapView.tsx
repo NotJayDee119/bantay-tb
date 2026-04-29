@@ -159,7 +159,7 @@ export function MapView() {
             <LayersControl.BaseLayer checked name="OpenStreetMap">
               <TileLayer
                 attribution='&copy; OpenStreetMap'
-                url="https://{s}.tile.openstreetmap.org/{z}/{y}/{x}.png"
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
             </LayersControl.BaseLayer>
             <LayersControl.BaseLayer name="Carto Light">

@@ -363,7 +363,7 @@ function MapPicker({
     >
       <TileLayer
         attribution="&copy; OpenStreetMap"
-        url="https://{s}.tile.openstreetmap.org/{z}/{y}/{x}.png"
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <Marker position={[lat, lon]} icon={PIN_ICON} />
       <ClickHandler onPick={onPick} />
