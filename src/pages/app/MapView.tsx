@@ -13,11 +13,19 @@ import barangays from "../../data/barangays.json";
 
 type DiseaseFilter = "all" | "tb" | "pneumonia" | "covid19" | "asthma";
 
-interface CaseRow {
+// Citywide barangay-level case counts come from the
+// public.barangay_case_counts() SECURITY DEFINER function so all staff see
+// the same aggregate map regardless of their own barangay assignment.
+interface BarangayCount {
   barangay_psgc: number;
-  jitter_lat: number;
-  jitter_lon: number;
-  reported_at: string;
+  case_count: number;
+}
+
+interface BarangayMeta {
+  psgc: number;
+  name: string;
+  lat: number;
+  lon: number;
 }
 
 const DAVAO_CENTER: [number, number] = [7.0731, 125.6128];
@@ -48,7 +56,7 @@ function HeatLayer({ points }: { points: [number, number, number][] }) {
 import { useMap } from "react-leaflet";
 
 export function MapView() {
-  const [cases, setCases] = useState<CaseRow[]>([]);
+  const [counts, setCounts] = useState<BarangayCount[]>([]);
   const [geo, setGeo] = useState<GeoJSON.FeatureCollection | null>(null);
   const [disease, setDisease] = useState<DiseaseFilter>("all");
   const [days, setDays] = useState(180);
@@ -61,35 +69,54 @@ export function MapView() {
   }, []);
 
   useEffect(() => {
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-    let q = supabase
-      .from("cases")
-      .select("barangay_psgc, jitter_lat, jitter_lon, reported_at")
-      .gte("reported_at", since.toISOString())
-      .limit(10000);
-    if (disease !== "all") q = q.eq("disease", disease);
     setLoading(true);
-    q.then(({ data, error }) => {
-      if (error) {
-         
-        console.error(error);
-      }
-      setCases((data ?? []) as CaseRow[]);
-      setLoading(false);
-    });
+    supabase
+      .rpc("barangay_case_counts", {
+        p_disease: disease === "all" ? null : disease,
+        p_days: days,
+      })
+      .then(({ data, error }) => {
+        if (error) {
+          console.error(error);
+        }
+        setCounts((data ?? []) as BarangayCount[]);
+        setLoading(false);
+      });
   }, [disease, days]);
-
-  const heatPoints = useMemo<[number, number, number][]>(
-    () => cases.map((c) => [c.jitter_lat, c.jitter_lon, 0.7]),
-    [cases]
-  );
 
   const bgyCounts = useMemo(() => {
     const m = new Map<number, number>();
-    for (const c of cases) m.set(c.barangay_psgc, (m.get(c.barangay_psgc) ?? 0) + 1);
+    for (const r of counts) m.set(r.barangay_psgc, r.case_count);
     return m;
-  }, [cases]);
+  }, [counts]);
+
+  const totalCases = useMemo(
+    () => counts.reduce((s, r) => s + r.case_count, 0),
+    [counts]
+  );
+
+  // Build heat points from each barangay's centroid weighted by case count.
+  // We synthesize multiple stacked points per barangay so leaflet.heat builds
+  // a smooth gradient that reflects the relative case density. This avoids
+  // sending raw jittered patient coordinates to the client and keeps the
+  // heatmap useful for citywide surveillance.
+  const heatPoints = useMemo<[number, number, number][]>(() => {
+    const byPsgc = new Map<number, BarangayMeta>();
+    for (const b of barangays as BarangayMeta[]) byPsgc.set(b.psgc, b);
+    const max = Math.max(1, ...counts.map((c) => c.case_count));
+    const out: [number, number, number][] = [];
+    for (const r of counts) {
+      const meta = byPsgc.get(r.barangay_psgc);
+      if (!meta) continue;
+      const intensity = r.case_count / max;
+      // Replicate the centroid so the heat blob "weight" tracks count.
+      const reps = Math.min(20, Math.max(1, Math.round(r.case_count)));
+      for (let i = 0; i < reps; i++) {
+        out.push([meta.lat, meta.lon, intensity]);
+      }
+    }
+    return out;
+  }, [counts]);
 
   const maxCount = Math.max(1, ...bgyCounts.values());
 
@@ -119,7 +146,7 @@ export function MapView() {
     <>
       <PageHeader
         title="GIS Map"
-        subtitle={`${cases.length.toLocaleString()} cases across ${barangays.length} Davao City barangays · last ${days} days.`}
+        subtitle={`${totalCases.toLocaleString()} cases across ${barangays.length} Davao City barangays · last ${days} days · citywide aggregate`}
         actions={
           <>
             <Select

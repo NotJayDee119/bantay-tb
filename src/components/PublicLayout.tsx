@@ -1,22 +1,29 @@
 import { Activity } from "lucide-react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { AnimatePresence, motion } from "motion/react";
+
+const NAV = [
+  { to: "/", label: "Home" },
+  { to: "/dots-locator", label: "DOTS Locator" },
+  { to: "/learn", label: "Health Education" },
+];
 
 export function PublicLayout() {
+  const location = useLocation();
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/85 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-          <Link to="/" className="flex items-center gap-2">
-            <Activity className="h-6 w-6 text-brand-600" />
-            <span className="text-lg font-bold text-slate-900">BANTAY-TB</span>
+          <Link to="/" className="flex items-center gap-2.5">
+            <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-accent-500 text-white shadow-soft">
+              <Activity className="h-5 w-5" />
+            </span>
+            <span className="font-display text-lg font-bold tracking-tight text-slate-900">
+              BANTAY-TB
+            </span>
           </Link>
-          <nav className="flex items-center gap-1 text-sm">
-            {[
-              { to: "/", label: "Home" },
-              { to: "/dots-locator", label: "DOTS Center Locator" },
-              { to: "/learn", label: "Health Education" },
-              { to: "/login", label: "Sign in" },
-            ].map((l) => (
+          <nav className="hidden items-center gap-1 text-sm sm:flex">
+            {NAV.map((l) => (
               <NavLink
                 key={l.to}
                 to={l.to}
@@ -31,11 +38,33 @@ export function PublicLayout() {
                 {l.label}
               </NavLink>
             ))}
+            <Link
+              to="/login"
+              className="ml-2 inline-flex h-9 items-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-white shadow-soft transition hover:bg-brand-700"
+            >
+              Sign in
+            </Link>
           </nav>
+          <Link
+            to="/login"
+            className="inline-flex h-9 items-center rounded-lg bg-brand-600 px-3 text-sm font-medium text-white shadow-soft sm:hidden"
+          >
+            Sign in
+          </Link>
         </div>
       </header>
       <main className="flex-1">
-        <Outlet />
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
       </main>
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-6 text-center text-sm text-slate-500 sm:px-6 lg:px-8">

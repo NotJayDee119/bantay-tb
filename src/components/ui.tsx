@@ -1,10 +1,18 @@
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import {
+  forwardRef,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from "react";
+import { motion, type HTMLMotionProps } from "motion/react";
 import { cn } from "../lib/utils";
 
 export const Button = forwardRef<
   HTMLButtonElement,
   ButtonHTMLAttributes<HTMLButtonElement> & {
-    variant?: "primary" | "secondary" | "ghost" | "danger";
+    variant?: "primary" | "secondary" | "ghost" | "danger" | "accent";
     size?: "sm" | "md" | "lg";
   }
 >(function Button(
@@ -12,18 +20,21 @@ export const Button = forwardRef<
   ref
 ) {
   const base =
-    "inline-flex items-center justify-center gap-2 rounded-md font-medium transition disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500";
+    "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-[background,color,box-shadow,transform] duration-150 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:ring-offset-2";
   const sizes = {
     sm: "h-8 px-3 text-sm",
     md: "h-10 px-4 text-sm",
     lg: "h-11 px-5 text-base",
   };
   const variants = {
-    primary: "bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800",
+    primary:
+      "bg-brand-600 text-white shadow-soft hover:bg-brand-700 active:bg-brand-800",
+    accent:
+      "bg-accent-600 text-white shadow-soft hover:bg-accent-700 active:bg-accent-800",
     secondary:
-      "bg-white border border-slate-300 text-slate-800 hover:bg-slate-50",
+      "bg-white border border-slate-200 text-slate-800 shadow-soft hover:bg-slate-50 hover:border-slate-300",
     ghost: "text-slate-700 hover:bg-slate-100",
-    danger: "bg-red-600 text-white hover:bg-red-700",
+    danger: "bg-red-600 text-white shadow-soft hover:bg-red-700",
   };
   return (
     <button
@@ -42,7 +53,7 @@ export const Input = forwardRef<
     <input
       ref={ref}
       className={cn(
-        "h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200",
+        "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm shadow-soft transition placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200/60",
         className
       )}
       {...rest}
@@ -58,7 +69,7 @@ export const Textarea = forwardRef<
     <textarea
       ref={ref}
       className={cn(
-        "min-h-[88px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200",
+        "min-h-[88px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-soft transition placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200/60",
         className
       )}
       {...rest}
@@ -74,7 +85,7 @@ export const Select = forwardRef<
     <select
       ref={ref}
       className={cn(
-        "h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200",
+        "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm shadow-soft transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200/60",
         className
       )}
       {...rest}
@@ -113,12 +124,41 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-lg border border-slate-200 bg-white shadow-sm",
+        "rounded-xl border border-slate-200/80 bg-white shadow-soft transition-shadow",
         className
       )}
     >
       {children}
     </div>
+  );
+}
+
+/**
+ * Motion-aware Card: animates in on mount + lifts subtly on hover. Use this
+ * for prominent surfaces (dashboard tiles, hero cards). Falls back to a static
+ * `Card` for users who prefer reduced motion (motion/react respects this
+ * automatically).
+ */
+export function MotionCard({
+  className,
+  children,
+  delay = 0,
+  ...rest
+}: HTMLMotionProps<"div"> & { className?: string; delay?: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, delay, ease: "easeOut" }}
+      whileHover={{ y: -2 }}
+      className={cn(
+        "rounded-xl border border-slate-200/80 bg-white shadow-soft transition-shadow hover:shadow-lift",
+        className
+      )}
+      {...rest}
+    >
+      {children}
+    </motion.div>
   );
 }
 
@@ -128,7 +168,7 @@ export function Badge({
   className,
 }: {
   children: ReactNode;
-  tone?: "default" | "success" | "warning" | "danger" | "info";
+  tone?: "default" | "success" | "warning" | "danger" | "info" | "accent";
   className?: string;
 }) {
   const tones = {
@@ -137,6 +177,7 @@ export function Badge({
     warning: "bg-amber-100 text-amber-800",
     danger: "bg-red-100 text-red-700",
     info: "bg-sky-100 text-sky-700",
+    accent: "bg-accent-100 text-accent-700",
   };
   return (
     <span
@@ -179,21 +220,35 @@ export function PageHeader({
   title,
   subtitle,
   actions,
+  eyebrow,
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
+  eyebrow?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+      className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
+    >
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
+        {eyebrow && (
+          <div className="mb-1 text-xs font-medium uppercase tracking-wider text-brand-700">
+            {eyebrow}
+          </div>
+        )}
+        <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          {title}
+        </h1>
         {subtitle && (
-          <p className="mt-1 text-sm text-slate-600">{subtitle}</p>
+          <p className="mt-1 max-w-2xl text-sm text-slate-600">{subtitle}</p>
         )}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
-    </div>
+    </motion.div>
   );
 }
 
@@ -207,12 +262,14 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border-2 border-dashed border-slate-200 bg-white p-10 text-center">
-      <h3 className="text-base font-medium text-slate-900">{title}</h3>
+    <Card className="p-8 text-center">
+      <div className="font-display text-base font-semibold text-slate-900">
+        {title}
+      </div>
       {description && (
         <p className="mt-1 text-sm text-slate-600">{description}</p>
       )}
-      {action && <div className="mt-4 flex justify-center">{action}</div>}
-    </div>
+      {action && <div className="mt-4">{action}</div>}
+    </Card>
   );
 }

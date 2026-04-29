@@ -263,7 +263,12 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      barangay_case_counts: {
+        Args: { p_disease: string | null; p_days: number };
+        Returns: { barangay_psgc: number; case_count: number }[];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
