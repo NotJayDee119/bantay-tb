@@ -31,68 +31,85 @@ interface NavItem {
   badgeKey?: "alerts";
 }
 
-// Roles per the BANTAY-TB conceptual framework. Patients only see Dashboard,
-// Adherence (self-reporting), Chatbot, and Health Education.
-const STAFF_ROLES: AppRole[] = [
-  "tb_coordinator",
-  "barangay_admin",
-  "health_worker",
-];
-
+// Sidebar visibility per the BANTAY-TB conceptual framework.
+//   tb_coordinator  : full city-wide surveillance — sees everything.
+//   barangay_admin  : Active Case Finding (encode + trends) + Hotspot Alerts.
+//   health_worker   : CDS + Adherence/Alerts + GIS Heatmap + AI Analytics.
+//   patient         : Adherence (self-report) + Chatbot + Health Education.
 const NAV: NavItem[] = [
   { to: "/app", label: "Dashboard", icon: Home },
-  { to: "/app/map", label: "GIS Map", icon: MapPinned, roles: STAFF_ROLES },
+  {
+    to: "/app/map",
+    label: "GIS Map",
+    icon: MapPinned,
+    roles: ["tb_coordinator", "health_worker"],
+  },
   {
     to: "/app/hotspots",
     label: "Hotspots",
     icon: AlertTriangle,
-    roles: STAFF_ROLES,
+    roles: ["tb_coordinator"],
   },
   {
     to: "/app/alerts",
     label: "Alerts",
     icon: Bell,
-    roles: ["tb_coordinator", "barangay_admin"],
+    roles: ["tb_coordinator", "barangay_admin", "health_worker"],
     badgeKey: "alerts",
   },
   {
     to: "/app/cases",
     label: "Cases (ACF)",
     icon: ClipboardList,
-    roles: STAFF_ROLES,
+    roles: ["tb_coordinator", "barangay_admin"],
   },
   {
     to: "/app/cds",
     label: "Decision Support",
     icon: Stethoscope,
-    roles: STAFF_ROLES,
+    roles: ["tb_coordinator", "health_worker"],
   },
   {
     to: "/app/analytics",
     label: "Analytics",
     icon: BarChart3,
-    roles: STAFF_ROLES,
+    roles: ["tb_coordinator", "health_worker"],
   },
   {
     to: "/app/dots-admin",
     label: "DOTS Centers",
     icon: MapPinned,
-    roles: ["tb_coordinator", "barangay_admin"],
+    roles: ["tb_coordinator"],
   },
   {
     to: "/app/import",
     label: "Bulk Import",
     icon: Upload,
-    roles: ["tb_coordinator", "barangay_admin"],
+    roles: ["tb_coordinator"],
   },
-  { to: "/app/adherence", label: "Adherence", icon: Pill },
-  { to: "/app/chatbot", label: "Chatbot", icon: Bot },
-  { to: "/app/education", label: "Health Education", icon: BookOpen },
+  {
+    to: "/app/adherence",
+    label: "Adherence",
+    icon: Pill,
+    roles: ["tb_coordinator", "health_worker", "patient"],
+  },
+  {
+    to: "/app/chatbot",
+    label: "Chatbot",
+    icon: Bot,
+    roles: ["tb_coordinator", "patient"],
+  },
+  {
+    to: "/app/education",
+    label: "Health Education",
+    icon: BookOpen,
+    roles: ["tb_coordinator", "patient"],
+  },
   {
     to: "/app/settings",
     label: "Settings",
     icon: Settings,
-    roles: ["tb_coordinator", "barangay_admin"],
+    roles: ["tb_coordinator"],
   },
   {
     to: "/app/users",
@@ -110,8 +127,15 @@ export function AppLayout() {
   const role = profile?.role;
   const userId = profile?.id;
   useEffect(() => {
-    if (role !== "tb_coordinator" && role !== "barangay_admin") return;
+    if (
+      role !== "tb_coordinator" &&
+      role !== "barangay_admin" &&
+      role !== "health_worker"
+    ) {
+      return;
+    }
     if (!userId) return;
+    const recipient = userId;
     let cancelled = false;
     // Scope to the current user's alerts; staff RLS would otherwise inflate
     // the badge with other recipients' unread rows.
@@ -119,7 +143,7 @@ export function AppLayout() {
       const { count } = await supabase
         .from("hotspot_alerts")
         .select("id", { count: "exact", head: true })
-        .eq("recipient_id", userId)
+        .eq("recipient_id", recipient)
         .is("read_at", null);
       if (!cancelled) setUnreadAlerts(count ?? 0);
     }
