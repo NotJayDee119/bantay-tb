@@ -10,6 +10,7 @@ import {
 import { Card, PageHeader, Spinner } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import type { AppRole } from "../../lib/supabase";
 
 interface Stats {
   totalCases: number;
@@ -169,12 +170,9 @@ export function Dashboard() {
             Quick actions
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <QuickLink to="/app/cases/new" label="Encode new case" />
-            <QuickLink to="/app/map" label="Open GIS map" />
-            <QuickLink to="/app/import" label="Bulk import (CHO Excel)" />
-            <QuickLink to="/app/chatbot" label="Ask the multilingual chatbot" />
-            <QuickLink to="/app/adherence" label="Adherence dashboard" />
-            <QuickLink to="/app/hotspots" label="Hotspot alerts" />
+            {quickActionsFor(profile?.role).map((q) => (
+              <QuickLink key={q.to} to={q.to} label={q.label} />
+            ))}
           </div>
         </Card>
       </div>
@@ -204,6 +202,43 @@ function StatCard({
       <div className="text-sm text-slate-500">{label}</div>
     </Card>
   );
+}
+
+interface QuickAction {
+  to: string;
+  label: string;
+  roles?: AppRole[];
+}
+
+const QUICK_ACTIONS: QuickAction[] = [
+  {
+    to: "/app/cases/new",
+    label: "Encode new case",
+    roles: ["tb_coordinator", "barangay_admin", "health_worker"],
+  },
+  {
+    to: "/app/map",
+    label: "Open GIS map",
+    roles: ["tb_coordinator", "barangay_admin", "health_worker"],
+  },
+  {
+    to: "/app/import",
+    label: "Bulk import (CHO Excel)",
+    roles: ["tb_coordinator", "barangay_admin"],
+  },
+  { to: "/app/chatbot", label: "Ask the multilingual chatbot" },
+  { to: "/app/adherence", label: "Adherence dashboard" },
+  {
+    to: "/app/alerts",
+    label: "Hotspot alerts",
+    roles: ["tb_coordinator", "barangay_admin"],
+  },
+  { to: "/app/education", label: "Health education" },
+];
+
+function quickActionsFor(role: AppRole | undefined): QuickAction[] {
+  if (!role) return [];
+  return QUICK_ACTIONS.filter((q) => !q.roles || q.roles.includes(role));
 }
 
 function QuickLink({ to, label }: { to: string; label: string }) {

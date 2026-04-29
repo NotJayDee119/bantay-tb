@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import {
   Activity,
   AlertTriangle,
+  Bell,
   BookOpen,
   Bot,
   ClipboardList,
@@ -8,6 +10,7 @@ import {
   LogOut,
   MapPinned,
   Pill,
+  Settings,
   Upload,
   Users,
   type LucideIcon,
@@ -15,6 +18,7 @@ import {
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { ROLE_LABELS, type AppRole } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
 import { Spinner } from "./ui";
 
 interface NavItem {
@@ -22,13 +26,45 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   roles?: AppRole[];
+  badgeKey?: "alerts";
 }
+
+// Roles per the BANTAY-TB conceptual framework. Patients only see Dashboard,
+// Adherence (self-reporting), Chatbot, and Health Education.
+const STAFF_ROLES: AppRole[] = [
+  "tb_coordinator",
+  "barangay_admin",
+  "health_worker",
+];
 
 const NAV: NavItem[] = [
   { to: "/app", label: "Dashboard", icon: Home },
-  { to: "/app/map", label: "GIS Map", icon: MapPinned },
-  { to: "/app/hotspots", label: "Hotspots", icon: AlertTriangle },
-  { to: "/app/cases", label: "Cases (ACF)", icon: ClipboardList },
+  { to: "/app/map", label: "GIS Map", icon: MapPinned, roles: STAFF_ROLES },
+  {
+    to: "/app/hotspots",
+    label: "Hotspots",
+    icon: AlertTriangle,
+    roles: STAFF_ROLES,
+  },
+  {
+    to: "/app/alerts",
+    label: "Alerts",
+    icon: Bell,
+    roles: ["tb_coordinator", "barangay_admin"],
+    badgeKey: "alerts",
+  },
+  {
+    to: "/app/cases",
+    label: "Cases (ACF)",
+    icon: ClipboardList,
+    roles: STAFF_ROLES,
+  },
+  {
+    to: "/app/dots-admin",
+    label: "DOTS Centers",
+    icon: MapPinned,
+    roles: ["tb_coordinator", "barangay_admin"],
+  },
   {
     to: "/app/import",
     label: "Bulk Import",
@@ -38,6 +74,12 @@ const NAV: NavItem[] = [
   { to: "/app/adherence", label: "Adherence", icon: Pill },
   { to: "/app/chatbot", label: "Chatbot", icon: Bot },
   { to: "/app/education", label: "Health Education", icon: BookOpen },
+  {
+    to: "/app/settings",
+    label: "Settings",
+    icon: Settings,
+    roles: ["tb_coordinator", "barangay_admin"],
+  },
   {
     to: "/app/users",
     label: "Users",
@@ -49,6 +91,33 @@ const NAV: NavItem[] = [
 export function AppLayout() {
   const { profile, loading, signOut } = useAuth();
   const navigate = useNavigate();
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
+
+  const role = profile?.role;
+  useEffect(() => {
+    if (role !== "tb_coordinator" && role !== "barangay_admin") return;
+    let cancelled = false;
+    async function refresh() {
+      const { count } = await supabase
+        .from("hotspot_alerts")
+        .select("id", { count: "exact", head: true })
+        .is("read_at", null);
+      if (!cancelled) setUnreadAlerts(count ?? 0);
+    }
+    refresh();
+    const ch = supabase
+      .channel("alerts-badge")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "hotspot_alerts" },
+        refresh
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(ch);
+    };
+  }, [role]);
 
   if (loading) {
     return (
@@ -91,7 +160,12 @@ export function AppLayout() {
               }
             >
               <item.icon className="h-4 w-4" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.badgeKey === "alerts" && unreadAlerts > 0 && (
+                <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-100 px-1.5 text-xs font-semibold text-red-700">
+                  {unreadAlerts}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

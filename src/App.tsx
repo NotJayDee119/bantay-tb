@@ -13,6 +13,7 @@ import { Register } from "./pages/public/Register";
 import { Dashboard } from "./pages/app/Dashboard";
 import { MapView } from "./pages/app/MapView";
 import { Hotspots } from "./pages/app/Hotspots";
+import { Alerts } from "./pages/app/Alerts";
 import { Cases } from "./pages/app/Cases";
 import { CaseFormPage } from "./pages/app/CaseFormPage";
 import { Adherence } from "./pages/app/Adherence";
@@ -56,10 +57,54 @@ export default function App() {
 
       <Route path="app" element={<AppLayout />}>
         <Route index element={<Dashboard />} />
-        <Route path="map" element={<MapView />} />
-        <Route path="hotspots" element={<Hotspots />} />
-        <Route path="cases" element={<Cases />} />
-        <Route path="cases/new" element={<CaseFormPage />} />
+        <Route
+          path="map"
+          element={
+            <RequireRole
+              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
+            >
+              <MapView />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="hotspots"
+          element={
+            <RequireRole
+              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
+            >
+              <Hotspots />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="alerts"
+          element={
+            <RequireRole roles={["tb_coordinator", "barangay_admin"]}>
+              <Alerts />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="cases"
+          element={
+            <RequireRole
+              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
+            >
+              <Cases />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="cases/new"
+          element={
+            <RequireRole
+              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
+            >
+              <CaseFormPage />
+            </RequireRole>
+          }
+        />
         <Route path="adherence" element={<Adherence />} />
         <Route
           path="import"
