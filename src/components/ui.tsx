@@ -125,9 +125,11 @@ export function Card({
 export function Badge({
   children,
   tone = "default",
+  className,
 }: {
   children: ReactNode;
   tone?: "default" | "success" | "warning" | "danger" | "info";
+  className?: string;
 }) {
   const tones = {
     default: "bg-slate-100 text-slate-700",
@@ -140,7 +142,8 @@ export function Badge({
     <span
       className={cn(
         "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-        tones[tone]
+        tones[tone],
+        className
       )}
     >
       {children}

@@ -20,6 +20,10 @@ import { Adherence } from "./pages/app/Adherence";
 import { BulkImport } from "./pages/app/BulkImport";
 import { Chatbot } from "./pages/app/Chatbot";
 import { HealthEducation } from "./pages/app/HealthEducation";
+import { Cds } from "./pages/app/Cds";
+import { DotsCentersAdmin } from "./pages/app/DotsCentersAdmin";
+import { SettingsPage } from "./pages/app/SettingsPage";
+import { Analytics } from "./pages/app/Analytics";
 import { Users } from "./pages/app/Users";
 import { Spinner } from "./components/ui";
 
@@ -60,9 +64,7 @@ export default function App() {
         <Route
           path="map"
           element={
-            <RequireRole
-              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
-            >
+            <RequireRole roles={["tb_coordinator", "health_worker"]}>
               <MapView />
             </RequireRole>
           }
@@ -70,9 +72,7 @@ export default function App() {
         <Route
           path="hotspots"
           element={
-            <RequireRole
-              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
-            >
+            <RequireRole roles={["tb_coordinator"]}>
               <Hotspots />
             </RequireRole>
           }
@@ -80,7 +80,9 @@ export default function App() {
         <Route
           path="alerts"
           element={
-            <RequireRole roles={["tb_coordinator", "barangay_admin"]}>
+            <RequireRole
+              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
+            >
               <Alerts />
             </RequireRole>
           }
@@ -88,9 +90,7 @@ export default function App() {
         <Route
           path="cases"
           element={
-            <RequireRole
-              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
-            >
+            <RequireRole roles={["tb_coordinator", "barangay_admin"]}>
               <Cases />
             </RequireRole>
           }
@@ -98,24 +98,77 @@ export default function App() {
         <Route
           path="cases/new"
           element={
-            <RequireRole
-              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
-            >
+            <RequireRole roles={["tb_coordinator", "barangay_admin"]}>
               <CaseFormPage />
             </RequireRole>
           }
         />
-        <Route path="adherence" element={<Adherence />} />
+        <Route
+          path="cds"
+          element={
+            <RequireRole roles={["tb_coordinator", "health_worker"]}>
+              <Cds />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="dots-admin"
+          element={
+            <RequireRole roles={["tb_coordinator"]}>
+              <DotsCentersAdmin />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="adherence"
+          element={
+            <RequireRole
+              roles={["tb_coordinator", "health_worker", "patient"]}
+            >
+              <Adherence />
+            </RequireRole>
+          }
+        />
         <Route
           path="import"
           element={
-            <RequireRole roles={["tb_coordinator", "barangay_admin"]}>
+            <RequireRole roles={["tb_coordinator"]}>
               <BulkImport />
             </RequireRole>
           }
         />
-        <Route path="chatbot" element={<Chatbot />} />
-        <Route path="education" element={<HealthEducation />} />
+        <Route
+          path="chatbot"
+          element={
+            <RequireRole roles={["tb_coordinator", "patient"]}>
+              <Chatbot />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="education"
+          element={
+            <RequireRole roles={["tb_coordinator", "patient"]}>
+              <HealthEducation />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="analytics"
+          element={
+            <RequireRole roles={["tb_coordinator", "health_worker"]}>
+              <Analytics />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="settings"
+          element={
+            <RequireRole roles={["tb_coordinator"]}>
+              <SettingsPage />
+            </RequireRole>
+          }
+        />
         <Route
           path="users"
           element={
