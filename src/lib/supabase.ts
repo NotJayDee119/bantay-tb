@@ -21,11 +21,13 @@ export type AppRole =
   | "barangay_admin"
   | "health_worker"
   | "tb_coordinator"
-  | "patient";
+  | "patient"
+  | "system_admin";
 
 export const ROLE_LABELS: Record<AppRole, string> = {
+  system_admin: "System Administrator",
+  tb_coordinator: "TB Coordinator / Official",
   barangay_admin: "Barangay Admin / Frontliner",
   health_worker: "BHW / Nurse / Doctor",
-  tb_coordinator: "TB Coordinator / Official",
   patient: "Patient / Client",
 };

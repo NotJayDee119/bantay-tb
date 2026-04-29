@@ -11,6 +11,7 @@ import {
   Spinner,
 } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../hooks/useAuth";
 import { formatDate } from "../../lib/utils";
 import barangays from "../../data/barangays.json";
 
@@ -37,6 +38,9 @@ const TONE: Record<string, "success" | "warning" | "danger" | "info" | "default"
 };
 
 export function Cases() {
+  const { profile } = useAuth();
+  const canCreateCase =
+    profile?.role === "tb_coordinator" || profile?.role === "barangay_admin";
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState({
@@ -76,18 +80,33 @@ export function Cases() {
     );
   });
 
+  const filterAreaName = filter.barangay
+    ? barangays.find((b) => b.psgc === Number(filter.barangay))?.name
+    : null;
+  const subtitle = (() => {
+    const parts = [`${filtered.length} cases`];
+    if (filtered.length !== rows.length) {
+      parts[0] += ` of ${rows.length}`;
+    }
+    if (filterAreaName) parts.push(`area: ${filterAreaName}`);
+    if (filter.disease !== "all") parts.push(`disease: ${filter.disease}`);
+    return `Encode and review TB and respiratory disease cases at the barangay level · ${parts.join(" · ")}.`;
+  })();
+
   return (
     <>
       <PageHeader
         title="Active Case Finding"
-        subtitle="Encode and review TB and respiratory disease cases at the barangay level."
+        subtitle={subtitle}
         actions={
-          <Link
-            to="/app/cases/new"
-            className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-          >
-            <Plus className="h-4 w-4" /> New case
-          </Link>
+          canCreateCase ? (
+            <Link
+              to="/app/cases/new"
+              className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            >
+              <Plus className="h-4 w-4" /> New case
+            </Link>
+          ) : null
         }
       />
 
@@ -120,6 +139,35 @@ export function Cases() {
             onChange={(e) => setFilter({ ...filter, search: e.target.value })}
           />
         </div>
+        <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+          <span>
+            <span className="font-semibold text-slate-900">
+              {filtered.length}
+            </span>{" "}
+            {filtered.length === 1 ? "case" : "cases"} match
+            {filtered.length !== rows.length && (
+              <>
+                {" "}
+                <span className="text-slate-400">
+                  ({rows.length} loaded)
+                </span>
+              </>
+            )}
+          </span>
+          {(filter.barangay ||
+            filter.disease !== "all" ||
+            filter.search) && (
+            <button
+              type="button"
+              className="text-brand-700 hover:underline"
+              onClick={() =>
+                setFilter({ barangay: "", disease: "all", search: "" })
+              }
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
       </Card>
 
       {loading ? (
@@ -129,14 +177,20 @@ export function Cases() {
       ) : filtered.length === 0 ? (
         <EmptyState
           title="No cases match your filters"
-          description="Try changing the filters above, or encode a new case."
+          description={
+            canCreateCase
+              ? "Try changing the filters above, or encode a new case."
+              : "Try changing the filters above."
+          }
           action={
-            <Link
-              to="/app/cases/new"
-              className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-            >
-              <Plus className="h-4 w-4" /> New case
-            </Link>
+            canCreateCase ? (
+              <Link
+                to="/app/cases/new"
+                className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+              >
+                <Plus className="h-4 w-4" /> New case
+              </Link>
+            ) : null
           }
         />
       ) : (

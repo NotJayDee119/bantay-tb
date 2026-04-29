@@ -8,11 +8,13 @@ import {
   BookOpen,
   Bot,
   ClipboardList,
+  LayoutDashboard,
   MapPinned,
   Pill,
   Stethoscope,
   TrendingUp,
   Upload,
+  Users as UsersIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
@@ -20,6 +22,7 @@ import { Card, PageHeader, Spinner } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import type { AppRole } from "../../lib/supabase";
+import barangays from "../../data/barangays.json";
 
 interface Stats {
   totalCases: number;
@@ -119,12 +122,60 @@ export function Dashboard() {
 
   const s = stats ?? ZERO;
 
+  const assignedAreaName = profile?.barangay_psgc
+    ? barangays.find((b) => b.psgc === profile.barangay_psgc)?.name
+    : null;
+
+  // Health workers + barangay admins are barangay-scoped per PR #8 — surface
+  // their assigned area prominently so the case counts feel anchored.
+  const subtitle = (() => {
+    const base = SUBTITLE[role ?? "patient"];
+    if (
+      assignedAreaName &&
+      (role === "health_worker" || role === "barangay_admin")
+    ) {
+      return `${base} · Assigned area: ${assignedAreaName}.`;
+    }
+    return base;
+  })();
+
   return (
     <>
       <PageHeader
         title={`Welcome${profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}`}
-        subtitle={SUBTITLE[role ?? "patient"]}
+        subtitle={subtitle}
       />
+
+      {assignedAreaName &&
+        (role === "health_worker" || role === "barangay_admin") && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            className="mb-4"
+          >
+            <Card className="flex items-center gap-3 border-brand-100 bg-brand-50/40 p-4">
+              <span className="grid h-10 w-10 place-items-center rounded-lg bg-brand-100 text-brand-700">
+                <MapPinned className="h-5 w-5" />
+              </span>
+              <div className="flex-1">
+                <div className="text-xs font-semibold uppercase tracking-wide text-brand-700">
+                  Coverage area
+                </div>
+                <div className="text-base font-semibold text-slate-900">
+                  {assignedAreaName}
+                </div>
+                <p className="text-xs text-slate-600">
+                  You are tracking{" "}
+                  <span className="font-semibold text-slate-900">
+                    {s.totalCases}
+                  </span>{" "}
+                  case{s.totalCases === 1 ? "" : "s"} from this area.
+                </p>
+              </div>
+            </Card>
+          </motion.div>
+        )}
 
       {!stats && (
         <div className="flex h-32 items-center justify-center">
@@ -218,6 +269,8 @@ export function Dashboard() {
 }
 
 const SUBTITLE: Record<AppRole, string> = {
+  system_admin:
+    "Central administration — monitor system-wide data, manage users and area assignments.",
   tb_coordinator:
     "City-wide TB surveillance overview — last 30 days.",
   barangay_admin:
@@ -290,7 +343,22 @@ function tilesFor(role: AppRole | undefined, s: Stats): FrameworkTile[] {
     icon: Upload,
   };
 
+  const ADMIN_CENTRAL: FrameworkTile = {
+    to: "/app/admin",
+    title: "Central admin dashboard",
+    blurb: "System-wide users, cases, hotspots, and barangay coverage at a glance.",
+    icon: LayoutDashboard,
+  };
+  const USERS_MGMT: FrameworkTile = {
+    to: "/app/users",
+    title: "User management",
+    blurb: "Create, edit, and assign areas to BHWs / nurses / barangay admins.",
+    icon: UsersIcon,
+  };
+
   switch (role) {
+    case "system_admin":
+      return [ADMIN_CENTRAL, USERS_MGMT, GIS, ANALYTICS];
     case "health_worker":
       return [CDS, ADHERENCE, GIS, ANALYTICS];
     case "barangay_admin":

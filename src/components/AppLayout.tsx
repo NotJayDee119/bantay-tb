@@ -8,6 +8,7 @@ import {
   Bot,
   ClipboardList,
   Home,
+  LayoutDashboard,
   LogOut,
   MapPinned,
   Menu,
@@ -41,6 +42,7 @@ interface NavItem {
 }
 
 // Sidebar visibility per the BANTAY-TB conceptual framework.
+//   system_admin    : central admin dashboard, user management, settings.
 //   tb_coordinator  : city-wide surveillance — Map, Hotspots, Alerts, Cases,
 //                     Analytics, DOTS Centers admin, Bulk Import, Chatbot,
 //                     Settings, Users.
@@ -50,16 +52,22 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: "/app", label: "Dashboard", icon: Home },
   {
+    to: "/app/admin",
+    label: "Central Dashboard",
+    icon: LayoutDashboard,
+    roles: ["system_admin"],
+  },
+  {
     to: "/app/map",
     label: "GIS Map",
     icon: MapPinned,
-    roles: ["tb_coordinator", "barangay_admin", "health_worker"],
+    roles: ["tb_coordinator", "barangay_admin", "health_worker", "system_admin"],
   },
   {
     to: "/app/hotspots",
     label: "Hotspots",
     icon: AlertTriangle,
-    roles: ["tb_coordinator"],
+    roles: ["tb_coordinator", "system_admin"],
   },
   {
     to: "/app/alerts",
@@ -72,7 +80,7 @@ const NAV: NavItem[] = [
     to: "/app/cases",
     label: "Cases (ACF)",
     icon: ClipboardList,
-    roles: ["tb_coordinator", "barangay_admin"],
+    roles: ["tb_coordinator", "barangay_admin", "health_worker", "system_admin"],
   },
   {
     to: "/app/cds",
@@ -84,13 +92,13 @@ const NAV: NavItem[] = [
     to: "/app/analytics",
     label: "Analytics",
     icon: BarChart3,
-    roles: ["tb_coordinator", "health_worker"],
+    roles: ["tb_coordinator", "health_worker", "system_admin"],
   },
   {
     to: "/app/dots-admin",
     label: "DOTS Centers",
     icon: MapPinned,
-    roles: ["tb_coordinator"],
+    roles: ["tb_coordinator", "system_admin"],
   },
   {
     to: "/app/import",
@@ -120,13 +128,13 @@ const NAV: NavItem[] = [
     to: "/app/settings",
     label: "Settings",
     icon: Settings,
-    roles: ["tb_coordinator"],
+    roles: ["tb_coordinator", "system_admin"],
   },
   {
     to: "/app/users",
     label: "Users",
     icon: Users,
-    roles: ["tb_coordinator"],
+    roles: ["tb_coordinator", "system_admin"],
   },
 ];
 
