@@ -36,3 +36,6 @@ supabase/.env
 # tsc build artifacts
 *.tsbuildinfo
 
+# uipro design skill scaffolding (local-only; not shipped with the app).
+.claude/
+
