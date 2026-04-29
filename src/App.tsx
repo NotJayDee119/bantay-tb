@@ -64,7 +64,9 @@ export default function App() {
         <Route
           path="map"
           element={
-            <RequireRole roles={["tb_coordinator", "health_worker"]}>
+            <RequireRole
+              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
+            >
               <MapView />
             </RequireRole>
           }
@@ -106,7 +108,7 @@ export default function App() {
         <Route
           path="cds"
           element={
-            <RequireRole roles={["tb_coordinator", "health_worker"]}>
+            <RequireRole roles={["health_worker"]}>
               <Cds />
             </RequireRole>
           }
@@ -122,9 +124,7 @@ export default function App() {
         <Route
           path="adherence"
           element={
-            <RequireRole
-              roles={["tb_coordinator", "health_worker", "patient"]}
-            >
+            <RequireRole roles={["health_worker", "patient"]}>
               <Adherence />
             </RequireRole>
           }
@@ -148,7 +148,7 @@ export default function App() {
         <Route
           path="education"
           element={
-            <RequireRole roles={["tb_coordinator", "patient"]}>
+            <RequireRole roles={["patient"]}>
               <HealthEducation />
             </RequireRole>
           }
