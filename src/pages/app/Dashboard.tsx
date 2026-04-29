@@ -5,6 +5,8 @@ import {
   AlertTriangle,
   BarChart3,
   Bell,
+  BookOpen,
+  Bot,
   ClipboardList,
   MapPinned,
   Pill,
@@ -321,13 +323,13 @@ function FrameworkTiles({
           to: "/app/chatbot",
           label: "Ask the health chatbot",
           blurb: "English, Filipino, or Bisaya — anytime.",
-          icon: Bell,
+          icon: Bot,
         },
         {
           to: "/app/education",
           label: "Read health education",
           blurb: "Plain-language guides on TB and respiratory care.",
-          icon: BarChart3,
+          icon: BookOpen,
         },
       ];
       return (
