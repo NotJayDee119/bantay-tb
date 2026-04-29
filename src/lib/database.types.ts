@@ -39,7 +39,8 @@ export interface Database {
             | "barangay_admin"
             | "health_worker"
             | "tb_coordinator"
-            | "patient";
+            | "patient"
+            | "system_admin";
           barangay_psgc: number | null;
           phone: string | null;
           created_at: string;

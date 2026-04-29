@@ -25,6 +25,7 @@ import { DotsCentersAdmin } from "./pages/app/DotsCentersAdmin";
 import { SettingsPage } from "./pages/app/SettingsPage";
 import { Analytics } from "./pages/app/Analytics";
 import { Users } from "./pages/app/Users";
+import { AdminDashboard } from "./pages/app/AdminDashboard";
 import { Spinner } from "./components/ui";
 
 function RequireRole({
@@ -62,10 +63,23 @@ export default function App() {
       <Route path="app" element={<AppLayout />}>
         <Route index element={<Dashboard />} />
         <Route
+          path="admin"
+          element={
+            <RequireRole roles={["system_admin"]}>
+              <AdminDashboard />
+            </RequireRole>
+          }
+        />
+        <Route
           path="map"
           element={
             <RequireRole
-              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
+              roles={[
+                "tb_coordinator",
+                "barangay_admin",
+                "health_worker",
+                "system_admin",
+              ]}
             >
               <MapView />
             </RequireRole>
@@ -74,7 +88,7 @@ export default function App() {
         <Route
           path="hotspots"
           element={
-            <RequireRole roles={["tb_coordinator"]}>
+            <RequireRole roles={["tb_coordinator", "system_admin"]}>
               <Hotspots />
             </RequireRole>
           }
@@ -92,7 +106,14 @@ export default function App() {
         <Route
           path="cases"
           element={
-            <RequireRole roles={["tb_coordinator", "barangay_admin"]}>
+            <RequireRole
+              roles={[
+                "tb_coordinator",
+                "barangay_admin",
+                "health_worker",
+                "system_admin",
+              ]}
+            >
               <Cases />
             </RequireRole>
           }
@@ -116,7 +137,7 @@ export default function App() {
         <Route
           path="dots-admin"
           element={
-            <RequireRole roles={["tb_coordinator"]}>
+            <RequireRole roles={["tb_coordinator", "system_admin"]}>
               <DotsCentersAdmin />
             </RequireRole>
           }
@@ -156,7 +177,9 @@ export default function App() {
         <Route
           path="analytics"
           element={
-            <RequireRole roles={["tb_coordinator", "health_worker"]}>
+            <RequireRole
+              roles={["tb_coordinator", "health_worker", "system_admin"]}
+            >
               <Analytics />
             </RequireRole>
           }
@@ -164,7 +187,7 @@ export default function App() {
         <Route
           path="settings"
           element={
-            <RequireRole roles={["tb_coordinator"]}>
+            <RequireRole roles={["tb_coordinator", "system_admin"]}>
               <SettingsPage />
             </RequireRole>
           }
@@ -172,7 +195,7 @@ export default function App() {
         <Route
           path="users"
           element={
-            <RequireRole roles={["tb_coordinator"]}>
+            <RequireRole roles={["tb_coordinator", "system_admin"]}>
               <Users />
             </RequireRole>
           }

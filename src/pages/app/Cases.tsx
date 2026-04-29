@@ -76,11 +76,24 @@ export function Cases() {
     );
   });
 
+  const filterAreaName = filter.barangay
+    ? barangays.find((b) => b.psgc === Number(filter.barangay))?.name
+    : null;
+  const subtitle = (() => {
+    const parts = [`${filtered.length} cases`];
+    if (filtered.length !== rows.length) {
+      parts[0] += ` of ${rows.length}`;
+    }
+    if (filterAreaName) parts.push(`area: ${filterAreaName}`);
+    if (filter.disease !== "all") parts.push(`disease: ${filter.disease}`);
+    return `Encode and review TB and respiratory disease cases at the barangay level · ${parts.join(" · ")}.`;
+  })();
+
   return (
     <>
       <PageHeader
         title="Active Case Finding"
-        subtitle="Encode and review TB and respiratory disease cases at the barangay level."
+        subtitle={subtitle}
         actions={
           <Link
             to="/app/cases/new"
@@ -119,6 +132,35 @@ export function Cases() {
             value={filter.search}
             onChange={(e) => setFilter({ ...filter, search: e.target.value })}
           />
+        </div>
+        <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+          <span>
+            <span className="font-semibold text-slate-900">
+              {filtered.length}
+            </span>{" "}
+            {filtered.length === 1 ? "case" : "cases"} match
+            {filtered.length !== rows.length && (
+              <>
+                {" "}
+                <span className="text-slate-400">
+                  ({rows.length} loaded)
+                </span>
+              </>
+            )}
+          </span>
+          {(filter.barangay ||
+            filter.disease !== "all" ||
+            filter.search) && (
+            <button
+              type="button"
+              className="text-brand-700 hover:underline"
+              onClick={() =>
+                setFilter({ barangay: "", disease: "all", search: "" })
+              }
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       </Card>
 

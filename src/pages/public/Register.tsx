@@ -94,11 +94,13 @@ export function Register() {
                 setForm({ ...form, role: e.target.value as AppRole })
               }
             >
-              {(Object.keys(ROLE_LABELS) as AppRole[]).map((r) => (
-                <option key={r} value={r}>
-                  {ROLE_LABELS[r]}
-                </option>
-              ))}
+              {(Object.keys(ROLE_LABELS) as AppRole[])
+                .filter((r) => r !== "system_admin")
+                .map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABELS[r]}
+                  </option>
+                ))}
             </Select>
           </div>
           <div className="space-y-1.5">
