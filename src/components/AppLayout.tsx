@@ -22,11 +22,11 @@ import {
 import {
   Link,
   NavLink,
-  Outlet,
   useLocation,
   useNavigate,
+  useOutlet,
 } from "react-router-dom";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useAuth } from "../hooks/useAuth";
 import { ROLE_LABELS, type AppRole } from "../lib/supabase";
 import { supabase } from "../lib/supabase";
@@ -139,6 +139,7 @@ export function AppLayout() {
 
   const role = profile?.role;
   const userId = profile?.id;
+  const outlet = useOutlet();
   useEffect(() => {
     if (
       role !== "tb_coordinator" &&
@@ -195,8 +196,13 @@ export function AppLayout() {
     (n) => !n.roles || n.roles.includes(profile.role)
   );
 
-  const sidebarBody = (
-    <>
+  // The sidebar is rendered twice (desktop + mobile drawer). We scope the
+  // active-nav layoutId per instance with LayoutGroup so framer-motion does
+  // not try to share-layout-animate across the two simultaneously-mounted
+  // copies (the desktop one is hidden via display:none on mobile but still
+  // mounted in the DOM).
+  const renderSidebar = (scope: "desktop" | "mobile") => (
+    <LayoutGroup id={`sidebar-${scope}`}>
       <Link
         to="/app"
         className="flex items-center gap-2.5 px-5 py-5"
@@ -287,7 +293,7 @@ export function AppLayout() {
           <LogOut className="h-4 w-4" /> Sign out
         </button>
       </div>
-    </>
+    </LayoutGroup>
   );
 
   return (
@@ -330,7 +336,7 @@ export function AppLayout() {
               transition={{ type: "spring", stiffness: 360, damping: 36 }}
               className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white md:hidden"
             >
-              {sidebarBody}
+              {renderSidebar("mobile")}
             </motion.aside>
           </>
         )}
@@ -338,22 +344,25 @@ export function AppLayout() {
 
       {/* Desktop sidebar */}
       <aside className="hidden w-64 flex-shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
-        {sidebarBody}
+        {renderSidebar("desktop")}
       </aside>
 
       <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-            >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
+          {/* Page-transition fade-in. We deliberately omit `exit` + `mode="wait"`:
+              React Router's Outlet (and even useOutlet's element) reads from a
+              context that updates immediately on navigation, so an exit
+              animation would cause the *new* page content to flash out before
+              fading back in. A simple fade-in keyed by pathname avoids the
+              double-flash while still feeling smooth. */}
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
+            {outlet}
+          </motion.div>
         </div>
       </main>
     </div>
