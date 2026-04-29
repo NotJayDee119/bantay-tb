@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
@@ -192,12 +193,12 @@ export function AdminDashboard() {
             barangay has no active reporter — review user assignments below to
             close coverage gaps.
           </p>
-          <a
-            href="/app/users"
+          <Link
+            to="/app/users"
             className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
           >
             <UsersIcon className="h-4 w-4" /> Manage users & area assignments
-          </a>
+          </Link>
         </Card>
       </div>
     </>

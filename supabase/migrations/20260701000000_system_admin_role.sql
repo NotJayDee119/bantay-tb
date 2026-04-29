@@ -89,3 +89,59 @@ create policy "profiles admin update"
   on public.profiles for update
   using (public.is_super_admin())
   with check (public.is_super_admin());
+
+-- ---------------------------------------------------------------------------
+-- Privilege escalation guard: prevent self-registration as system_admin.
+--
+-- The handle_new_user() trigger (defined in 20260101000000_init.sql) blindly
+-- trusts the role value supplied in raw_user_meta_data. The frontend filters
+-- 'system_admin' out of the registration role dropdown, but a malicious user
+-- could call supabase.auth.signUp() directly with role = 'system_admin' in
+-- the user metadata, and combined with the new admin-update RLS policy
+-- above this would be a complete privilege escalation. Cap the role inside
+-- the trigger so only an existing system_admin (via /app/users) can elevate
+-- another account.
+--
+-- Defense in depth: the profiles self-insert policy is also tightened to
+-- forbid 'system_admin' inserts directly through the API.
+-- ---------------------------------------------------------------------------
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  bgy bigint;
+  requested public.app_role;
+  effective public.app_role;
+begin
+  bgy := nullif(new.raw_user_meta_data ->> 'barangay_psgc', '')::bigint;
+  requested := coalesce(
+    (new.raw_user_meta_data ->> 'role')::public.app_role,
+    'patient'::public.app_role
+  );
+  -- Cap self-registered system_admin requests down to 'patient'. A real
+  -- system admin must be promoted by an existing system_admin via /app/users.
+  if requested = 'system_admin'::public.app_role then
+    effective := 'patient'::public.app_role;
+  else
+    effective := requested;
+  end if;
+  insert into public.profiles (id, email, full_name, role, barangay_psgc)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data ->> 'full_name', ''),
+    effective,
+    bgy
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop policy if exists "profiles self insert" on public.profiles;
+create policy "profiles self insert"
+  on public.profiles for insert
+  with check (auth.uid() = id and role <> 'system_admin'::public.app_role);
