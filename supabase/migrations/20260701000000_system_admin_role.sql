@@ -145,3 +145,23 @@ drop policy if exists "profiles self insert" on public.profiles;
 create policy "profiles self insert"
   on public.profiles for insert
   with check (auth.uid() = id and role <> 'system_admin'::public.app_role);
+
+-- The pre-existing "profiles self update" policy from 20260101000000_init.sql
+-- only checks `auth.uid() = id`, which lets any authenticated user mutate
+-- ANY column on their own profile — including `role`. With the new admin
+-- powers granted to system_admin above, that becomes a complete privilege
+-- escalation: a user could run
+--   supabase.from('profiles').update({ role: 'system_admin' }).eq('id', me)
+-- from the browser and immediately gain citywide access + admin-update on
+-- everyone else's profile. Tighten the self-update policy so users can
+-- still update their own profile (name, phone, barangay) but cannot
+-- elevate themselves to system_admin. Demoting also blocked from this
+-- side — only the "profiles admin update" policy may set system_admin.
+drop policy if exists "profiles self update" on public.profiles;
+create policy "profiles self update"
+  on public.profiles for update
+  using (auth.uid() = id)
+  with check (
+    auth.uid() = id
+    and role <> 'system_admin'::public.app_role
+  );
