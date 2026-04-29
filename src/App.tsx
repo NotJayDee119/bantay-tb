@@ -20,6 +20,9 @@ import { Adherence } from "./pages/app/Adherence";
 import { BulkImport } from "./pages/app/BulkImport";
 import { Chatbot } from "./pages/app/Chatbot";
 import { HealthEducation } from "./pages/app/HealthEducation";
+import { Cds } from "./pages/app/Cds";
+import { DotsCentersAdmin } from "./pages/app/DotsCentersAdmin";
+import { SettingsPage } from "./pages/app/SettingsPage";
 import { Users } from "./pages/app/Users";
 import { Spinner } from "./components/ui";
 
@@ -105,6 +108,24 @@ export default function App() {
             </RequireRole>
           }
         />
+        <Route
+          path="cds"
+          element={
+            <RequireRole
+              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
+            >
+              <Cds />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="dots-admin"
+          element={
+            <RequireRole roles={["tb_coordinator", "barangay_admin"]}>
+              <DotsCentersAdmin />
+            </RequireRole>
+          }
+        />
         <Route path="adherence" element={<Adherence />} />
         <Route
           path="import"
@@ -116,6 +137,14 @@ export default function App() {
         />
         <Route path="chatbot" element={<Chatbot />} />
         <Route path="education" element={<HealthEducation />} />
+        <Route
+          path="settings"
+          element={
+            <RequireRole roles={["tb_coordinator", "barangay_admin"]}>
+              <SettingsPage />
+            </RequireRole>
+          }
+        />
         <Route
           path="users"
           element={

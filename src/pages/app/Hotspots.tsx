@@ -4,6 +4,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Badge, Button, Card, PageHeader, Spinner } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 import { dbscan, type DbscanPoint } from "../../lib/dbscan";
+import { loadDbscanSettings } from "../../lib/dbscanSettings";
 import { formatDateTime } from "../../lib/utils";
 import barangays from "../../data/barangays.json";
 import { toast } from "sonner";
@@ -67,8 +68,9 @@ export function Hotspots() {
   async function recompute() {
     setRunning(true);
     try {
+      const settings = await loadDbscanSettings();
       const since = new Date();
-      since.setDate(since.getDate() - 90);
+      since.setDate(since.getDate() - settings.window_days);
       const { data, error } = await supabase
         .from("cases")
         .select("id, barangay_psgc, jitter_lat, jitter_lon")
@@ -82,7 +84,7 @@ export function Hotspots() {
           lon: c.jitter_lon,
         })
       );
-      const clusters = dbscan(points, 1.2, 8);
+      const clusters = dbscan(points, settings.eps_km, settings.min_pts);
 
       const inserts = clusters.map((cl) => {
         // Most-represented barangay in the cluster

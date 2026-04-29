@@ -142,6 +142,20 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["dots_centers"]["Row"]>;
         Relationships: [];
       };
+      app_settings: {
+        Row: {
+          key: string;
+          value: Record<string, unknown>;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: Partial<Database["public"]["Tables"]["app_settings"]["Row"]> & {
+          key: string;
+          value: Record<string, unknown>;
+        };
+        Update: Partial<Database["public"]["Tables"]["app_settings"]["Row"]>;
+        Relationships: [];
+      };
       adherence_schedules: {
         Row: {
           id: string;
