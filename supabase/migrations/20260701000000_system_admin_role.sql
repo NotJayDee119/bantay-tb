@@ -157,6 +157,11 @@ create policy "profiles self insert"
 -- (name, phone, barangay) but the `role` column is frozen on the self path.
 -- Only the "profiles admin update" policy (gated on is_super_admin()) can
 -- change roles.
+-- barangay_psgc must also be frozen on the self path: a health_worker or
+-- barangay_admin could otherwise call
+--   supabase.from('profiles').update({ barangay_psgc: <other> }).eq('id', me)
+-- and slide into another barangay's RLS scope (cases, adherence, SMS).
+-- Only system_admin can reassign areas, via the admin update policy.
 drop policy if exists "profiles self update" on public.profiles;
 create policy "profiles self update"
   on public.profiles for update
@@ -165,4 +170,6 @@ create policy "profiles self update"
     auth.uid() = id
     and role is not distinct from
       (select p.role from public.profiles p where p.id = auth.uid())
+    and barangay_psgc is not distinct from
+      (select p.barangay_psgc from public.profiles p where p.id = auth.uid())
   );

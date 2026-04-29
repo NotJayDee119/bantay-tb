@@ -43,9 +43,17 @@ export function AdminDashboard() {
       const since = new Date();
       since.setDate(since.getDate() - 30);
 
-      const [usersQ, casesQ, hotspotsQ, byBarangayQ, totalBgyQ] =
+      // Count users per role with server-side count (head:true) so we don't
+      // hit PostgREST's default 1000-row cap once the system has many users.
+      const roleCountQs = ROLE_ORDER.map((r) =>
+        supabase
+          .from("profiles")
+          .select("id", { count: "exact", head: true })
+          .eq("role", r)
+      );
+
+      const [casesQ, hotspotsQ, byBarangayQ, totalBgyQ, ...roleQs] =
         await Promise.all([
-          supabase.from("profiles").select("role"),
           supabase
             .from("cases")
             .select("id", { count: "exact", head: true }),
@@ -60,6 +68,7 @@ export function AdminDashboard() {
           supabase
             .from("barangays")
             .select("psgc", { count: "exact", head: true }),
+          ...roleCountQs,
         ]);
 
       if (cancelled) return;
@@ -71,15 +80,18 @@ export function AdminDashboard() {
         health_worker: 0,
         patient: 0,
       };
-      for (const row of (usersQ.data ?? []) as { role: AppRole }[]) {
-        byRole[row.role] = (byRole[row.role] ?? 0) + 1;
-      }
+      let totalUsers = 0;
+      ROLE_ORDER.forEach((r, i) => {
+        const c = roleQs[i]?.count ?? 0;
+        byRole[r] = c;
+        totalUsers += c;
+      });
 
       const counts = (byBarangayQ.data ?? []) as BarangayCount[];
       const barangaysWithCases = counts.filter((c) => c.case_count > 0).length;
 
       setStats({
-        totalUsers: (usersQ.data ?? []).length,
+        totalUsers,
         byRole,
         totalCases: casesQ.count ?? 0,
         activeHotspots: hotspotsQ.count ?? 0,
