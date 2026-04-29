@@ -174,34 +174,65 @@ Deno.serve(async (req) => {
   });
 
   if (inserts.length > 0) {
-    let inserted: { id: string; severity: string }[];
+    let inserted: {
+      id: string;
+      severity: string;
+      barangay_psgc: number | null;
+    }[];
     try {
-      inserted = await dbInsert<{ id: string; severity: string }>(
+      inserted = await dbInsert<{
+        id: string;
+        severity: string;
+        barangay_psgc: number | null;
+      }>(
         cfg,
         "hotspots",
-        inserts as unknown as { id: string; severity: string }[]
+        inserts as unknown as {
+          id: string;
+          severity: string;
+          barangay_psgc: number | null;
+        }[]
       );
     } catch (err) {
       return json({ error: err instanceof Error ? err.message : String(err) }, 500);
     }
 
-    // Notify TB Coordinators about HIGH severity clusters.
-    const highIds = inserted
-      .filter((h) => h.severity === "high")
-      .map((h) => h.id);
-    if (highIds.length > 0) {
+    // Notify staff about HIGH severity clusters.
+    const highHotspots = inserted.filter((h) => h.severity === "high");
+    if (highHotspots.length > 0) {
       try {
-        // Notify everyone whose dashboard exposes the Alerts inbox.
-        // Per the BANTAY-TB framework: tb_coordinator, barangay_admin, and
-        // health_worker (BHWs / nurses / doctors monitoring adherence + alerts).
-        const recipients = await dbSelect<{ id: string }>(
+        // Per the BANTAY-TB framework + community-scoped RLS:
+        //   * tb_coordinator gets every high-severity alert (citywide).
+        //   * barangay_admin / health_worker only get alerts for hotspots
+        //     in *their own* barangay.
+        const recipients = await dbSelect<{
+          id: string;
+          role: string;
+          barangay_psgc: number | null;
+        }>(
           cfg,
           "profiles",
-          "select=id&role=in.(tb_coordinator,barangay_admin,health_worker)"
+          "select=id,role,barangay_psgc&role=in.(tb_coordinator,barangay_admin,health_worker)"
         );
-        const alerts = recipients.flatMap((c) =>
-          highIds.map((hid) => ({ hotspot_id: hid, recipient_id: c.id }))
-        );
+
+        const alerts: { hotspot_id: string; recipient_id: string }[] = [];
+        for (const h of highHotspots) {
+          for (const r of recipients) {
+            if (r.role === "tb_coordinator") {
+              alerts.push({ hotspot_id: h.id, recipient_id: r.id });
+              continue;
+            }
+            // BA / HW: only notify if hotspot is in their assigned barangay.
+            if (
+              r.barangay_psgc !== null &&
+              h.barangay_psgc !== null &&
+              r.barangay_psgc === h.barangay_psgc
+            ) {
+              alerts.push({ hotspot_id: h.id, recipient_id: r.id });
+            }
+          }
+        }
+
         if (alerts.length > 0) {
           await dbInsert(cfg, "hotspot_alerts", alerts, { returning: false });
         }

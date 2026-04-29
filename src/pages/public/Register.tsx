@@ -102,9 +102,18 @@ export function Register() {
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="barangay">Barangay (optional)</Label>
+            <Label htmlFor="barangay">
+              Barangay
+              {form.role === "barangay_admin" || form.role === "health_worker"
+                ? " (required)"
+                : " (optional)"}
+            </Label>
             <Select
               id="barangay"
+              required={
+                form.role === "barangay_admin" ||
+                form.role === "health_worker"
+              }
               value={form.barangayPsgc}
               onChange={(e) =>
                 setForm({ ...form, barangayPsgc: e.target.value })
@@ -117,6 +126,13 @@ export function Register() {
                 </option>
               ))}
             </Select>
+            {(form.role === "barangay_admin" ||
+              form.role === "health_worker") && (
+              <p className="text-xs text-slate-500">
+                Frontliners and BHWs/nurses/doctors only see cases, hotspots,
+                and patients within their assigned barangay.
+              </p>
+            )}
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? (
