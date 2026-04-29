@@ -6,8 +6,8 @@ import { supabase } from "../../lib/supabase";
 interface RawCase {
   age: number | null;
   sex: "male" | "female" | null;
-  classification: string | null;
-  outcome: string | null;
+  tb_classification: string | null;
+  treatment_outcome: string | null;
   reported_at: string;
 }
 
@@ -37,7 +37,7 @@ export function Analytics() {
       since.setMonth(since.getMonth() - 12);
       const { data: rows } = await supabase
         .from("cases")
-        .select("age, sex, classification, outcome, reported_at")
+        .select("age, sex, tb_classification, treatment_outcome, reported_at")
         .gte("reported_at", since.toISOString())
         .limit(20000);
       if (cancelled) return;
@@ -149,10 +149,10 @@ function summarize(rows: RawCase[]): AnalyticsData {
     const sex = c.sex ?? "unknown";
     bySexMap.set(sex, (bySexMap.get(sex) ?? 0) + 1);
 
-    const cls = c.classification ?? "unspecified";
+    const cls = c.tb_classification ?? "unspecified";
     byClassMap.set(cls, (byClassMap.get(cls) ?? 0) + 1);
 
-    const out = c.outcome ?? "unknown";
+    const out = c.treatment_outcome ?? "unknown";
     byOutcomeMap.set(out, (byOutcomeMap.get(out) ?? 0) + 1);
   }
 
