@@ -9,7 +9,15 @@ import {
 } from "../../data/healthContent";
 import { LOCALE_LABEL, type Locale } from "../../lib/i18n";
 
-const DISEASES: Disease[] = ["tb", "pneumonia", "covid19", "asthma"];
+const DISEASES: Disease[] = [
+  "tb",
+  "pneumonia",
+  "covid19",
+  "influenza",
+  "bronchitis",
+  "copd",
+  "asthma",
+];
 const CATEGORIES: Category[] = [
   "overview",
   "symptoms",
