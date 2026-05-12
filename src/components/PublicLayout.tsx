@@ -7,6 +7,7 @@ import {
   useOutlet,
 } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
+import { PublicChatbotFab } from "./PublicChatbotFab";
 
 const NAV = [
   { to: "/", label: "Home" },
@@ -131,6 +132,7 @@ export function PublicLayout() {
           </p>
         </div>
       </footer>
+      <PublicChatbotFab />
     </div>
   );
 }
