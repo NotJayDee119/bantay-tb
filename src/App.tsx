@@ -11,14 +11,13 @@ import { Login } from "./pages/public/Login";
 import { Register } from "./pages/public/Register";
 
 import { Dashboard } from "./pages/app/Dashboard";
-import { MapView } from "./pages/app/MapView";
+import { GISMapTab } from "./pages/app/GISMapTab";
 import { Hotspots } from "./pages/app/Hotspots";
 import { Alerts } from "./pages/app/Alerts";
 import { Cases } from "./pages/app/Cases";
 import { CaseFormPage } from "./pages/app/CaseFormPage";
 import { Adherence } from "./pages/app/Adherence";
 import { BulkImport } from "./pages/app/BulkImport";
-import { Chatbot } from "./pages/app/Chatbot";
 import { HealthEducation } from "./pages/app/HealthEducation";
 import { Cds } from "./pages/app/Cds";
 import { DotsCentersAdmin } from "./pages/app/DotsCentersAdmin";
@@ -81,7 +80,7 @@ export default function App() {
                 "system_admin",
               ]}
             >
-              <MapView />
+              <GISMapTab />
             </RequireRole>
           }
         />
@@ -155,14 +154,6 @@ export default function App() {
           element={
             <RequireRole roles={["tb_coordinator"]}>
               <BulkImport />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="chatbot"
-          element={
-            <RequireRole roles={["tb_coordinator", "patient"]}>
-              <Chatbot />
             </RequireRole>
           }
         />

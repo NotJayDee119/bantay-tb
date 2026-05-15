@@ -5,7 +5,6 @@ import {
   BarChart3,
   Bell,
   BookOpen,
-  Bot,
   ClipboardList,
   Home,
   LayoutDashboard,
@@ -32,6 +31,8 @@ import { useAuth } from "../hooks/useAuth";
 import { ROLE_LABELS, type AppRole } from "../lib/supabase";
 import { supabase } from "../lib/supabase";
 import { Spinner } from "./ui";
+import { FloatingChatButton } from "./FloatingChatButton";
+import { ChatbotModal } from "./ChatbotModal";
 
 interface NavItem {
   to: string;
@@ -113,12 +114,6 @@ const NAV: NavItem[] = [
     roles: ["health_worker", "patient"],
   },
   {
-    to: "/app/chatbot",
-    label: "Chatbot",
-    icon: Bot,
-    roles: ["tb_coordinator", "patient"],
-  },
-  {
     to: "/app/education",
     label: "Health Education",
     icon: BookOpen,
@@ -148,6 +143,7 @@ export function AppLayout() {
   const role = profile?.role;
   const userId = profile?.id;
   const outlet = useOutlet();
+  const [chatOpen, setChatOpen] = useState(false);
   useEffect(() => {
     if (
       role !== "tb_coordinator" &&
@@ -354,6 +350,9 @@ export function AppLayout() {
       <aside className="hidden w-64 flex-shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
         {renderSidebar("desktop")}
       </aside>
+
+      <FloatingChatButton onClick={() => setChatOpen(true)} />
+      <ChatbotModal isOpen={chatOpen} onClose={() => setChatOpen(false)} />
 
       <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
