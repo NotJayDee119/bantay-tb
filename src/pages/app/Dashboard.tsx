@@ -204,19 +204,33 @@ export function Dashboard() {
   const cancelRef = useRef(false);
 
   const fetchData = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("cases")
-      .select(
-        "id, barangay_psgc, reported_at, created_at, tb_classification, jitter_lat, jitter_lon"
-      )
-      .eq("disease", "tb");
-    if (cancelRef.current) return;
-    if (error || !data) {
-      setStats(null);
-      setLoading(false);
-      return;
+    // Supabase imposes a default 1000-row response cap; page through it so we
+    // never undercount when the dataset grows past that limit.
+    const pageSize = 1000;
+    const all: DashboardCaseRow[] = [];
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from("cases")
+        .select(
+          "id, barangay_psgc, reported_at, created_at, tb_classification, jitter_lat, jitter_lon"
+        )
+        .eq("disease", "tb")
+        .order("created_at", { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (cancelRef.current) return;
+      if (error || !data) {
+        if (all.length === 0) {
+          setStats(null);
+          setLoading(false);
+          return;
+        }
+        break;
+      }
+      all.push(...(data as unknown as DashboardCaseRow[]));
+      if (data.length < pageSize) break;
     }
-    setStats(buildStats(data as unknown as DashboardCaseRow[]));
+    if (cancelRef.current) return;
+    setStats(buildStats(all));
     setLoading(false);
   }, []);
 
@@ -242,8 +256,15 @@ export function Dashboard() {
       )
       .subscribe();
 
+    // Polling fallback so the dashboard still refreshes even if Supabase
+    // realtime is not enabled for the `cases` table on this project.
+    const poll = window.setInterval(() => {
+      fetchData();
+    }, 60_000);
+
     return () => {
       cancelRef.current = true;
+      window.clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [role, fetchData]);
