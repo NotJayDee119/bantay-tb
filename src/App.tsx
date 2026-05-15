@@ -18,6 +18,7 @@ import { Cases } from "./pages/app/Cases";
 import { CaseFormPage } from "./pages/app/CaseFormPage";
 import { Adherence } from "./pages/app/Adherence";
 import { BulkImport } from "./pages/app/BulkImport";
+import { Chatbot } from "./pages/app/Chatbot";
 import { HealthEducation } from "./pages/app/HealthEducation";
 import { Cds } from "./pages/app/Cds";
 import { DotsCentersAdmin } from "./pages/app/DotsCentersAdmin";
@@ -154,6 +155,14 @@ export default function App() {
           element={
             <RequireRole roles={["tb_coordinator"]}>
               <BulkImport />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="chatbot"
+          element={
+            <RequireRole roles={["tb_coordinator", "patient"]}>
+              <Chatbot />
             </RequireRole>
           }
         />

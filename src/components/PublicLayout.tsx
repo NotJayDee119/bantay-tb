@@ -7,8 +7,7 @@ import {
   useOutlet,
 } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { FloatingChatButton } from "./FloatingChatButton";
-import { ChatbotModal } from "./ChatbotModal";
+import { PublicChatbotFab } from "./PublicChatbotFab";
 
 const NAV = [
   { to: "/", label: "Home" },
@@ -20,7 +19,6 @@ export function PublicLayout() {
   const location = useLocation();
   const outlet = useOutlet();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
 
   // Close drawer on navigation.
   useEffect(() => {
@@ -134,8 +132,7 @@ export function PublicLayout() {
           </p>
         </div>
       </footer>
-      <FloatingChatButton onClick={() => setChatOpen(true)} />
-      <ChatbotModal isOpen={chatOpen} onClose={() => setChatOpen(false)} />
+      <PublicChatbotFab />
     </div>
   );
 }
