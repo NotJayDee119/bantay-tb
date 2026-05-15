@@ -11,7 +11,7 @@ import { Login } from "./pages/public/Login";
 import { Register } from "./pages/public/Register";
 
 import { Dashboard } from "./pages/app/Dashboard";
-import { MapView } from "./pages/app/MapView";
+import { GISMapTab } from "./pages/app/GISMapTab";
 import { Hotspots } from "./pages/app/Hotspots";
 import { Alerts } from "./pages/app/Alerts";
 import { Cases } from "./pages/app/Cases";
@@ -81,7 +81,7 @@ export default function App() {
                 "system_admin",
               ]}
             >
-              <MapView />
+              <GISMapTab />
             </RequireRole>
           }
         />
