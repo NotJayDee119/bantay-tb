@@ -15,6 +15,11 @@ export interface HotspotCaseRow {
   reported_at: string | null;
   created_at: string | null;
   tb_classification: TBClassification | null;
+  // Optional per-case jittered coordinates (preferred when available so DBSCAN
+  // produces precise clusters instead of stacking every case at the
+  // barangay centroid).
+  jitter_lat?: number | null;
+  jitter_lon?: number | null;
 }
 
 interface BarangayMeta {
@@ -122,15 +127,26 @@ export function computeHotspotInsights(
   barangayStats.sort((a, b) => b.caseCount - a.caseCount);
   const topBarangays = barangayStats.slice(0, 10);
 
-  // Build DBSCAN input. We position each case at its barangay centroid; cases
-  // in unknown barangays are dropped from clustering but still counted above.
+  // Build DBSCAN input. Prefer per-case jittered coordinates for precise
+  // clustering; fall back to the barangay centroid when jitter coords are
+  // not present. Cases with no resolvable position are dropped from
+  // clustering but still counted in the summary.
   const points: DbscanPoint[] = [];
   const pointBgy: number[] = [];
   for (let i = 0; i < cases.length; i += 1) {
-    const meta = BARANGAY_INDEX.get(cases[i].barangay_psgc);
-    if (!meta) continue;
-    points.push({ id: String(i), lat: meta.lat, lon: meta.lon });
-    pointBgy.push(cases[i].barangay_psgc);
+    const row = cases[i];
+    const meta = BARANGAY_INDEX.get(row.barangay_psgc);
+    const lat =
+      typeof row.jitter_lat === "number" && Number.isFinite(row.jitter_lat)
+        ? row.jitter_lat
+        : meta?.lat;
+    const lon =
+      typeof row.jitter_lon === "number" && Number.isFinite(row.jitter_lon)
+        ? row.jitter_lon
+        : meta?.lon;
+    if (typeof lat !== "number" || typeof lon !== "number") continue;
+    points.push({ id: String(i), lat, lon });
+    pointBgy.push(row.barangay_psgc);
   }
 
   const rawClusters = dbscan(points, DBSCAN_EPS_KM, DBSCAN_MIN_PTS);

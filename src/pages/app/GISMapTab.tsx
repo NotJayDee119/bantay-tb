@@ -22,7 +22,9 @@ export function GISMapTab({ focusBarangay = null }: GISMapTabProps) {
       setLoading(true);
       const { data: allCases, error } = await supabase
         .from("cases")
-        .select("barangay_psgc, reported_at, created_at, tb_classification")
+        .select(
+          "barangay_psgc, reported_at, created_at, tb_classification, jitter_lat, jitter_lon"
+        )
         .eq("disease", "tb");
 
       if (error || !allCases) {
@@ -46,23 +48,21 @@ export function GISMapTab({ focusBarangay = null }: GISMapTabProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
+      <div className="flex h-[calc(100vh-8rem)] items-center justify-center rounded-2xl border border-slate-200 bg-white">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[#0f7b5c]"></div>
-          <p className="mt-4 text-gray-600">Loading map data...</p>
+          <div className="inline-block h-12 w-12 animate-spin rounded-full border-b-2 border-brand-600"></div>
+          <p className="mt-4 text-sm text-slate-600">Loading map data…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white overflow-hidden" style={{ height: "100vh" }}>
-      <div style={{ height: "100%" }}>
-        <AdminHotspotMap
-          hotspotInsights={hotspotInsights}
-          focusBarangay={focusBarangay}
-        />
-      </div>
+    <div className="h-[calc(100vh-8rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <AdminHotspotMap
+        hotspotInsights={hotspotInsights}
+        focusBarangay={focusBarangay}
+      />
     </div>
   );
 }
