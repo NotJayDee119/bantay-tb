@@ -1,223 +1,277 @@
 import {
-  Activity,
-  AlertTriangle,
-  Bot,
-  ClipboardList,
-  Database,
+  ArrowRight,
+  BookOpenCheck,
+  HeartPulse,
+  MapPin,
   MapPinned,
-  Pill,
   ShieldCheck,
-  Sparkles,
   Stethoscope,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
-import { motion } from "motion/react";
 
-interface Feature {
-  icon: LucideIcon;
-  title: string;
-  body: string;
-}
+const STATS = [
+  { value: "8,601", label: "TB cases reported in 2024" },
+  { value: "182", label: "Barangays in Davao City" },
+  { value: "24/7", label: "Public information access" },
+];
 
-const FEATURES: Feature[] = [
+const PATIENT_POINTS: { icon: LucideIcon; title: string; body: string }[] = [
   {
-    icon: MapPinned,
-    title: "Barangay-level GIS Heatmap",
-    body: "Live, interactive Leaflet map of TB and respiratory cases across all 182 Davao City barangays — drawn directly from CHO records.",
+    icon: MapPin,
+    title: "Find the nearest DOTS center",
+    body: "Search accredited TB-DOTS facilities by location and barangay.",
   },
   {
-    icon: AlertTriangle,
-    title: "Automated DBSCAN Hotspots",
-    body: "Hotspot detection re-runs after every new case and notifies the right barangay frontliners when density crosses the configured threshold.",
+    icon: BookOpenCheck,
+    title: "Learn about TB and respiratory illness",
+    body: "Plain-language guides in English, Filipino, and Bisaya.",
   },
   {
-    icon: ClipboardList,
-    title: "Active Case Finding",
-    body: "Frontliners encode presumptive and confirmed cases in seconds — barangay, age, sex, classification, treatment outcome.",
-  },
-  {
-    icon: Stethoscope,
-    title: "DOTS Center Locator",
-    body: "Public, no-login map that finds the nearest TB-DOTS facility using device GPS or barangay search.",
-  },
-  {
-    icon: Database,
-    title: "Bulk Excel Import",
-    body: "Upload monthly CHO Excel reports. Auto-mapping, 5-row preview, and client-side PII stripping before any data is sent.",
-  },
-  {
-    icon: Bot,
-    title: "Multilingual AI Chatbot",
-    body: "Health Q&A in English, Filipino, and Bisaya with automatic language detection (≥90% accuracy target).",
-  },
-  {
-    icon: Pill,
-    title: "Medication Adherence",
-    body: "Per-patient schedules, dose logs, and SMS reminders so non-adherence is flagged early to BHWs.",
-  },
-  {
-    icon: Activity,
-    title: "Health Promotion",
-    body: "Plain-language education on TB, pneumonia, COVID-19, and asthma — translated to Tagalog and Bisaya.",
+    icon: HeartPulse,
+    title: "Talk to the BANTAY-TB assistant",
+    body: "Ask everyday health questions any time — no sign-in required.",
   },
 ];
 
-const STATS = [
-  { value: "8,601", label: "TB cases · Davao City 2024" },
-  { value: "182", label: "Barangays mapped" },
-  { value: "≥90%", label: "Chatbot language accuracy" },
+const WORKER_POINTS: { icon: LucideIcon; title: string; body: string }[] = [
+  {
+    icon: Stethoscope,
+    title: "Citywide case surveillance",
+    body: "Monitor TB cases at the barangay level with a live operational dashboard.",
+  },
+  {
+    icon: MapPinned,
+    title: "Spatial hotspot detection",
+    body: "Density-based clustering highlights barangays needing immediate attention.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Role-based, privacy-aware access",
+    body: "Coordinator, barangay, and clinic accounts each see only what they should.",
+  },
 ];
 
 export function Landing() {
   return (
     <>
       {/* Hero */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-brand-50 via-white to-white" />
-        <div className="absolute inset-0 -z-10 bg-grid opacity-60 [mask-image:radial-gradient(ellipse_at_top,#000,transparent_70%)]" />
-        <div className="mx-auto max-w-7xl px-4 pb-16 pt-20 text-center sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white/80 px-3 py-1 text-xs font-medium text-brand-700 shadow-soft backdrop-blur"
-          >
-            <Sparkles className="h-3 w-3" /> Davao City · Capstone 2026
-          </motion.div>
-          <motion.h1
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.05 }}
-            className="font-display mx-auto mt-5 max-w-4xl text-4xl font-bold tracking-tight text-slate-900 sm:text-6xl"
-          >
-            GIS-based spatial surveillance for{" "}
-            <span className="bg-gradient-to-r from-brand-600 to-accent-600 bg-clip-text text-transparent">
-              Tuberculosis
-            </span>{" "}
-            in Davao City
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="mx-auto mt-5 max-w-2xl text-lg text-slate-600"
-          >
-            BANTAY-TB closes the geographic gap in TB surveillance with
-            barangay-level mapping, automated DBSCAN hotspot detection, and
-            community-friendly health tools — built on React.js and Supabase.
-          </motion.p>
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.15 }}
-            className="mt-9 flex flex-wrap justify-center gap-3"
-          >
-            <Link
-              to="/dots-locator"
-              className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-600 px-5 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-700 active:scale-[0.98]"
-            >
-              <MapPinned className="h-4 w-4" /> Find a DOTS Center
-            </Link>
-            <Link
-              to="/login"
-              className="inline-flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 shadow-soft transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
-            >
-              <ShieldCheck className="h-4 w-4" /> Health Worker Sign-in
-            </Link>
-            <Link
-              to="/learn"
-              className="inline-flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 shadow-soft transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
-            >
-              <Activity className="h-4 w-4" /> Health Education
-            </Link>
-          </motion.div>
-
-          {/* Hero stats strip */}
-          <motion.dl
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.25 }}
-            className="mx-auto mt-12 grid max-w-2xl grid-cols-3 gap-4 rounded-xl border border-slate-200 bg-white/70 p-4 shadow-soft backdrop-blur"
-          >
-            {STATS.map((s) => (
-              <div key={s.label} className="text-center">
-                <dt className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                  {s.value}
-                </dt>
-                <dd className="mt-1 text-[11px] uppercase tracking-wider text-slate-500">
-                  {s.label}
-                </dd>
+      <section className="border-b border-slate-200 bg-white">
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-12 lg:py-24 lg:px-8">
+          <div>
+            <p className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-brand-600" />
+              Davao City Health Office
+            </p>
+            <h1 className="font-display mt-5 text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+              Care, knowledge, and{" "}
+              <span className="text-brand-700">surveillance</span> for
+              tuberculosis in Davao City.
+            </h1>
+            <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-slate-600 sm:text-lg">
+              BANTAY-TB connects patients to care and equips Davao City health
+              workers with the data they need — barangay by barangay.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                to="/dots-locator"
+                className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-600 px-5 text-sm font-semibold text-white shadow-soft hover:bg-brand-700"
+              >
+                <MapPinned className="h-4 w-4" /> Find a DOTS Center
+              </Link>
+              <Link
+                to="/login"
+                className="inline-flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 hover:border-slate-300 hover:bg-slate-50"
+              >
+                <ShieldCheck className="h-4 w-4" /> Health Worker Sign-in
+              </Link>
+            </div>
+          </div>
+          <div className="relative">
+            <div className="absolute -inset-3 -z-10 rounded-3xl bg-gradient-to-br from-brand-100 via-brand-50 to-white" />
+            <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-lift">
+              <img
+                src="/images/hero.jpg"
+                alt="Health worker using a mobile device to record patient information"
+                className="aspect-[5/4] h-full w-full object-cover"
+                loading="eager"
+              />
+            </div>
+            <div className="absolute -bottom-5 -left-5 hidden w-56 rounded-xl border border-slate-200 bg-white p-4 shadow-lift sm:block">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                  <HeartPulse className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wider text-slate-500">
+                    Public service
+                  </p>
+                  <p className="text-sm font-semibold text-slate-900">
+                    Free for residents
+                  </p>
+                </div>
               </div>
-            ))}
-          </motion.dl>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Features grid */}
-      <section className="py-16 sm:py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className="font-display text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-              Eight integrated modules, one platform
+      {/* Stats band */}
+      <section className="bg-brand-700">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-px overflow-hidden bg-brand-700 px-4 py-10 sm:grid-cols-3 sm:px-6 lg:px-8">
+          {STATS.map((s) => (
+            <div key={s.label} className="px-4 py-2 text-center text-white sm:text-left">
+              <p className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
+                {s.value}
+              </p>
+              <p className="mt-2 text-xs uppercase tracking-wider text-brand-100">
+                {s.label}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* For Patients */}
+      <section id="for-patients" className="bg-white py-20 sm:py-24">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
+            <div className="order-2 lg:order-1">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-soft">
+                <img
+                  src="/images/for-patients.jpg"
+                  alt="A community health worker checking a patient at a local clinic"
+                  className="aspect-[4/3] h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+            <div className="order-1 lg:order-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">
+                For patients &amp; families
+              </p>
+              <h2 className="font-display mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                Reliable TB information, close to home.
+              </h2>
+              <p className="mt-4 text-base leading-relaxed text-slate-600">
+                Tuberculosis is treatable. BANTAY-TB helps Davao City residents
+                find care quickly and understand the next steps — in their own
+                language.
+              </p>
+              <ul className="mt-8 space-y-5">
+                {PATIENT_POINTS.map((p) => (
+                  <li key={p.title} className="flex gap-4">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                      <p.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-900">{p.title}</p>
+                      <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                        {p.body}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link
+                  to="/dots-locator"
+                  className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-600 px-5 text-sm font-semibold text-white shadow-soft hover:bg-brand-700"
+                >
+                  Open the DOTS locator
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  to="/learn"
+                  className="inline-flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 hover:border-slate-300 hover:bg-slate-50"
+                >
+                  Read the guides
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* For Health Workers */}
+      <section id="for-workers" className="bg-slate-50 py-20 sm:py-24">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">
+                For health workers
+              </p>
+              <h2 className="font-display mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                A clearer view of TB across the city.
+              </h2>
+              <p className="mt-4 text-base leading-relaxed text-slate-600">
+                BANTAY-TB gives coordinators, barangay teams, and clinic staff a
+                single, secure place to track cases, spot emerging clusters,
+                and act early.
+              </p>
+              <ul className="mt-8 space-y-5">
+                {WORKER_POINTS.map((p) => (
+                  <li key={p.title} className="flex gap-4">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                      <p.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-900">{p.title}</p>
+                      <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                        {p.body}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link
+                  to="/login"
+                  className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-600 px-5 text-sm font-semibold text-white shadow-soft hover:bg-brand-700"
+                >
+                  Sign in to BANTAY-TB
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  to="/register"
+                  className="inline-flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 hover:border-slate-300 hover:bg-slate-50"
+                >
+                  Request an account
+                </Link>
+              </div>
+            </div>
+            <div>
+              <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-soft">
+                <img
+                  src="/images/for-workers.jpg"
+                  alt="Two health workers reviewing TB case data on a screen"
+                  className="aspect-[4/3] h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Closing CTA band */}
+      <section className="border-t border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-4 py-12 text-center sm:flex-row sm:text-left sm:px-6 lg:px-8">
+          <div>
+            <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              Together against tuberculosis in Davao City.
             </h2>
-            <p className="mt-3 text-slate-600">
-              Built around the workflows of barangay frontliners, BHWs, doctors,
-              and the Davao City Health Office.
+            <p className="mt-2 text-slate-600">
+              Built with Davao City frontliners, for Davao City residents.
             </p>
           </div>
-          <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {FEATURES.map((f, i) => (
-              <motion.div
-                key={f.title}
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.35, delay: i * 0.04 }}
-                whileHover={{ y: -3 }}
-                className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-soft transition-shadow hover:shadow-lift"
-              >
-                <div className="grid h-10 w-10 place-items-center rounded-lg bg-gradient-to-br from-brand-50 to-accent-50 text-brand-700">
-                  <f.icon className="h-5 w-5" />
-                </div>
-                <h3 className="font-display mt-4 text-base font-semibold tracking-tight text-slate-900">
-                  {f.title}
-                </h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
-                  {f.body}
-                </p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Closing impact section */}
-      <section className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 py-16 text-white">
-        <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
-          <motion.h2
-            initial={{ opacity: 0, y: 8 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4 }}
-            className="font-display text-3xl font-bold tracking-tight sm:text-4xl"
+          <Link
+            to="/dots-locator"
+            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg bg-brand-600 px-5 text-sm font-semibold text-white shadow-soft hover:bg-brand-700"
           >
-            8,601 confirmed TB cases in Davao City in 2024.
-          </motion.h2>
-          <motion.p
-            initial={{ opacity: 0, y: 8 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4, delay: 0.05 }}
-            className="mt-4 text-slate-300"
-          >
-            Talomo South recorded the most cases (505), followed by Buhangin
-            (463) and Bunawan (459). Working-class adults aged 18–40 carry the
-            heaviest burden.{" "}
-            <span className="text-slate-400">
-              Source: Davao City Health Office (2024).
-            </span>
-          </motion.p>
+            Find a DOTS Center near you
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </section>
     </>

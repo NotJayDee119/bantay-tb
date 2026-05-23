@@ -1219,3 +1219,170 @@ export function articlesFor(disease: Disease, locale: Locale): HealthArticle[] {
     (a) => a.disease === disease && a.locale === locale
   );
 }
+
+export interface Source {
+  publisher: string;
+  title: string;
+  url: string;
+  year: number;
+}
+
+/**
+ * Authoritative public-health sources used to inform the educational content
+ * for each disease. Citations are displayed beneath every article so readers
+ * can verify the information against the original guidance.
+ */
+export const DISEASE_SOURCES: Record<Disease, Source[]> = {
+  tb: [
+    {
+      publisher: "World Health Organization",
+      title: "Tuberculosis — Fact sheet",
+      url: "https://www.who.int/news-room/fact-sheets/detail/tuberculosis",
+      year: 2024,
+    },
+    {
+      publisher: "World Health Organization",
+      title: "Global Tuberculosis Report 2024",
+      url: "https://www.who.int/teams/global-tuberculosis-programme/tb-reports/global-tuberculosis-report-2024",
+      year: 2024,
+    },
+    {
+      publisher: "Department of Health (Philippines)",
+      title: "National Tuberculosis Control Program",
+      url: "https://doh.gov.ph/national-tuberculosis-control-program",
+      year: 2024,
+    },
+    {
+      publisher: "U.S. Centers for Disease Control and Prevention",
+      title: "Tuberculosis (TB) — Basic TB Facts",
+      url: "https://www.cdc.gov/tb/topic/basics/default.htm",
+      year: 2024,
+    },
+  ],
+  pneumonia: [
+    {
+      publisher: "World Health Organization",
+      title: "Pneumonia in children — Fact sheet",
+      url: "https://www.who.int/news-room/fact-sheets/detail/pneumonia",
+      year: 2024,
+    },
+    {
+      publisher: "U.S. Centers for Disease Control and Prevention",
+      title: "Pneumonia — Causes and How It Spreads",
+      url: "https://www.cdc.gov/pneumonia/about/causes.html",
+      year: 2024,
+    },
+    {
+      publisher: "American Lung Association",
+      title: "Learn About Pneumonia",
+      url: "https://www.lung.org/lung-health-diseases/lung-disease-lookup/pneumonia/learn-about-pneumonia",
+      year: 2024,
+    },
+  ],
+  covid19: [
+    {
+      publisher: "World Health Organization",
+      title: "Coronavirus disease (COVID-19)",
+      url: "https://www.who.int/health-topics/coronavirus",
+      year: 2024,
+    },
+    {
+      publisher: "Department of Health (Philippines)",
+      title: "DOH COVID-19 Tracker",
+      url: "https://doh.gov.ph/covid19tracker",
+      year: 2024,
+    },
+    {
+      publisher: "U.S. Centers for Disease Control and Prevention",
+      title: "About COVID-19",
+      url: "https://www.cdc.gov/covid/about/index.html",
+      year: 2024,
+    },
+  ],
+  asthma: [
+    {
+      publisher: "World Health Organization",
+      title: "Asthma — Fact sheet",
+      url: "https://www.who.int/news-room/fact-sheets/detail/asthma",
+      year: 2024,
+    },
+    {
+      publisher: "Global Initiative for Asthma",
+      title: "Global Strategy for Asthma Management and Prevention (2024 update)",
+      url: "https://ginasthma.org/2024-report/",
+      year: 2024,
+    },
+    {
+      publisher: "U.S. Centers for Disease Control and Prevention",
+      title: "Asthma — Basic Information",
+      url: "https://www.cdc.gov/asthma/faqs.htm",
+      year: 2024,
+    },
+  ],
+  influenza: [
+    {
+      publisher: "World Health Organization",
+      title: "Influenza (Seasonal) — Fact sheet",
+      url: "https://www.who.int/news-room/fact-sheets/detail/influenza-(seasonal)",
+      year: 2024,
+    },
+    {
+      publisher: "U.S. Centers for Disease Control and Prevention",
+      title: "Influenza (Flu) — Symptoms, Diagnosis & Treatment",
+      url: "https://www.cdc.gov/flu/about/index.html",
+      year: 2024,
+    },
+  ],
+  bronchitis: [
+    {
+      publisher: "U.S. Centers for Disease Control and Prevention",
+      title: "Chest Cold (Acute Bronchitis)",
+      url: "https://www.cdc.gov/antibiotic-use/bronchitis.html",
+      year: 2024,
+    },
+    {
+      publisher: "American Lung Association",
+      title: "Learn About Bronchitis",
+      url: "https://www.lung.org/lung-health-diseases/lung-disease-lookup/bronchitis",
+      year: 2024,
+    },
+    {
+      publisher: "U.S. National Library of Medicine — MedlinePlus",
+      title: "Acute bronchitis",
+      url: "https://medlineplus.gov/acutebronchitis.html",
+      year: 2024,
+    },
+  ],
+  copd: [
+    {
+      publisher: "World Health Organization",
+      title: "Chronic obstructive pulmonary disease (COPD) — Fact sheet",
+      url: "https://www.who.int/news-room/fact-sheets/detail/chronic-obstructive-pulmonary-disease-(copd)",
+      year: 2024,
+    },
+    {
+      publisher: "Global Initiative for Chronic Obstructive Lung Disease (GOLD)",
+      title: "2024 GOLD Report",
+      url: "https://goldcopd.org/2024-gold-report/",
+      year: 2024,
+    },
+    {
+      publisher: "U.S. Centers for Disease Control and Prevention",
+      title: "COPD — Basics About COPD",
+      url: "https://www.cdc.gov/copd/basics-about.html",
+      year: 2024,
+    },
+  ],
+};
+
+export const SOURCES_HEADING: Record<Locale, string> = {
+  en: "Sources",
+  tl: "Mga Sanggunian",
+  ceb: "Mga Tinubdan",
+};
+
+export const SOURCES_NOTE: Record<Locale, string> = {
+  en: "Content on this page is summarised from the references below. For diagnosis or treatment, always consult a licensed healthcare professional.",
+  tl: "Ang nilalaman ng pahinang ito ay batay sa mga sanggunian sa ibaba. Para sa diagnosis o paggamot, kumonsulta sa lisensyadong propesyonal sa kalusugan.",
+  ceb: "Kining mga sulod gisumada gikan sa mga tinubdan sa ubos. Para sa diagnosis o tambal, kanunay konsulta sa lisensyadong propesyonal sa kahimsog.",
+};
