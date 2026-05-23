@@ -126,9 +126,9 @@ export function PublicLayout() {
       </main>
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-6 text-center text-sm text-slate-500 sm:px-6 lg:px-8">
-          <p>BANTAY-TB · GIS-based TB surveillance for Davao City.</p>
+          <p>BANTAY-TB · Tuberculosis surveillance for Davao City.</p>
           <p className="mt-1">
-            University of the Immaculate Conception · IT Capstone Project 2026
+            &copy; {new Date().getFullYear()} BANTAY-TB. All rights reserved.
           </p>
         </div>
       </footer>
