@@ -9,6 +9,7 @@ import { DotsLocator } from "./pages/public/DotsLocator";
 import { LearnPublic } from "./pages/public/LearnPublic";
 import { Login } from "./pages/public/Login";
 import { Register } from "./pages/public/Register";
+import { StaffRegister } from "./pages/public/StaffRegister";
 
 import { Dashboard } from "./pages/app/Dashboard";
 import { GISMapTab } from "./pages/app/GISMapTab";
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="learn" element={<LearnPublic />} />
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
+        <Route path="register/staff" element={<StaffRegister />} />
       </Route>
 
       <Route path="app" element={<AppLayout />}>

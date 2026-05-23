@@ -1,9 +1,13 @@
 import { useState } from "react";
+import { ExternalLink } from "lucide-react";
 import { Card } from "../../components/ui";
 import {
   CATEGORY_LABEL,
   DISEASE_LABEL,
+  DISEASE_SOURCES,
   HEALTH_ARTICLES,
+  SOURCES_HEADING,
+  SOURCES_NOTE,
   type Category,
   type Disease,
 } from "../../data/healthContent";
@@ -119,6 +123,43 @@ export function LearnPublic() {
               <div className="prose mt-4 max-w-none whitespace-pre-line text-slate-800">
                 {article.body_md}
               </div>
+
+              <section
+                aria-labelledby="sources-heading"
+                className="mt-8 border-t border-slate-200 pt-5"
+              >
+                <h3
+                  id="sources-heading"
+                  className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500"
+                >
+                  {SOURCES_HEADING[locale]}
+                </h3>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                  {SOURCES_NOTE[locale]}
+                </p>
+                <ol className="mt-3 space-y-2 text-sm text-slate-700">
+                  {DISEASE_SOURCES[disease].map((s, idx) => (
+                    <li key={s.url} className="flex gap-2 leading-relaxed">
+                      <span className="text-slate-400">{idx + 1}.</span>
+                      <span>
+                        <span className="font-medium text-slate-900">
+                          {s.publisher}
+                        </span>{" "}
+                        ({s.year}).{" "}
+                        <a
+                          href={s.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-brand-700 underline-offset-2 hover:text-brand-800 hover:underline"
+                        >
+                          {s.title}
+                          <ExternalLink className="h-3 w-3" aria-hidden />
+                        </a>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
             </article>
           ) : (
             <p className="text-sm text-slate-500">

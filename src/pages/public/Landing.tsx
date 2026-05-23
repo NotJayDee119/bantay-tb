@@ -64,9 +64,9 @@ export function Landing() {
               Davao City Health Office
             </p>
             <h1 className="font-display mt-5 text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-              Tuberculosis information and surveillance for{" "}
-              <span className="text-brand-700">every barangay</span> in Davao
-              City.
+              Care, knowledge, and{" "}
+              <span className="text-brand-700">surveillance</span> for
+              tuberculosis in Davao City.
             </h1>
             <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-slate-600 sm:text-lg">
               BANTAY-TB connects patients to care and equips Davao City health
