@@ -36,16 +36,22 @@ export function LearnPublic() {
   );
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <header className="mb-6">
-        <h1 className="font-display text-3xl font-bold tracking-tight text-slate-900">
-          Health Education
-        </h1>
-        <p className="mt-2 text-slate-600">
-          Plain-language guides on tuberculosis and respiratory diseases in
-          English, Filipino, and Bisaya.
-        </p>
-      </header>
+    <>
+      <section className="border-b border-slate-200 bg-gradient-to-b from-brand-50 to-white">
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">
+            For patients &amp; families
+          </p>
+          <h1 className="font-display mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+            Health Education
+          </h1>
+          <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-600">
+            Plain-language guides on tuberculosis and respiratory diseases in
+            English, Filipino, and Bisaya.
+          </p>
+        </div>
+      </section>
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
 
       <div className="mb-4 flex flex-wrap gap-2">
         {(Object.keys(LOCALE_LABEL) as Locale[]).map((l) => (
@@ -122,5 +128,6 @@ export function LearnPublic() {
         </Card>
       </div>
     </div>
+    </>
   );
 }
