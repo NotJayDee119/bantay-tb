@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Activity } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { motion } from "motion/react";
 import { toast } from "sonner";
 import { Button, Card, Input, Label, Spinner } from "../../components/ui";
 import { useAuth } from "../../hooks/useAuth";
@@ -15,15 +14,10 @@ export function Login() {
 
   return (
     <div className="relative mx-auto flex min-h-[calc(100vh-9rem)] max-w-md items-center justify-center px-4 py-12">
-      <motion.div
-        initial={{ opacity: 0, y: 12, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.3, ease: "easeOut" }}
-        className="w-full"
-      >
-        <Card className="p-8 shadow-lift">
+      <div className="w-full">
+        <Card className="p-8">
           <div className="mb-5 flex items-center gap-2.5">
-            <span className="grid h-10 w-10 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-accent-500 text-white shadow-soft">
+            <span className="grid h-10 w-10 place-items-center rounded-lg bg-brand-600 text-white">
               <Activity className="h-5 w-5" />
             </span>
             <div>
@@ -86,7 +80,7 @@ export function Login() {
             </Link>
           </div>
         </Card>
-      </motion.div>
+      </div>
     </div>
   );
 }
