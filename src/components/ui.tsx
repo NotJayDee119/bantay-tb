@@ -1,11 +1,13 @@
 import {
   forwardRef,
+  useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { motion, type HTMLMotionProps } from "motion/react";
 import { cn } from "../lib/utils";
 
@@ -58,6 +60,41 @@ export const Input = forwardRef<
       )}
       {...rest}
     />
+  );
+});
+
+/**
+ * Password input with a built-in show/hide eye toggle. Same styling as
+ * `Input` but with `type` swapped between `password` and `text` on click.
+ * Use just like `Input` — accepts the same props.
+ */
+export const PasswordInput = forwardRef<
+  HTMLInputElement,
+  Omit<InputHTMLAttributes<HTMLInputElement>, "type">
+>(function PasswordInput({ className, ...rest }, ref) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        ref={ref}
+        type={show ? "text" : "password"}
+        className={cn(
+          "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 pr-10 text-sm shadow-soft transition placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200/60",
+          className
+        )}
+        {...rest}
+      />
+      <button
+        type="button"
+        onClick={() => setShow((s) => !s)}
+        aria-label={show ? "Hide password" : "Show password"}
+        aria-pressed={show}
+        className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+        tabIndex={-1}
+      >
+        {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
   );
 });
 
