@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Activity, MapPin, ShieldCheck } from "lucide-react";
+import { Activity, MapPin, Phone, ShieldCheck } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -21,6 +21,7 @@ export function Register() {
     password: "",
     fullName: "",
     barangayPsgc: "",
+    phone: "",
   });
   const [loading, setLoading] = useState(false);
 
@@ -100,7 +101,8 @@ export function Register() {
                   form.password,
                   form.fullName,
                   "patient",
-                  Number(form.barangayPsgc)
+                  Number(form.barangayPsgc),
+                  form.phone.trim() || null
                 );
                 setLoading(false);
                 if (error) {
@@ -150,6 +152,32 @@ export function Register() {
                 />
                 <p className="text-xs text-slate-500">
                   Minimum 6 characters.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="phone">
+                  Mobile number{" "}
+                  <span className="text-slate-500">(for SMS reminders)</span>
+                </Label>
+                <div className="relative">
+                  <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    id="phone"
+                    type="tel"
+                    autoComplete="tel"
+                    inputMode="tel"
+                    placeholder="+63 9XX XXX XXXX"
+                    className="pl-9"
+                    value={form.phone}
+                    onChange={(e) =>
+                      setForm({ ...form, phone: e.target.value })
+                    }
+                  />
+                </div>
+                <p className="text-xs text-slate-500">
+                  Used to send medication reminders by SMS — works even on
+                  basic phones without internet. Leave blank if you don't
+                  have one.
                 </p>
               </div>
               <div className="space-y-1.5">

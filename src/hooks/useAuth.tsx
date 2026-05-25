@@ -29,7 +29,8 @@ interface AuthContextValue {
     password: string,
     fullName: string,
     role: AppRole,
-    barangayPsgc: number | null
+    barangayPsgc: number | null,
+    phone?: string | null
   ) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
 }
@@ -94,12 +95,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         return error ? { error: error.message } : {};
       },
-      async signUp(email, password, fullName, role, barangayPsgc) {
+      async signUp(email, password, fullName, role, barangayPsgc, phone = null) {
+        const cleanPhone = phone?.trim() || null;
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { full_name: fullName, role, barangay_psgc: barangayPsgc },
+            data: {
+              full_name: fullName,
+              role,
+              barangay_psgc: barangayPsgc,
+              phone: cleanPhone,
+            },
           },
         });
         if (error) return { error: error.message };
@@ -110,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             full_name: fullName,
             role,
             barangay_psgc: barangayPsgc,
+            phone: cleanPhone,
           });
           if (pErr) return { error: pErr.message };
         }
