@@ -1,9 +1,17 @@
 import { useState } from "react";
-import { Activity, ShieldCheck } from "lucide-react";
+import { Activity, MapPin, ShieldCheck } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Button, Card, Input, Label, Spinner } from "../../components/ui";
+import {
+  Button,
+  Card,
+  Input,
+  Label,
+  Select,
+  Spinner,
+} from "../../components/ui";
 import { useAuth } from "../../hooks/useAuth";
+import barangays from "../../data/barangays.json";
 
 export function Register() {
   const { signUp } = useAuth();
@@ -12,6 +20,7 @@ export function Register() {
     email: "",
     password: "",
     fullName: "",
+    barangayPsgc: "",
   });
   const [loading, setLoading] = useState(false);
 
@@ -81,13 +90,17 @@ export function Register() {
               className="space-y-4"
               onSubmit={async (e) => {
                 e.preventDefault();
+                if (!form.barangayPsgc) {
+                  toast.error("Please select your barangay.");
+                  return;
+                }
                 setLoading(true);
                 const { error } = await signUp(
                   form.email,
                   form.password,
                   form.fullName,
                   "patient",
-                  null
+                  Number(form.barangayPsgc)
                 );
                 setLoading(false);
                 if (error) {
@@ -137,6 +150,34 @@ export function Register() {
                 />
                 <p className="text-xs text-slate-500">
                   Minimum 6 characters.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="barangay">
+                  Your barangay <span className="text-red-600">*</span>
+                </Label>
+                <div className="relative">
+                  <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Select
+                    id="barangay"
+                    required
+                    className="pl-9"
+                    value={form.barangayPsgc}
+                    onChange={(e) =>
+                      setForm({ ...form, barangayPsgc: e.target.value })
+                    }
+                  >
+                    <option value="">— select your barangay —</option>
+                    {barangays.map((b) => (
+                      <option key={b.psgc} value={b.psgc}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Davao City health workers in your barangay can then monitor
+                  and support your TB care.
                 </p>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
