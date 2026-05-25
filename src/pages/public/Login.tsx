@@ -2,7 +2,14 @@ import { useState } from "react";
 import { Activity, ShieldCheck } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Button, Card, Input, Label, Spinner } from "../../components/ui";
+import {
+  Button,
+  Card,
+  Input,
+  Label,
+  PasswordInput,
+  Spinner,
+} from "../../components/ui";
 import { useAuth } from "../../hooks/useAuth";
 
 export function Login() {
@@ -100,10 +107,17 @@ export function Login() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
-                <Input
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs font-medium text-brand-600 hover:text-brand-700"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                <PasswordInput
                   id="password"
-                  type="password"
                   autoComplete="current-password"
                   value={password}
                   required
