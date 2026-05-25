@@ -14,6 +14,17 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { formatDate, formatDateTime } from "../../lib/utils";
 
+interface SmsRow {
+  id: string;
+  to_phone: string;
+  body: string;
+  status: string;
+  provider: string;
+  created_at: string;
+  sent_at: string | null;
+  patient: { full_name: string | null } | null;
+}
+
 interface Schedule {
   id: string;
   patient_id: string;
@@ -47,8 +58,10 @@ export function Adherence() {
   const isPatient = profile?.role === "patient";
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
+  const [smsRows, setSmsRows] = useState<SmsRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [sending, setSending] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -69,10 +82,90 @@ export function Adherence() {
       .limit(80);
     if (isPatient) logQ = logQ.eq("patient_id", profile!.id);
 
-    const [s, l] = await Promise.all([scheduleQ, logQ]);
+    const smsQ = supabase
+      .from("sms_outbox")
+      .select(
+        "id, to_phone, body, status, provider, created_at, sent_at, patient:profiles!sms_outbox_patient_id_fkey(full_name)"
+      )
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    const [s, l, sm] = await Promise.all([scheduleQ, logQ, smsQ]);
     setSchedules((s.data ?? []) as unknown as Schedule[]);
     setLogs((l.data ?? []) as unknown as Log[]);
+    setSmsRows((sm.data ?? []) as unknown as SmsRow[]);
     setLoading(false);
+  }
+
+  async function sendReminders() {
+    setSending(true);
+    const now = new Date();
+    const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
+
+    const { data: dueLogs } = await supabase
+      .from("adherence_logs")
+      .select("id, patient_id, schedule_id, scheduled_at")
+      .eq("status", "scheduled")
+      .gte("scheduled_at", now.toISOString())
+      .lte("scheduled_at", inOneHour.toISOString())
+      .limit(100);
+
+    if (!dueLogs || dueLogs.length === 0) {
+      toast.info("No dose reminders due within the next hour.");
+      setSending(false);
+      return;
+    }
+
+    const patientIds = [...new Set(dueLogs.map((d) => d.patient_id))];
+    const scheduleIds = [...new Set(dueLogs.map((d) => d.schedule_id))];
+
+    const [{ data: patients }, { data: scheds }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, phone, full_name")
+        .in("id", patientIds),
+      supabase
+        .from("adherence_schedules")
+        .select("id, medication, dose")
+        .in("id", scheduleIds),
+    ]);
+
+    const patientMap = new Map(
+      (patients ?? []).map((p) => [p.id, p])
+    );
+    const schedMap = new Map(
+      (scheds ?? []).map((s) => [s.id, s])
+    );
+
+    let sent = 0;
+    for (const row of dueLogs) {
+      const patient = patientMap.get(row.patient_id);
+      const sched = schedMap.get(row.schedule_id);
+      if (!patient?.phone || !sched) continue;
+
+      const body = `BANTAY-TB: ${
+        patient.full_name ? `Hi ${patient.full_name}, ` : ""
+      }reminder to take ${sched.dose} of ${sched.medication} now. Reply CONFIRM in the app once taken.`;
+
+      await supabase.from("sms_outbox").insert({
+        to_phone: patient.phone,
+        body,
+        status: "mocked" as const,
+        provider: "mock",
+        patient_id: row.patient_id,
+        schedule_id: row.schedule_id,
+        sent_at: new Date().toISOString(),
+      });
+      sent++;
+    }
+
+    toast.success(
+      sent > 0
+        ? `${sent} SMS reminder(s) queued (mock mode — no real SMS sent without a provider key).`
+        : "No patients with phone numbers have doses due. SMS skipped."
+    );
+    setSending(false);
+    load();
   }
 
   useEffect(() => {
@@ -103,12 +196,17 @@ export function Adherence() {
         }
         actions={
           !isPatient && (
-            <Button
-              variant="secondary"
-              onClick={() => setShowForm((v) => !v)}
-            >
-              {showForm ? "Close" : "Add schedule"}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setShowForm((v) => !v)}
+              >
+                {showForm ? "Close" : "Add schedule"}
+              </Button>
+              <Button onClick={sendReminders} disabled={sending}>
+                {sending ? "Sending…" : "Send SMS reminders"}
+              </Button>
+            </div>
           )
         }
       />
@@ -206,6 +304,59 @@ export function Adherence() {
           )}
         </Card>
       </div>
+
+      {!isPatient && (
+        <Card className="mt-4 p-0">
+          <div className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900">
+            SMS outbox
+          </div>
+          {loading ? (
+            <div className="flex h-32 items-center justify-center">
+              <Spinner />
+            </div>
+          ) : smsRows.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-slate-500">
+              No SMS messages yet. Create a schedule and click &ldquo;Send SMS
+              reminders&rdquo; to queue messages.
+            </p>
+          ) : (
+            <ul className="max-h-[420px] divide-y divide-slate-200 overflow-y-auto">
+              {smsRows.map((s) => (
+                <li key={s.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">
+                        {s.patient?.full_name ?? "—"} · {s.to_phone}
+                      </div>
+                      <div className="mt-0.5 line-clamp-2 text-xs text-slate-500">
+                        {s.body}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge
+                        tone={
+                          s.status === "sent" || s.status === "delivered"
+                            ? "success"
+                            : s.status === "failed"
+                              ? "danger"
+                              : s.status === "mocked"
+                                ? "warning"
+                                : "info"
+                        }
+                      >
+                        {s.status}
+                      </Badge>
+                      <span className="text-[10px] text-slate-400">
+                        {formatDateTime(s.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
     </>
   );
 }
