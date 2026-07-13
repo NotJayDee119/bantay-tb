@@ -78,7 +78,6 @@ export function PublicChatbotFab() {
           session_id: sessionId,
           message: trimmed,
           language,
-          // user_id intentionally null — public, anonymous chat.
           user_id: null,
         },
       });
@@ -113,41 +112,44 @@ export function PublicChatbotFab() {
 
   return (
     <>
+      {/* Chat window */}
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.96 }}
+            initial={{ opacity: 0, y: 12, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.96 }}
+            exit={{ opacity: 0, y: 12, scale: 0.97 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className="fixed bottom-24 right-4 z-50 flex h-[min(560px,80vh)] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl sm:right-6"
+            className="fixed bottom-20 right-4 z-50 flex h-[min(560px,80vh)] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xl sm:right-6"
             role="dialog"
             aria-label="BANTAY-TB chatbot"
           >
-            <div className="flex items-center gap-3 border-b border-slate-200 bg-gradient-to-br from-brand-600 to-accent-600 px-4 py-3 text-white">
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-white/20">
-                <Bot className="h-5 w-5" />
+            {/* Header */}
+            <div className="flex items-center gap-3 border-b border-accent-700/20 bg-accent-600 px-4 py-3 text-white">
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-white/15">
+                <Bot className="h-4 w-4" />
               </span>
               <div className="flex-1">
                 <div className="text-sm font-semibold leading-tight">
-                  BANTAY-TB Health Assistant
+                  BANTAY-TB
                 </div>
-                <div className="text-xs text-white/80">
+                <div className="text-[0.6875rem] text-white/60">
                   English · Filipino · Bisaya
                 </div>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="rounded-md p-1.5 text-white/80 transition hover:bg-white/10 hover:text-white"
+                className="rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white"
                 aria-label="Close chatbot"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
+            {/* Messages */}
             <div
               ref={scrollRef}
-              className="flex-1 space-y-3 overflow-y-auto px-4 py-3"
+              className="flex-1 space-y-3 overflow-y-auto px-4 py-4"
             >
               {messages.map((m) => (
                 <div
@@ -158,21 +160,21 @@ export function PublicChatbotFab() {
                   }
                 >
                   {m.role === "assistant" && (
-                    <div className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-full bg-brand-100 text-brand-700">
-                      <Bot className="h-3.5 w-3.5" />
+                    <div className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-full bg-slate-100 text-slate-500">
+                      <Bot className="h-3 w-3" />
                     </div>
                   )}
                   <div
                     className={
-                      "max-w-[78%] whitespace-pre-line rounded-2xl px-3 py-2 text-sm leading-relaxed " +
+                      "max-w-[78%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-[0.8125rem] leading-relaxed " +
                       (m.role === "user"
-                        ? "rounded-br-sm bg-brand-600 text-white"
-                        : "rounded-bl-sm bg-slate-100 text-slate-900")
+                        ? "rounded-br-md bg-brand-950 text-white"
+                        : "rounded-bl-md bg-slate-100 text-slate-800")
                     }
                   >
                     {m.content}
                     {m.language && m.role === "assistant" && (
-                      <div className="mt-1 text-[10px] uppercase tracking-wide text-slate-500">
+                      <div className="mt-1.5 text-[0.625rem] uppercase tracking-wider text-slate-400">
                         {LOCALE_LABEL[m.language]}
                       </div>
                     )}
@@ -180,23 +182,27 @@ export function PublicChatbotFab() {
                 </div>
               ))}
               {sending && (
-                <div className="flex items-center gap-2 px-1 text-xs text-slate-500">
-                  <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-brand-500" />
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <span className="flex gap-1">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-300 [animation-delay:150ms]" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-200 [animation-delay:300ms]" />
+                  </span>
                   Thinking…
                 </div>
               )}
               {messages.length <= 1 && (
                 <div className="pt-1">
-                  <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  <div className="mb-2 text-[0.6875rem] font-medium text-slate-400">
                     Try asking
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-col gap-1.5">
                     {SUGGESTIONS.map((s) => (
                       <button
                         key={s}
                         type="button"
                         onClick={() => send(s)}
-                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+                        className="rounded-lg border border-slate-150 bg-white px-3 py-2 text-left text-xs text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
                       >
                         {s}
                       </button>
@@ -206,52 +212,60 @@ export function PublicChatbotFab() {
               )}
             </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                send(draft);
-              }}
-              className="flex items-center gap-2 border-t border-slate-200 bg-white px-3 py-2"
-            >
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder={PLACEHOLDER.en}
-                className="h-10 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100"
-                disabled={sending}
-              />
-              <button
-                type="submit"
-                disabled={sending || !draft.trim()}
-                className="grid h-10 w-10 place-items-center rounded-lg bg-brand-600 text-white shadow-soft transition hover:bg-brand-700 disabled:opacity-50"
-                aria-label="Send"
+            {/* Input */}
+            <div className="border-t border-slate-100 bg-white px-3 py-2.5">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  send(draft);
+                }}
+                className="flex items-center gap-2"
               >
-                <Send className="h-4 w-4" />
-              </button>
-            </form>
-            <p className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-[10px] leading-snug text-slate-500">
-              For information only — not a substitute for medical diagnosis.
-              Visit the nearest DOTS Center for screening.
-            </p>
+                <input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder={PLACEHOLDER.en}
+                  className="h-9 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-300 focus:bg-white focus:ring-1 focus:ring-brand-200"
+                  disabled={sending}
+                />
+                <button
+                  type="submit"
+                  disabled={sending || !draft.trim()}
+                  className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-accent-600 text-white transition hover:bg-accent-700 disabled:opacity-40"
+                  aria-label="Send"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                </button>
+              </form>
+            </div>
+
+            {/* Disclaimer */}
+            <div className="border-t border-slate-100 bg-slate-50 px-4 py-2">
+              <p className="text-[0.625rem] leading-snug text-slate-400">
+                For information only — not a substitute for medical diagnosis.
+                Visit the nearest DOTS Center for screening.
+              </p>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
+      {/* FAB — accent green pill */}
       <motion.button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        className="fixed bottom-5 right-4 z-50 flex h-14 items-center gap-2 rounded-full bg-gradient-to-br from-brand-600 to-accent-600 px-4 text-white shadow-2xl ring-4 ring-brand-100/60 transition hover:shadow-brand-300/40 sm:right-6"
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.97 }}
+        className="fixed bottom-5 right-4 z-50 flex h-12 items-center gap-2 rounded-full bg-accent-600 px-4 text-white shadow-lg transition hover:bg-accent-700 sm:right-6"
         aria-expanded={open}
         aria-label={open ? "Close chatbot" : "Open BANTAY-TB chatbot"}
       >
         {open ? (
-          <X className="h-5 w-5" />
+          <X className="h-4 w-4" />
         ) : (
           <>
-            <MessageCircle className="h-5 w-5" />
-            <span className="hidden text-sm font-semibold sm:inline">
+            <MessageCircle className="h-4 w-4" />
+            <span className="hidden text-sm font-medium sm:inline">
               Ask BANTAY-TB
             </span>
           </>

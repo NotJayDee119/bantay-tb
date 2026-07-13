@@ -9,28 +9,36 @@ import { formatDateTime } from "../../lib/utils";
 import barangays from "../../data/barangays.json";
 import { toast } from "sonner";
 
+type Severity = "watch" | "moderate" | "high" | "urgent" | "low" | "medium";
+
 interface Hotspot {
   id: string;
   barangay_psgc: number;
   case_count: number;
   density: number;
-  severity: "low" | "medium" | "high";
+  severity: Severity;
   detected_at: string;
   centroid_lat: number;
   centroid_lon: number;
   radius_km: number;
 }
 
-const SEVERITY_COLOR: Record<Hotspot["severity"], string> = {
-  low: "#fbbf24",
-  medium: "#f97316",
-  high: "#dc2626",
+const SEVERITY_COLOR: Record<Severity, string> = {
+  watch: "#60a5fa",
+  moderate: "#fbbf24",
+  high: "#f97316",
+  urgent: "#dc2626",
+  low: "#60a5fa",
+  medium: "#fbbf24",
 };
 
-const SEVERITY_TONE: Record<Hotspot["severity"], "warning" | "danger"> = {
-  low: "warning",
+const SEVERITY_TONE: Record<Severity, "warning" | "danger" | "info"> = {
+  watch: "info",
+  moderate: "warning",
+  high: "warning",
+  urgent: "danger",
+  low: "info",
   medium: "warning",
-  high: "danger",
 };
 
 export function Hotspots() {
@@ -104,8 +112,8 @@ export function Hotspots() {
         });
         const radius_km = Math.max(0.3, Math.max(...radii));
         const density = cl.points.length / (Math.PI * radius_km * radius_km);
-        const severity =
-          cl.points.length >= 25 ? "high" : cl.points.length >= 15 ? "medium" : "low";
+        const severity: Severity =
+          cl.points.length >= 50 ? "urgent" : cl.points.length >= 20 ? "high" : cl.points.length >= 10 ? "moderate" : "watch";
         return {
           barangay_psgc: topBgy ?? barangays[0].psgc,
           disease: "tb" as const,
@@ -120,8 +128,40 @@ export function Hotspots() {
         };
       });
 
-      const { error: insErr } = await supabase.from("hotspots").insert(inserts);
+      const { data: insertedHotspots, error: insErr } = await supabase
+        .from("hotspots")
+        .insert(inserts)
+        .select("id, severity, barangay_psgc");
       if (insErr) throw insErr;
+
+      // Fan-out alerts for high/urgent clusters — mirrors edge function logic.
+      const highClusters = (insertedHotspots ?? []).filter(
+        (h) => h.severity === "high" || h.severity === "urgent"
+      );
+      if (highClusters.length > 0) {
+        const { data: staff } = await supabase
+          .from("profiles")
+          .select("id, role, barangay_psgc")
+          .in("role", ["tb_coordinator", "barangay_admin", "health_worker", "system_admin"]);
+        const alerts: { hotspot_id: string; recipient_id: string }[] = [];
+        for (const h of highClusters) {
+          for (const p of staff ?? []) {
+            if (p.role === "tb_coordinator" || p.role === "system_admin") {
+              alerts.push({ hotspot_id: h.id, recipient_id: p.id });
+            } else if (
+              p.barangay_psgc != null &&
+              h.barangay_psgc != null &&
+              p.barangay_psgc === h.barangay_psgc
+            ) {
+              alerts.push({ hotspot_id: h.id, recipient_id: p.id });
+            }
+          }
+        }
+        if (alerts.length > 0) {
+          await supabase.from("hotspot_alerts").insert(alerts);
+        }
+      }
+
       toast.success(`Detected ${inserts.length} hotspot cluster(s)`);
       await load();
     } catch (err) {

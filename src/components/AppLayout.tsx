@@ -25,6 +25,7 @@ import {
   NavLink,
   useLocation,
   useNavigate,
+  Navigate,
   useOutlet,
 } from "react-router-dom";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
@@ -67,13 +68,13 @@ const NAV: NavItem[] = [
     to: "/app/hotspots",
     label: "Hotspots",
     icon: AlertTriangle,
-    roles: ["tb_coordinator", "system_admin"],
+    roles: ["tb_coordinator", "system_admin", "barangay_admin", "health_worker"],
   },
   {
     to: "/app/alerts",
     label: "Alerts",
     icon: Bell,
-    roles: ["tb_coordinator", "barangay_admin", "health_worker"],
+    roles: ["tb_coordinator", "barangay_admin", "health_worker", "system_admin"],
     badgeKey: "alerts",
   },
   {
@@ -92,7 +93,7 @@ const NAV: NavItem[] = [
     to: "/app/analytics",
     label: "Analytics",
     icon: BarChart3,
-    roles: ["tb_coordinator", "health_worker", "system_admin"],
+    roles: ["tb_coordinator", "barangay_admin", "health_worker", "system_admin"],
   },
   {
     to: "/app/dots-admin",
@@ -116,7 +117,7 @@ const NAV: NavItem[] = [
     to: "/app/chatbot",
     label: "Chatbot",
     icon: Bot,
-    roles: ["tb_coordinator", "patient"],
+    roles: ["tb_coordinator", "barangay_admin", "health_worker", "patient"],
   },
   {
     to: "/app/education",
@@ -152,7 +153,8 @@ export function AppLayout() {
     if (
       role !== "tb_coordinator" &&
       role !== "barangay_admin" &&
-      role !== "health_worker"
+      role !== "health_worker" &&
+      role !== "system_admin"
     ) {
       return;
     }
@@ -196,8 +198,7 @@ export function AppLayout() {
   }
 
   if (!profile) {
-    navigate("/login", { replace: true });
-    return null;
+    return <Navigate to="/login" replace />;
   }
 
   const visibleNav = NAV.filter(

@@ -38,6 +38,7 @@ export function Analytics() {
       const { data: rows } = await supabase
         .from("cases")
         .select("age, sex, tb_classification, treatment_outcome, reported_at")
+        .eq("disease", "tb")
         .gte("reported_at", since.toISOString())
         .limit(20000);
       if (cancelled) return;
@@ -62,7 +63,7 @@ export function Analytics() {
     <>
       <PageHeader
         title="AI Analytics for Outreach"
-        subtitle="Where to focus screening and contact-tracing campaigns based on the last 12 months of TB case data."
+        subtitle="TB cases only · Last 12 months · Where to focus screening and contact-tracing campaigns."
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -121,7 +122,8 @@ export function Analytics() {
         <ChartCard title="Cases by month" icon={BarChart3} bars={data.byMonth.map((m) => ({ label: m.month, value: m.count }))} />
         <ChartCard title="Age distribution" icon={Users} bars={data.byAgeBand.map((m) => ({ label: m.band, value: m.count }))} />
         <ChartCard title="By sex" icon={Users} bars={data.bySex.map((m) => ({ label: m.label, value: m.count }))} />
-        <ChartCard title="Treatment outcome" icon={BarChart3} bars={data.byOutcome.map((m) => ({ label: m.label, value: m.count }))} />
+        <ChartCard title="TB classification" icon={BarChart3} bars={data.byClassification.map((m) => ({ label: m.label.replace(/_/g, " "), value: m.count }))} />
+        <ChartCard title="Treatment outcome" icon={BarChart3} bars={data.byOutcome.map((m) => ({ label: m.label.replace(/_/g, " "), value: m.count }))} />
       </div>
     </>
   );

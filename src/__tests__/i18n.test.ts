@@ -78,7 +78,6 @@ describe("detectLocale", () => {
     const correct = CORPUS.filter((c) => detectLocale(c.text) === c.expected)
       .length;
     const accuracy = correct / total;
-    // eslint-disable-next-line no-console
     console.log(
       `Language detection accuracy: ${(accuracy * 100).toFixed(1)}% (${correct}/${total})`
     );

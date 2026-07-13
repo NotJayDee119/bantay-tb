@@ -81,6 +81,9 @@ export interface Database {
           notes: string | null;
           reported_by: string | null;
           source: string;
+          patient_code: string | null;
+          diagnosis_date: string | null;
+          source_file_path: string | null;
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["cases"]["Row"]> & {
@@ -97,7 +100,7 @@ export interface Database {
           disease: Disease;
           case_count: number;
           density: number;
-          severity: "low" | "medium" | "high";
+          severity: "low" | "medium" | "high" | "watch" | "moderate" | "urgent";
           detected_at: string;
           window_start: string;
           window_end: string;

@@ -1,30 +1,49 @@
 import { useMemo, useState } from "react";
-import { Stethoscope, AlertTriangle, CheckCircle2 } from "lucide-react";
+import {
+  AlertTriangle,
+  BookOpen,
+  CheckCircle2,
+  ExternalLink,
+  ShieldAlert,
+  Stethoscope,
+} from "lucide-react";
 import { Badge, Card, PageHeader } from "../../components/ui";
 
-// Simple rule-based clinical decision support for presumptive TB screening.
-// Rules are based on Philippine NTP guidelines for presumptive TB and the
-// WHO 4-symptom screen. This is *decision support*, not a substitute for
-// clinical judgement — every recommendation links back to a doctor referral.
+// Rule-based clinical decision support for presumptive TB screening.
+// Rules derived from Philippine NTP MOP 5th ed. (2020) §4.2 and WHO
+// Consolidated Guidelines on TB Module 2: Screening (2021).
+// This tool is DECISION SUPPORT ONLY — final triage rests with the clinician.
 
 interface Symptom {
   key: string;
   label: string;
   helper?: string;
-  weight: number; // contribution to presumption score
-  red?: boolean; // red-flag (auto-refer regardless of score)
+  weight: number;
+  red?: boolean;
 }
 
 const SYMPTOMS: Symptom[] = [
   {
     key: "cough_2w",
     label: "Cough lasting 2 weeks or more",
-    helper: "Cardinal symptom; cough <2 wk = lower priority",
+    helper: "Cardinal symptom; cough < 2 wk = lower priority",
     weight: 3,
   },
-  { key: "fever_2w", label: "Unexplained fever ≥ 2 weeks", weight: 2 },
-  { key: "night_sweats", label: "Night sweats", weight: 1 },
-  { key: "weight_loss", label: "Unintentional weight loss", weight: 2 },
+  {
+    key: "fever_2w",
+    label: "Unexplained fever ≥ 2 weeks",
+    weight: 2,
+  },
+  {
+    key: "night_sweats",
+    label: "Night sweats",
+    weight: 1,
+  },
+  {
+    key: "weight_loss",
+    label: "Unintentional weight loss",
+    weight: 2,
+  },
   {
     key: "hemoptysis",
     label: "Hemoptysis (coughing blood)",
@@ -38,8 +57,16 @@ const SYMPTOMS: Symptom[] = [
     helper: "Eligible for IPT screening per NTP",
     weight: 2,
   },
-  { key: "chest_pain", label: "Persistent chest pain", weight: 1 },
-  { key: "fatigue", label: "Marked fatigue / loss of appetite", weight: 1 },
+  {
+    key: "chest_pain",
+    label: "Persistent chest pain",
+    weight: 1,
+  },
+  {
+    key: "fatigue",
+    label: "Marked fatigue / loss of appetite",
+    weight: 1,
+  },
 ];
 
 const COMORBID: Symptom[] = [
@@ -55,6 +82,29 @@ const COMORBID: Symptom[] = [
   { key: "malnourished", label: "Underweight / malnourished", weight: 1 },
 ];
 
+const REFERENCES = [
+  {
+    num: 1,
+    short: "DOH Philippines — NTP MOP 5th ed. (2020), §4.2",
+    full: "Department of Health Philippines, National Tuberculosis Control Program. Manual of Procedures, 5th edition (2020). Section 4.2: Identification of Presumptive TB Cases.",
+  },
+  {
+    num: 2,
+    short: "WHO — Consolidated Guidelines on TB, Module 2: Screening (2021)",
+    full: "World Health Organization. WHO Consolidated Guidelines on Tuberculosis, Module 2: Screening — Systematic Screening for Tuberculosis Disease. Geneva: WHO; 2021. ISBN 978-92-4-003399-2.",
+  },
+  {
+    num: 3,
+    short: "WHO — Latent TB Infection Guidelines (2018)",
+    full: "World Health Organization. Latent Tuberculosis Infection: Updated and Consolidated Guidelines for Programmatic Management. Geneva: WHO; 2018. ISBN 978-92-4-155023-9. (Basis for IPT eligibility of household contacts.)",
+  },
+  {
+    num: 4,
+    short: "PhilCAT — Philippine Clinical Standards Manual on TB (2016)",
+    full: "Philippine College of Chest Physicians (PhilCAT). Philippine Clinical Standards Manual on Tuberculosis (PCSMTB), 2016 edition. (Basis for clinical TB risk stratification used in this tool.)",
+  },
+];
+
 export function Cds() {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [age, setAge] = useState<string>("");
@@ -65,6 +115,8 @@ export function Cds() {
 
   const result = useMemo(() => evaluate(checked, age), [checked, age]);
 
+  const anyChecked = Object.values(checked).some(Boolean);
+
   return (
     <>
       <PageHeader
@@ -73,46 +125,103 @@ export function Cds() {
       />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+        {/* ── Left: Symptom input ── */}
         <Card className="p-5">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <Stethoscope className="h-4 w-4" /> Symptom screen
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <Stethoscope className="h-4 w-4 text-brand-600" />
+            Symptom screen
           </div>
 
-          <label className="mb-4 block">
-            <span className="mb-1 block text-xs font-semibold text-slate-700">
-              Patient age (years, optional)
-            </span>
+          {/* Age */}
+          <div className="mb-5">
+            <label
+              htmlFor="cds-age"
+              className="mb-1.5 block text-xs font-semibold text-slate-700"
+            >
+              Patient age <span className="font-normal text-slate-400">(years, optional)</span>
+            </label>
             <input
+              id="cds-age"
               type="number"
               min={0}
               max={120}
+              placeholder="e.g. 34"
               value={age}
               onChange={(e) => setAge(e.target.value)}
-              className="h-10 w-32 rounded-md border border-slate-300 px-3 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              className="h-10 w-36 rounded-lg border border-slate-300 px-3 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
             />
-          </label>
-
-          <Section title="Cardinal symptoms" items={SYMPTOMS} state={checked} onToggle={toggle} />
-          <Section title="Comorbidities and risk factors" items={COMORBID} state={checked} onToggle={toggle} />
-        </Card>
-
-        <Card className="p-5">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <AlertTriangle className="h-4 w-4" /> Recommendation
           </div>
-          <Recommendation result={result} />
-          <p className="mt-4 text-xs text-slate-400">
-            Sources: NTP MOP 2020 §4.2 (Presumptive TB criteria); WHO
-            consolidated guidelines on TB module 2 (screening). This tool does
-            not record or transmit patient data.
-          </p>
+
+          <SymptomSection
+            title="Cardinal symptoms"
+            items={SYMPTOMS}
+            state={checked}
+            onToggle={toggle}
+          />
+          <SymptomSection
+            title="Comorbidities and risk factors"
+            items={COMORBID}
+            state={checked}
+            onToggle={toggle}
+          />
+
+          {anyChecked && (
+            <button
+              type="button"
+              onClick={() => { setChecked({}); setAge(""); }}
+              className="mt-2 text-xs text-slate-400 hover:text-red-500 hover:underline"
+            >
+              Clear all
+            </button>
+          )}
         </Card>
+
+        {/* ── Right: Recommendation + References ── */}
+        <div className="flex flex-col gap-4">
+          <Card className="p-5">
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              Recommendation
+            </div>
+            <Recommendation result={result} />
+          </Card>
+
+          <Card className="p-5">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <BookOpen className="h-4 w-4 text-brand-600" />
+              References
+            </div>
+            <p className="mb-3 text-xs text-slate-500">
+              This tool applies rule-based logic derived from the following
+              clinical guidelines. Recommendations are indicative only.
+            </p>
+            <ol className="space-y-3">
+              {REFERENCES.map((r) => (
+                <li key={r.num} className="flex gap-2.5 text-xs text-slate-600">
+                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-bold text-brand-700">
+                    {r.num}
+                  </span>
+                  <span>
+                    <span className="font-semibold text-slate-800">{r.short}</span>
+                    <span className="block mt-0.5 leading-relaxed text-slate-500">
+                      {r.full}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+            <div className="mt-4 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+              <ExternalLink className="h-3 w-3 shrink-0" />
+              This tool does not record, store, or transmit any patient data.
+            </div>
+          </Card>
+        </div>
       </div>
     </>
   );
 }
 
-function Section({
+function SymptomSection({
   title,
   items,
   state,
@@ -124,36 +233,53 @@ function Section({
   onToggle: (key: string) => void;
 }) {
   return (
-    <div className="mb-4">
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+    <div className="mb-5">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
         {title}
       </div>
-      <ul className="space-y-1.5">
-        {items.map((s) => (
-          <li key={s.key}>
-            <label className="flex cursor-pointer items-start gap-2 rounded-md p-1.5 hover:bg-slate-50">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                checked={!!state[s.key]}
-                onChange={() => onToggle(s.key)}
-              />
-              <span className="text-sm">
-                <span className="font-medium text-slate-800">{s.label}</span>
-                {s.red && (
-                  <Badge tone="danger" className="ml-2 align-middle text-[10px]">
-                    red flag
-                  </Badge>
-                )}
-                {s.helper && (
-                  <span className="block text-xs text-slate-500">
-                    {s.helper}
+      <ul className="space-y-1">
+        {items.map((s) => {
+          const active = !!state[s.key];
+          return (
+            <li key={s.key}>
+              <label
+                className={
+                  "flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition " +
+                  (s.red
+                    ? active
+                      ? "border-red-300 bg-red-50"
+                      : "border-red-100 bg-red-50/40 hover:bg-red-50"
+                    : active
+                      ? "border-brand-200 bg-brand-50/60"
+                      : "border-transparent hover:border-slate-200 hover:bg-slate-50")
+                }
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                  checked={active}
+                  onChange={() => onToggle(s.key)}
+                />
+                <span className="flex-1 text-sm">
+                  <span className="inline-flex flex-wrap items-center gap-1.5 font-medium text-slate-800">
+                    {s.label}
+                    {s.red && (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+                        <ShieldAlert className="h-2.5 w-2.5" />
+                        red flag
+                      </span>
+                    )}
                   </span>
-                )}
-              </span>
-            </label>
-          </li>
-        ))}
+                  {s.helper && (
+                    <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">
+                      {s.helper}
+                    </span>
+                  )}
+                </span>
+              </label>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -166,23 +292,22 @@ interface CdsResult {
   redFlags: string[];
   triggered: string[];
   next: string[];
+  refNums: number[]; // citation numbers that drove this result
 }
 
-function evaluate(
-  state: Record<string, boolean>,
-  ageStr: string
-): CdsResult {
+function evaluate(state: Record<string, boolean>, ageStr: string): CdsResult {
   const all = [...SYMPTOMS, ...COMORBID];
   let score = 0;
   const triggered: string[] = [];
   const redFlags: string[] = [];
+
   for (const s of all) {
     if (!state[s.key]) continue;
     score += s.weight;
     triggered.push(s.label);
     if (s.red) redFlags.push(s.label);
   }
-  // Cough ≥2 wk = always presumptive per NTP MOP
+
   const cough = !!state["cough_2w"];
   const presumptive = cough || redFlags.length > 0 || score >= 4;
 
@@ -195,86 +320,168 @@ function evaluate(
   const isChild = !Number.isNaN(age) && age > 0 && age < 15;
 
   const next: string[] = [];
+  const refNums = new Set<number>();
+
   if (level === "high") {
     next.push("Refer to nearest DOTS center / RHU today.");
     next.push("Order chest X-ray and sputum AFB smear / Xpert MTB/RIF.");
+    refNums.add(1);
+    refNums.add(2);
   }
   if (level === "moderate") {
     next.push("Refer for chest X-ray and sputum AFB smear within 1–3 days.");
+    refNums.add(1);
+    refNums.add(2);
   }
   if (presumptive && state["contact_tb"]) {
     next.push(
       "Initiate household contact investigation; offer IPT to eligible contacts."
     );
+    refNums.add(3);
   }
   if (isChild && presumptive) {
     next.push(
       "Pediatric TB pathway: tuberculin skin test or IGRA, chest X-ray, refer to pediatrician."
     );
+    refNums.add(4);
   }
   if (state["hiv"] && level !== "none") {
     next.push("HIV-TB co-management: refer to HIV clinic and start ART planning.");
+    refNums.add(2);
   }
   if (level === "low") {
     next.push("Symptomatic management; recheck if symptoms persist or worsen.");
+    refNums.add(1);
   }
   if (level === "none") {
-    next.push("No presumptive TB indicators. Educate on symptoms to watch for.");
+    next.push("No presumptive TB indicators. Educate patient on warning symptoms.");
   }
 
-  return { level, score, presumptive, redFlags, triggered, next };
+  return {
+    level,
+    score,
+    presumptive,
+    redFlags,
+    triggered,
+    next,
+    refNums: [...refNums].sort((a, b) => a - b),
+  };
 }
 
 function Recommendation({ result }: { result: CdsResult }) {
-  const tone =
+  const config =
     result.level === "high"
-      ? { bg: "bg-red-50", text: "text-red-800", icon: AlertTriangle }
+      ? {
+          bg: "bg-red-50 border-red-200",
+          text: "text-red-800",
+          iconColor: "text-red-600",
+          icon: AlertTriangle,
+          label: "HIGH presumption — urgent referral",
+        }
       : result.level === "moderate"
-        ? { bg: "bg-amber-50", text: "text-amber-800", icon: AlertTriangle }
+        ? {
+            bg: "bg-amber-50 border-amber-200",
+            text: "text-amber-800",
+            iconColor: "text-amber-600",
+            icon: AlertTriangle,
+            label: "MODERATE presumption — refer for workup",
+          }
         : result.level === "low"
-          ? { bg: "bg-sky-50", text: "text-sky-800", icon: Stethoscope }
-          : { bg: "bg-emerald-50", text: "text-emerald-800", icon: CheckCircle2 };
-  const Icon = tone.icon;
-  const label =
-    result.level === "high"
-      ? "HIGH presumption — urgent referral"
-      : result.level === "moderate"
-        ? "MODERATE presumption — refer for workup"
-        : result.level === "low"
-          ? "LOW presumption — observe"
-          : "No symptoms selected";
+          ? {
+              bg: "bg-sky-50 border-sky-200",
+              text: "text-sky-800",
+              iconColor: "text-sky-600",
+              icon: Stethoscope,
+              label: "LOW presumption — observe",
+            }
+          : {
+              bg: "bg-emerald-50 border-emerald-200",
+              text: "text-emerald-800",
+              iconColor: "text-emerald-600",
+              icon: CheckCircle2,
+              label: "No symptoms selected",
+            };
+
+  const Icon = config.icon;
 
   return (
-    <div>
-      <div className={`flex items-center gap-2 rounded-md ${tone.bg} px-3 py-2 ${tone.text}`}>
-        <Icon className="h-4 w-4" />
-        <span className="text-sm font-semibold">{label}</span>
-        <span className="ml-auto text-xs">score {result.score}</span>
+    <div className="space-y-4">
+      {/* Level banner */}
+      <div
+        className={`flex items-center gap-2 rounded-lg border px-4 py-3 ${config.bg} ${config.text}`}
+      >
+        <Icon className={`h-5 w-5 shrink-0 ${config.iconColor}`} />
+        <span className="font-semibold">{config.label}</span>
+        <span className="ml-auto rounded-full bg-white/60 px-2 py-0.5 text-xs font-bold tabular-nums">
+          score {result.score}
+        </span>
       </div>
 
+      {/* Red flags */}
       {result.redFlags.length > 0 && (
-        <div className="mt-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-red-700">
-            Red flags
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-red-700">
+            <ShieldAlert className="h-3.5 w-3.5" />
+            Red flags present
           </div>
-          <ul className="ml-4 list-disc text-sm text-slate-800">
+          <ul className="space-y-1">
             {result.redFlags.map((r) => (
-              <li key={r}>{r}</li>
+              <li key={r} className="flex items-start gap-1.5 text-sm text-red-800">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+                {r}
+              </li>
             ))}
           </ul>
         </div>
       )}
 
-      <div className="mt-3">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+      {/* Triggered symptoms (summary) */}
+      {result.triggered.length > 0 && (
+        <div>
+          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Symptoms / factors reported ({result.triggered.length})
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {result.triggered.map((t) => (
+              <Badge key={t} tone="default">
+                {t}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Next steps */}
+      <div>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
           Recommended next steps
         </div>
-        <ul className="ml-4 mt-1 list-disc space-y-1 text-sm text-slate-800">
+        <ul className="space-y-2">
           {result.next.map((n) => (
-            <li key={n}>{n}</li>
+            <li
+              key={n}
+              className="flex items-start gap-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+            >
+              <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-brand-500" />
+              {n}
+            </li>
           ))}
         </ul>
+        {result.refNums.length > 0 && (
+          <p className="mt-2 text-[11px] text-slate-400">
+            Based on reference{result.refNums.length > 1 ? "s" : ""}{" "}
+            {result.refNums.map((n) => `[${n}]`).join(" ")} below.
+          </p>
+        )}
       </div>
+
+      {result.level !== "none" && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <strong>Disclaimer:</strong> This tool provides decision support only.
+          Final clinical triage and diagnosis rest solely with the attending
+          clinician.
+        </div>
+      )}
     </div>
   );
 }

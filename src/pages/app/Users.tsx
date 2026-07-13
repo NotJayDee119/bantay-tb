@@ -116,7 +116,7 @@ export function Users() {
         subtitle={
           canEdit
             ? "System users, their roles, and barangay assignments. Click the pencil to reassign."
-            : "System users, their roles, and barangay assignments."
+            : "System users, their roles, and barangay assignments. Contact the System Administrator to update a user's role or area."
         }
       />
 

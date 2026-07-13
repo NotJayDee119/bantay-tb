@@ -1,35 +1,37 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { PublicLayout } from "./components/PublicLayout";
 import { useAuth } from "./hooks/useAuth";
 import type { AppRole } from "./lib/supabase";
-
-import { Landing } from "./pages/public/Landing";
-import { DotsLocator } from "./pages/public/DotsLocator";
-import { LearnPublic } from "./pages/public/LearnPublic";
-import { Login } from "./pages/public/Login";
-import { Register } from "./pages/public/Register";
-import { StaffRegister } from "./pages/public/StaffRegister";
-import { ForgotPassword } from "./pages/public/ForgotPassword";
-import { ResetPassword } from "./pages/public/ResetPassword";
-
-import { Dashboard } from "./pages/app/Dashboard";
-import { GISMapTab } from "./pages/app/GISMapTab";
-import { Hotspots } from "./pages/app/Hotspots";
-import { Alerts } from "./pages/app/Alerts";
-import { Cases } from "./pages/app/Cases";
-import { CaseFormPage } from "./pages/app/CaseFormPage";
-import { Adherence } from "./pages/app/Adherence";
-import { BulkImport } from "./pages/app/BulkImport";
-import { Chatbot } from "./pages/app/Chatbot";
-import { HealthEducation } from "./pages/app/HealthEducation";
-import { Cds } from "./pages/app/Cds";
-import { DotsCentersAdmin } from "./pages/app/DotsCentersAdmin";
-import { SettingsPage } from "./pages/app/SettingsPage";
-import { Analytics } from "./pages/app/Analytics";
-import { Users } from "./pages/app/Users";
-import { AdminDashboard } from "./pages/app/AdminDashboard";
 import { Spinner } from "./components/ui";
+
+const Landing = lazy(() => import("./pages/public/Landing").then(m => ({ default: m.Landing })));
+const About = lazy(() => import("./pages/public/About").then(m => ({ default: m.About })));
+const DotsLocator = lazy(() => import("./pages/public/DotsLocator").then(m => ({ default: m.DotsLocator })));
+const LearnPublic = lazy(() => import("./pages/public/LearnPublic").then(m => ({ default: m.LearnPublic })));
+const Login = lazy(() => import("./pages/public/Login").then(m => ({ default: m.Login })));
+const Register = lazy(() => import("./pages/public/Register").then(m => ({ default: m.Register })));
+const StaffRegister = lazy(() => import("./pages/public/StaffRegister").then(m => ({ default: m.StaffRegister })));
+const ForgotPassword = lazy(() => import("./pages/public/ForgotPassword").then(m => ({ default: m.ForgotPassword })));
+const ResetPassword = lazy(() => import("./pages/public/ResetPassword").then(m => ({ default: m.ResetPassword })));
+
+const Dashboard = lazy(() => import("./pages/app/Dashboard").then(m => ({ default: m.Dashboard })));
+const GISMapTab = lazy(() => import("./pages/app/GISMapTab").then(m => ({ default: m.GISMapTab })));
+const Hotspots = lazy(() => import("./pages/app/Hotspots").then(m => ({ default: m.Hotspots })));
+const Alerts = lazy(() => import("./pages/app/Alerts").then(m => ({ default: m.Alerts })));
+const Cases = lazy(() => import("./pages/app/Cases").then(m => ({ default: m.Cases })));
+const CaseFormPage = lazy(() => import("./pages/app/CaseFormPage").then(m => ({ default: m.CaseFormPage })));
+const Adherence = lazy(() => import("./pages/app/Adherence").then(m => ({ default: m.Adherence })));
+const BulkImport = lazy(() => import("./pages/app/BulkImport").then(m => ({ default: m.BulkImport })));
+const Chatbot = lazy(() => import("./pages/app/Chatbot").then(m => ({ default: m.Chatbot })));
+const HealthEducation = lazy(() => import("./pages/app/HealthEducation").then(m => ({ default: m.HealthEducation })));
+const Cds = lazy(() => import("./pages/app/Cds").then(m => ({ default: m.Cds })));
+const DotsCentersAdmin = lazy(() => import("./pages/app/DotsCentersAdmin").then(m => ({ default: m.DotsCentersAdmin })));
+const SettingsPage = lazy(() => import("./pages/app/SettingsPage").then(m => ({ default: m.SettingsPage })));
+const Analytics = lazy(() => import("./pages/app/Analytics").then(m => ({ default: m.Analytics })));
+const Users = lazy(() => import("./pages/app/Users").then(m => ({ default: m.Users })));
+const AdminDashboard = lazy(() => import("./pages/app/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
 
 function RequireRole({
   roles,
@@ -52,11 +54,19 @@ function RequireRole({
   return <>{children}</>;
 }
 
+const LazyFallback = () => (
+  <div className="flex h-64 items-center justify-center">
+    <Spinner />
+  </div>
+);
+
 export default function App() {
   return (
+    <Suspense fallback={<LazyFallback />}>
     <Routes>
       <Route element={<PublicLayout />}>
         <Route index element={<Landing />} />
+        <Route path="about" element={<About />} />
         <Route path="dots-locator" element={<DotsLocator />} />
         <Route path="learn" element={<LearnPublic />} />
         <Route path="login" element={<Login />} />
@@ -94,7 +104,7 @@ export default function App() {
         <Route
           path="hotspots"
           element={
-            <RequireRole roles={["tb_coordinator", "system_admin"]}>
+            <RequireRole roles={["tb_coordinator", "system_admin", "barangay_admin", "health_worker"]}>
               <Hotspots />
             </RequireRole>
           }
@@ -103,7 +113,7 @@ export default function App() {
           path="alerts"
           element={
             <RequireRole
-              roles={["tb_coordinator", "barangay_admin", "health_worker"]}
+              roles={["tb_coordinator", "barangay_admin", "health_worker", "system_admin"]}
             >
               <Alerts />
             </RequireRole>
@@ -167,7 +177,7 @@ export default function App() {
         <Route
           path="chatbot"
           element={
-            <RequireRole roles={["tb_coordinator", "patient"]}>
+            <RequireRole roles={["tb_coordinator", "barangay_admin", "health_worker", "patient"]}>
               <Chatbot />
             </RequireRole>
           }
@@ -184,7 +194,7 @@ export default function App() {
           path="analytics"
           element={
             <RequireRole
-              roles={["tb_coordinator", "health_worker", "system_admin"]}
+              roles={["tb_coordinator", "barangay_admin", "health_worker", "system_admin"]}
             >
               <Analytics />
             </RequireRole>
@@ -210,5 +220,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 }

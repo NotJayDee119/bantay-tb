@@ -7,8 +7,8 @@ export interface DbscanSettings {
 }
 
 export const DBSCAN_DEFAULTS: DbscanSettings = {
-  eps_km: 1.2,
-  min_pts: 8,
+  eps_km: 5,
+  min_pts: 2,
   window_days: 90,
 };
 

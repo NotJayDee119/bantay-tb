@@ -18,7 +18,7 @@ values
   ('Agdao Health Center DOTS', 'Agdao, Davao City', 7.0850, 125.6240, '(082) 226-2828', 'Mon–Fri 8am–4pm', array['TB treatment']),
   ('Calinan Hospital DOTS', 'Calinan, Davao City', 7.1841, 125.4612, '(082) 295-0101', 'Mon–Fri 8am–4pm', array['Sputum testing','TB treatment']),
   ('Tugbok Health Center DOTS', 'Mintal, Davao City', 7.0944, 125.4937, '(082) 293-1234', 'Mon–Fri 8am–4pm', array['TB treatment']),
-  ('Bunawan Health Center DOTS', 'Bunawan, Davao City', 7.1995, 125.6748, '(082) 235-9000', 'Mon–Fri 8am–4pm', array['TB treatment']),
+  ('Bunawan Health Center DOTS', 'Bunawan, Davao City', 7.236596, 125.643938, '(082) 235-9000', 'Mon–Fri 8am–4pm', array['TB treatment']),
   ('Marilog District Health Office DOTS', 'Marilog, Davao City', 7.4097, 125.4567, '(082) 295-2222', 'Mon–Fri 8am–4pm', array['TB treatment']),
   ('Davao City Health Office Central DOTS', 'San Pedro St., Davao City', 7.0708, 125.6113, '(082) 222-9000', 'Mon–Fri 8am–5pm', array['Sputum testing','MDR-TB','TB treatment','Health education']),
   ('Paquibato District Hospital DOTS', 'Paquibato, Davao City', 7.2887, 125.7290, '(082) 295-7777', 'Mon–Fri 8am–4pm', array['TB treatment']);

@@ -14,6 +14,16 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import barangays from "../../data/barangays.json";
 
+async function triggerHotspotDetection() {
+  try {
+    await supabase.functions.invoke("detect-hotspots", {
+      body: { trigger: "case_insert" },
+    });
+  } catch {
+    // Non-fatal — hotspots will still be visible via manual re-run.
+  }
+}
+
 const DISEASES = [
   { value: "tb", label: "Tuberculosis" },
   { value: "pneumonia", label: "Pneumonia" },
@@ -104,7 +114,9 @@ export function CaseFormPage() {
       toast.error(error.message);
       return;
     }
-    toast.success("Case recorded");
+    toast.success("Case recorded. Hotspot detection is running.");
+    // Fire-and-forget — do not await so navigation is instant.
+    void triggerHotspotDetection();
     navigate("/app/cases");
   }
 

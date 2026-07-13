@@ -31,7 +31,7 @@ interface AuthContextValue {
     role: AppRole,
     barangayPsgc: number | null,
     phone?: string | null
-  ) => Promise<{ error?: string }>;
+  ) => Promise<{ error?: string; confirmed?: boolean }>;
   signOut: () => Promise<void>;
 }
 
@@ -49,7 +49,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq("id", userId)
       .maybeSingle();
     if (error) {
-       
       console.warn("Failed to load profile:", error.message);
       setProfile(null);
       return;
@@ -71,9 +70,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       if (s?.user.id) {
-        loadProfile(s.user.id);
+        setLoading(true);
+        void loadProfile(s.user.id).finally(() => setLoading(false));
       } else {
         setProfile(null);
+        setLoading(false);
       }
     });
     return () => {
@@ -121,7 +122,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           if (pErr) return { error: pErr.message };
         }
-        return {};
+        // confirmed = true means Supabase returned a live session (email
+        // confirmation is disabled on this project). The caller can navigate
+        // straight to /app. If false, the user must confirm their email first.
+        return { confirmed: !!data.session };
       },
       async signOut() {
         await supabase.auth.signOut();

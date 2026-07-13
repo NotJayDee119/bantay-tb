@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
   }
 
   // Resolve thresholds: explicit body overrides > app_settings.dbscan > defaults.
-  const defaults = { window_days: 90, eps_km: 1.2, min_pts: 8 };
+  const defaults = { window_days: 90, eps_km: 5, min_pts: 2 };
   let stored: typeof defaults = defaults;
   try {
     const rows = await dbSelect<{ value: typeof defaults }>(
@@ -158,7 +158,7 @@ Deno.serve(async (req) => {
     );
     const density = pts.length / (Math.PI * radius_km * radius_km);
     const severity =
-      pts.length >= 25 ? "high" : pts.length >= 15 ? "medium" : "low";
+      pts.length >= 50 ? "urgent" : pts.length >= 20 ? "high" : pts.length >= 10 ? "moderate" : "watch";
     return {
       barangay_psgc: topBgy ?? null,
       disease: "tb" as const,
@@ -198,11 +198,11 @@ Deno.serve(async (req) => {
     }
 
     // Notify staff about HIGH severity clusters.
-    const highHotspots = inserted.filter((h) => h.severity === "high");
+    const highHotspots = inserted.filter((h) => h.severity === "urgent" || h.severity === "high");
     if (highHotspots.length > 0) {
       try {
         // Per the BANTAY-TB framework + community-scoped RLS:
-        //   * tb_coordinator gets every high-severity alert (citywide).
+        //   * system_admin / tb_coordinator get every high-severity alert (citywide).
         //   * barangay_admin / health_worker only get alerts for hotspots
         //     in *their own* barangay.
         const recipients = await dbSelect<{
@@ -212,13 +212,13 @@ Deno.serve(async (req) => {
         }>(
           cfg,
           "profiles",
-          "select=id,role,barangay_psgc&role=in.(tb_coordinator,barangay_admin,health_worker)"
+          "select=id,role,barangay_psgc&role=in.(tb_coordinator,barangay_admin,health_worker,system_admin)"
         );
 
         const alerts: { hotspot_id: string; recipient_id: string }[] = [];
         for (const h of highHotspots) {
           for (const r of recipients) {
-            if (r.role === "tb_coordinator") {
+            if (r.role === "tb_coordinator" || r.role === "system_admin") {
               alerts.push({ hotspot_id: h.id, recipient_id: r.id });
               continue;
             }

@@ -38,7 +38,7 @@ export interface BarangayStat {
   recentCases: number;
 }
 
-export type HotspotSeverity = "low" | "medium" | "high";
+export type HotspotSeverity = "watch" | "moderate" | "high" | "urgent" | "low" | "medium";
 
 export interface HotspotCluster {
   id: number;
@@ -63,8 +63,8 @@ const RECENT_WINDOW_DAYS = 30;
 // DBSCAN parameters: ~1.5 km neighbourhood and 3+ cases to form a hotspot.
 // These values are chosen so that adjacent dense barangays merge into a
 // single cluster while isolated cases stay as noise.
-const DBSCAN_EPS_KM = 1.5;
-const DBSCAN_MIN_PTS = 3;
+const DBSCAN_EPS_KM = 5;
+const DBSCAN_MIN_PTS = 2;
 
 const BARANGAY_INDEX: Map<number, BarangayMeta> = new Map(
   (barangaysData as BarangayMeta[]).map((b) => [
@@ -74,9 +74,10 @@ const BARANGAY_INDEX: Map<number, BarangayMeta> = new Map(
 );
 
 function severityFor(caseCount: number): HotspotSeverity {
-  if (caseCount >= 25) return "high";
-  if (caseCount >= 15) return "medium";
-  return "low";
+  if (caseCount >= 50) return "urgent";
+  if (caseCount >= 20) return "high";
+  if (caseCount >= 10) return "moderate";
+  return "watch";
 }
 
 function caseDate(row: HotspotCaseRow): number {

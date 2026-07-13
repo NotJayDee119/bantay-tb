@@ -9,11 +9,15 @@ import {
   Navigation,
   Stethoscope,
   ChevronRight,
+  Heart,
 } from "lucide-react";
-import { Button, Card, Input } from "../../components/ui";
+import { motion } from "motion/react";
+import { Badge, Button, Input, MotionCard } from "../../components/ui";
+import { cn } from "../../lib/utils";
 import { supabase } from "../../lib/supabase";
 import { haversineKm } from "../../lib/utils";
 import barangays from "../../data/barangays.json";
+import heroImage from "../../assets/davao_city_midnight_blue_20260528_090346.png";
 
 interface DotsCenter {
   id: string;
@@ -109,46 +113,70 @@ export function DotsLocator() {
 
   return (
     <>
-      <section className="border-b border-slate-200 bg-gradient-to-b from-brand-50 via-white to-white">
-        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">
-            For patients &amp; families
-          </p>
-          <h1 className="font-display mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            DOTS Center Locator
-          </h1>
-          <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-600">
-            Find the nearest TB-DOTS treatment facility across Davao City. Free
-            diagnostics and medication for tuberculosis. No login required.
-          </p>
+      {/* ─── Hero Header with Search ───────────────────────────────── */}
+      <section className="relative overflow-hidden border-b border-slate-200">
+        <div className="absolute inset-0">
+          <img
+            src={heroImage}
+            alt=""
+            className="h-full w-full object-cover object-center"
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-900/85 via-slate-900/75 to-brand-900/85" />
+        </div>
+
+        <div className="relative mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+          >
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-medium text-white backdrop-blur-sm">
+              <Heart className="h-4 w-4" />
+              For patients &amp; families
+            </div>
+            <h1 className="font-display text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl">
+              DOTS Center Locator
+            </h1>
+            <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-200">
+              Find the nearest TB-DOTS treatment facility across Davao City. Free
+              diagnostics and medication for tuberculosis. No login required.
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2, ease: "easeOut" }}
+            className="mt-8 rounded-xl border border-white/15 bg-white/10 p-4 backdrop-blur-md"
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Button
+                onClick={locateMe}
+                className="shrink-0 sm:w-auto"
+              >
+                <Navigation className="h-4 w-4" /> Use my location
+              </Button>
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  placeholder="Search by barangay (e.g. Talomo, Buhangin, Agdao)"
+                  className="border-white/20 bg-white/90 pl-9 shadow-none placeholder:text-slate-400"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+            </div>
+            <p className="mt-3 flex items-center gap-2 text-xs text-white/70">
+              <MapPin className="h-3.5 w-3.5 text-white/50" />
+              Sorting from{" "}
+              <span className="font-medium text-white">{referenceLabel}</span>
+            </p>
+          </motion.div>
         </div>
       </section>
 
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        <Card className="mb-5 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Button
-              onClick={locateMe}
-              className="sm:w-auto"
-            >
-              <Navigation className="h-4 w-4" /> Use my location
-            </Button>
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                placeholder="Search by barangay (e.g. Talomo, Buhangin, Agdao)"
-                className="pl-9"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
-          </div>
-          <p className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-            <MapPin className="h-3.5 w-3.5 text-brand-600" />
-            Sorting from <span className="font-medium text-slate-700">{referenceLabel}</span>
-          </p>
-        </Card>
-
+      {/* ─── Map + List ────────────────────────────────────────────── */}
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         {error && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {error}
@@ -156,7 +184,7 @@ export function DotsLocator() {
         )}
 
         <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
-          <Card className="overflow-hidden p-0">
+          <MotionCard className="overflow-hidden p-0 ring-1 ring-slate-200">
             <MapContainer
               center={referencePoint}
               zoom={12}
@@ -207,19 +235,17 @@ export function DotsLocator() {
                 </CircleMarker>
               ))}
             </MapContainer>
-          </Card>
+          </MotionCard>
 
-          <Card className="flex flex-col overflow-hidden p-0 lg:h-[520px]">
-            <div className="flex-none border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+          <MotionCard delay={0.1} className="flex flex-col overflow-hidden p-0 lg:h-[520px]">
+            <div className="flex-none border-b border-slate-200 bg-brand-50/60 px-4 py-3">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-semibold text-slate-900">
                   {loading
-                    ? "Loading centers…"
+                    ? "Loading centers..."
                     : `${sorted.length} ${sorted.length === 1 ? "center" : "centers"} nearby`}
                 </div>
-                <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
-                  Sorted by distance
-                </span>
+                <Badge tone="info">Sorted by distance</Badge>
               </div>
               <p className="mt-1 text-xs text-slate-500">
                 Scroll the list to see every facility, or click a pin on the
@@ -227,10 +253,10 @@ export function DotsLocator() {
               </p>
             </div>
 
-            <ul className="flex-1 divide-y divide-slate-200 overflow-y-auto">
+            <ul className="flex-1 divide-y divide-slate-100 overflow-y-auto">
               {loading && (
                 <li className="px-4 py-8 text-center text-sm text-slate-500">
-                  Fetching DOTS centers…
+                  Fetching DOTS centers...
                 </li>
               )}
               {!loading && sorted.length === 0 && (
@@ -244,12 +270,12 @@ export function DotsLocator() {
                 return (
                   <li
                     key={c.id}
-                    className={
-                      "cursor-pointer px-4 py-3 transition " +
-                      (isSelected
-                        ? "bg-brand-50/70"
-                        : "hover:bg-slate-50")
-                    }
+                    className={cn(
+                      "cursor-pointer px-4 py-3 transition",
+                      isSelected
+                        ? "border-l-2 border-brand-600 bg-brand-50/70 pl-[14px]"
+                        : "hover:bg-slate-50"
+                    )}
                     onClick={() => setSelectedId(c.id)}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -266,9 +292,9 @@ export function DotsLocator() {
                           </div>
                         )}
                       </div>
-                      <div className="flex-none rounded-md bg-brand-600/10 px-2 py-1 text-xs font-semibold text-brand-700">
+                      <Badge tone="default" className="shrink-0">
                         {c.distance.toFixed(1)} km
-                      </div>
+                      </Badge>
                     </div>
 
                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-xs text-slate-500">
@@ -300,7 +326,7 @@ export function DotsLocator() {
                 );
               })}
             </ul>
-          </Card>
+          </MotionCard>
         </div>
       </div>
     </>

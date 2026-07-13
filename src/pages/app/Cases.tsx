@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { MapPin, Plus } from "lucide-react";
 import {
   Badge,
   Card,
@@ -41,6 +41,7 @@ export function Cases() {
   const { profile } = useAuth();
   const canCreateCase =
     profile?.role === "tb_coordinator" || profile?.role === "barangay_admin";
+  const assignedPsgc = profile?.barangay_psgc ?? null;
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState({
@@ -48,6 +49,18 @@ export function Cases() {
     disease: "all",
     search: "",
   });
+
+  // Pre-select the assigned barangay for health_worker / barangay_admin once
+  // the profile is available so they land on their area by default.
+  useEffect(() => {
+    if (
+      (profile?.role === "health_worker" || profile?.role === "barangay_admin") &&
+      profile.barangay_psgc
+    ) {
+      setFilter((f) => ({ ...f, barangay: String(profile.barangay_psgc) }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
 
   useEffect(() => {
     setLoading(true);
@@ -209,13 +222,29 @@ export function Cases() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
-              {filtered.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50">
+              {filtered.map((r) => {
+                const isAssigned = assignedPsgc !== null && r.barangay_psgc === assignedPsgc;
+                return (
+                <tr
+                  key={r.id}
+                  className={
+                    isAssigned
+                      ? "bg-brand-50/60 ring-1 ring-inset ring-brand-100 hover:bg-brand-50"
+                      : "hover:bg-slate-50"
+                  }
+                >
                   <td className="px-4 py-2 text-slate-600">
                     {formatDate(r.reported_at)}
                   </td>
                   <td className="px-4 py-2 font-medium text-slate-900">
-                    {barangays.find((b) => b.psgc === r.barangay_psgc)?.name ?? "—"}
+                    <span className="inline-flex items-center gap-1.5">
+                      {barangays.find((b) => b.psgc === r.barangay_psgc)?.name ?? "—"}
+                      {isAssigned && (
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
+                          <MapPin className="h-2.5 w-2.5" /> Your area
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className="px-4 py-2 uppercase">{r.disease}</td>
                   <td className="px-4 py-2 text-slate-600">
@@ -230,7 +259,8 @@ export function Cases() {
                   </td>
                   <td className="px-4 py-2 text-xs text-slate-500">{r.source}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </Card>

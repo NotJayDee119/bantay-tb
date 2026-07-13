@@ -7,6 +7,8 @@ import { formatDateTime } from "../../lib/utils";
 import barangays from "../../data/barangays.json";
 import { toast } from "sonner";
 
+type Severity = "watch" | "moderate" | "high" | "urgent" | "low" | "medium";
+
 interface AlertRow {
   id: string;
   read_at: string | null;
@@ -15,16 +17,19 @@ interface AlertRow {
   hotspots: {
     barangay_psgc: number;
     case_count: number;
-    severity: "low" | "medium" | "high";
+    severity: Severity;
     radius_km: number;
     detected_at: string;
   } | null;
 }
 
-const SEVERITY_TONE: Record<"low" | "medium" | "high", "warning" | "danger"> = {
-  low: "warning",
+const SEVERITY_TONE: Record<Severity, "warning" | "danger" | "info"> = {
+  watch: "info",
+  moderate: "warning",
+  high: "warning",
+  urgent: "danger",
+  low: "info",
   medium: "warning",
-  high: "danger",
 };
 
 export function Alerts() {

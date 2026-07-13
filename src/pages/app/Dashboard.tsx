@@ -738,9 +738,11 @@ function HotspotsModal({
 }
 
 function SeverityBadge({ severity }: { severity: HotspotCluster["severity"] }) {
+  if (severity === "urgent") return <Badge tone="danger">Urgent</Badge>;
   if (severity === "high") return <Badge tone="danger">High</Badge>;
-  if (severity === "medium") return <Badge tone="warning">Medium</Badge>;
-  return <Badge tone="info">Low</Badge>;
+  if (severity === "moderate" || severity === "medium")
+    return <Badge tone="warning">{severity === "moderate" ? "Moderate" : "Medium"}</Badge>;
+  return <Badge tone="info">Watch</Badge>;
 }
 
 function PatientTiles() {

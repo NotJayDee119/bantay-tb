@@ -43,6 +43,22 @@ body {
 
 .leaflet-container {
   font-family: inherit;
+  isolation: isolate;
+  z-index: 0;
+  cursor: default !important;
+}
+
+/* Use default cursor for map interactions */
+.leaflet-grab {
+  cursor: default !important;
+}
+
+.leaflet-grabbing {
+  cursor: default !important;
+}
+
+.leaflet-dragging .leaflet-grab {
+  cursor: default !important;
 }
 
 /* Subtle scrollbars */

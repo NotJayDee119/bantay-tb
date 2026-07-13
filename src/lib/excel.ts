@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import type { Database } from "./database.types";
-import barangaysList from "../data/barangays.json";
+import { resolveBarangay } from "./barangayResolver";
 
 type CaseInsert = Database["public"]["Tables"]["cases"]["Insert"];
 
@@ -29,6 +29,17 @@ const FIELD_MAP: Record<string, keyof MappedRow> = {
   status: "treatment_outcome",
   // disease
   disease: "disease",
+  // patient code
+  "patient_code": "patient_code",
+  "patient code": "patient_code",
+  "patient id": "patient_code",
+  code: "patient_code",
+  // diagnosis date
+  "diagnosis_date": "diagnosis_date",
+  "diagnosis date": "diagnosis_date",
+  "date_of_diagnosis": "diagnosis_date",
+  "date of diagnosis": "diagnosis_date",
+  date: "diagnosis_date",
   // PII to strip
   name: "_pii",
   "patient name": "_pii",
@@ -56,6 +67,8 @@ interface MappedRow {
   tb_classification?: string;
   treatment_outcome?: string;
   disease?: string;
+  patient_code?: string;
+  diagnosis_date?: unknown;
   _pii?: string;
 }
 
@@ -136,23 +149,26 @@ const DISEASE_NORMALIZE: Record<string, string> = {
   asthma: "asthma",
 };
 
-const BARANGAY_INDEX = new Map<string, (typeof barangaysList)[number]>();
-for (const b of barangaysList) {
-  BARANGAY_INDEX.set(b.name.toLowerCase(), b);
-}
-
 function normaliseHeader(h: string): string {
   return h.trim().toLowerCase().replace(/\s+/g, " ").replace(/[._-]+/g, " ");
 }
 
-function lookupBarangay(name: string) {
-  if (!name) return null;
-  const key = name.trim().toLowerCase();
-  return (
-    BARANGAY_INDEX.get(key) ??
-    barangaysList.find((b) => b.name.toLowerCase() === key) ??
-    null
-  );
+function normalizeDateValue(raw: unknown): string | null {
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "number") {
+    const parsed = XLSX.SSF.parse_date_code(raw);
+    if (parsed) {
+      const y = String(parsed.y).padStart(4, "0");
+      const m = String(parsed.m).padStart(2, "0");
+      const d = String(parsed.d).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+    return null;
+  }
+  const str = String(raw).trim();
+  const d = new Date(str);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
 }
 
 function normalise<T extends Record<string, string>>(
@@ -162,7 +178,7 @@ function normalise<T extends Record<string, string>>(
   if (raw == null) return undefined;
   const k = String(raw).trim().toLowerCase();
   if (!k) return undefined;
-  return table[k] ?? k;
+  return table[k];
 }
 
 /**
@@ -220,7 +236,8 @@ export async function parseImportFile(file: File): Promise<ImportPreview> {
     }
 
     const bgyRaw = String(mapped.barangay ?? "").trim();
-    const bgy = lookupBarangay(bgyRaw);
+    const resolved = resolveBarangay(bgyRaw);
+    const bgy = resolved?.entry ?? null;
     if (!bgy && bgyRaw) unknownBarangays.add(bgyRaw);
 
     const ageRaw = mapped.age;
@@ -260,6 +277,11 @@ export async function parseImportFile(file: File): Promise<ImportPreview> {
 
     if (!bgy) return;
 
+    const patientCode = mapped.patient_code
+      ? String(mapped.patient_code).trim()
+      : `AUTO-${Date.now()}-${idx}`;
+    const diagnosisDate = normalizeDateValue(mapped.diagnosis_date);
+
     // Deterministic ~75 m radial jitter from the centroid so case markers
     // don't all stack on a single point but stay inside the barangay.
     const angle = ((idx * 137.5) % 360) * (Math.PI / 180);
@@ -273,7 +295,9 @@ export async function parseImportFile(file: File): Promise<ImportPreview> {
       treatment_outcome: outcomeNorm as CaseInsert["treatment_outcome"],
       jitter_lat: bgy.lat + Math.sin(angle) * r,
       jitter_lon: bgy.lon + Math.cos(angle) * r,
-      reported_at: new Date().toISOString(),
+      reported_at: diagnosisDate ?? new Date().toISOString(),
+      patient_code: patientCode,
+      diagnosis_date: diagnosisDate,
       source: "bulk_import",
     });
   });

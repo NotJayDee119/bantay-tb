@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { AlertTriangle } from "lucide-react";
 import {
   Badge,
   Button,
@@ -46,6 +47,14 @@ interface Log {
   patient: { full_name: string | null };
 }
 
+interface NonAdherenceFlag {
+  patient_id: string;
+  patient_name: string;
+  missed: number;
+  late: number;
+  total: number;
+}
+
 const STATUS_TONE = {
   scheduled: "info",
   taken: "success",
@@ -59,6 +68,7 @@ export function Adherence() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
   const [smsRows, setSmsRows] = useState<SmsRow[]>([]);
+  const [flags, setFlags] = useState<NonAdherenceFlag[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [sending, setSending] = useState(false);
@@ -90,10 +100,42 @@ export function Adherence() {
       .order("created_at", { ascending: false })
       .limit(50);
 
-    const [s, l, sm] = await Promise.all([scheduleQ, logQ, smsQ]);
+    // Non-adherence flags: missed/late logs in the last 14 days, per patient.
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 14);
+    const flagQ = !isPatient
+      ? supabase
+          .from("adherence_logs")
+          .select(
+            "patient_id, status, patient:profiles!adherence_logs_patient_id_fkey(full_name)"
+          )
+          .in("status", ["missed", "late"])
+          .gte("scheduled_at", cutoff.toISOString())
+      : null;
+
+    const [s, l, sm, f] = await Promise.all([scheduleQ, logQ, smsQ, flagQ ?? Promise.resolve({ data: [] })]);
     setSchedules((s.data ?? []) as unknown as Schedule[]);
     setLogs((l.data ?? []) as unknown as Log[]);
     setSmsRows((sm.data ?? []) as unknown as SmsRow[]);
+
+    // Aggregate flag rows by patient.
+    type FlagRow = { patient_id: string; status: string; patient: { full_name: string | null } | null };
+    const flagRows = ((f as { data: unknown[] }).data ?? []) as FlagRow[];
+    const byPatient = new Map<string, NonAdherenceFlag>();
+    for (const row of flagRows) {
+      const existing = byPatient.get(row.patient_id) ?? {
+        patient_id: row.patient_id,
+        patient_name: row.patient?.full_name ?? row.patient_id,
+        missed: 0,
+        late: 0,
+        total: 0,
+      };
+      if (row.status === "missed") existing.missed += 1;
+      if (row.status === "late") existing.late += 1;
+      existing.total += 1;
+      byPatient.set(row.patient_id, existing);
+    }
+    setFlags([...byPatient.values()].sort((a, b) => b.total - a.total));
     setLoading(false);
   }
 
@@ -307,6 +349,50 @@ export function Adherence() {
 
       {!isPatient && (
         <Card className="mt-4 p-0">
+          <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <span className="text-sm font-semibold text-slate-900">
+              Non-adherence flags
+            </span>
+            <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+              Last 14 days
+            </span>
+          </div>
+          {loading ? (
+            <div className="flex h-20 items-center justify-center">
+              <Spinner />
+            </div>
+          ) : flags.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-slate-500">
+              No missed or late doses in the last 14 days.
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-200">
+              {flags.map((f) => (
+                <li key={f.patient_id} className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <div className="text-sm font-medium text-slate-900">{f.patient_name}</div>
+                    <div className="mt-0.5 flex gap-3 text-xs text-slate-500">
+                      {f.missed > 0 && (
+                        <span className="font-semibold text-red-600">{f.missed} missed</span>
+                      )}
+                      {f.late > 0 && (
+                        <span className="font-semibold text-amber-600">{f.late} late</span>
+                      )}
+                    </div>
+                  </div>
+                  <Badge tone={f.missed > 0 ? "danger" : "warning"}>
+                    {f.total} issue{f.total === 1 ? "" : "s"}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+
+      {!isPatient && (
+        <Card className="mt-4 p-0">
           <div className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900">
             SMS outbox
           </div>
@@ -413,10 +499,17 @@ function NewScheduleForm({
       return;
     }
 
-    // Generate scheduled dose logs for the first 14 days as a starter set.
+    // Generate scheduled dose logs for the full schedule duration (capped at 365
+    // days to avoid unbounded inserts). Insert in 500-row chunks to stay within
+    // PostgREST body limits.
     const logs: { schedule_id: string; patient_id: string; scheduled_at: string; status: "scheduled" }[] = [];
     const start = new Date(form.start_date);
-    for (let d = 0; d < 14; d++) {
+    const end = new Date(form.end_date);
+    const totalDays = Math.min(
+      Math.ceil((end.getTime() - start.getTime()) / 86_400_000) + 1,
+      365
+    );
+    for (let d = 0; d < totalDays; d++) {
       const day = new Date(start);
       day.setDate(start.getDate() + d);
       for (let i = 0; i < Number(form.times_per_day); i++) {
@@ -430,9 +523,12 @@ function NewScheduleForm({
         });
       }
     }
-    await supabase.from("adherence_logs").insert(logs);
+    const chunkSize = 500;
+    for (let i = 0; i < logs.length; i += chunkSize) {
+      await supabase.from("adherence_logs").insert(logs.slice(i, i + chunkSize));
+    }
 
-    toast.success("Schedule created with 14 days of dose reminders.");
+    toast.success(`Schedule created with ${totalDays} days of dose reminders.`);
     setSubmitting(false);
     onCreated();
   }
