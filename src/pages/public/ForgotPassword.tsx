@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Activity, ArrowLeft, KeyRound, MailCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Button, Card, Input, Label, Spinner } from "../../components/ui";
+import { Button, Card, Input, Label } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 
 export function ForgotPassword() {
@@ -132,12 +132,8 @@ export function ForgotPassword() {
                     onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? (
-                    <Spinner className="h-4 w-4 text-white" />
-                  ) : (
-                    "Send reset link"
-                  )}
+                <Button type="submit" className="w-full" loading={loading}>
+                  {loading ? "Sending…" : "Send reset link"}
                 </Button>
               </form>
             )}

@@ -7,7 +7,6 @@ import {
   Input,
   Label,
   PasswordInput,
-  Spinner,
 } from "../../components/ui";
 import { useAuth } from "../../hooks/useAuth";
 import loginImage from "../../assets/login.jpg";
@@ -162,10 +161,10 @@ export function Login() {
             <Button
               type="submit"
               className="!mt-7 w-full gap-2"
-              disabled={loading}
+              loading={loading}
             >
               {loading ? (
-                <Spinner className="h-4 w-4 text-white" />
+                "Signing in…"
               ) : (
                 <>
                   Sign in

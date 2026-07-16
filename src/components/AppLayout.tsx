@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -201,9 +201,13 @@ export function AppLayout() {
     };
   }, [role, userId]);
 
-  // Close mobile drawer on route change.
+  // Close mobile drawer and reset the content scroll on route change —
+  // the scrollable <main> persists across navigations, so without this a
+  // deep scroll on one page carries over to the next.
+  const mainRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     setMobileOpen(false);
+    mainRef.current?.scrollTo(0, 0);
   }, [location.pathname]);
 
   if (loading) {
@@ -359,10 +363,10 @@ export function AppLayout() {
       {mobileOpen && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-slate-900/40 md:hidden"
+            className="backdrop-in fixed inset-0 z-40 bg-slate-900/40 md:hidden"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white md:hidden">
+          <aside className="drawer-in fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white md:hidden">
             {renderSidebar("mobile")}
           </aside>
         </>
@@ -378,14 +382,16 @@ export function AppLayout() {
           (maps go edge-to-edge; the chatbot fills the full height). */}
       {["/app/map", "/app/hotspots", "/app/chatbot"].includes(location.pathname) ? (
         <main className="flex-1 overflow-hidden pt-14 md:pt-0">
-          <div key={location.pathname} className="h-full">
+          <div key={location.pathname} className="page-in h-full">
             {outlet}
           </div>
         </main>
       ) : (
-        <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
+        <main ref={mainRef} className="flex-1 overflow-y-auto pt-14 md:pt-0">
           <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-            <div key={location.pathname}>{outlet}</div>
+            <div key={location.pathname} className="page-in">
+              {outlet}
+            </div>
           </div>
         </main>
       )}

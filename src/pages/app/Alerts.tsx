@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Bell, BellOff, CheckCheck } from "lucide-react";
-import { Button, Card, PageHeader, Spinner } from "../../components/ui";
+import { Button, Card, ListSkeleton, PageHeader } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { formatDateTime } from "../../lib/utils";
@@ -142,9 +142,7 @@ export function Alerts() {
         </div>
 
         {loading ? (
-          <div className="flex h-32 items-center justify-center">
-            <Spinner />
-          </div>
+          <ListSkeleton rows={5} />
         ) : list.length === 0 ? (
           <div className="px-4 py-14 text-center">
             <BellOff className="mx-auto h-6 w-6 text-slate-300" />

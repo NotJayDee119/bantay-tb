@@ -19,7 +19,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { Badge, Card, PageHeader, Spinner } from "../../components/ui";
+import { Badge, Card, PageHeader, Skeleton } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import type { AppRole } from "../../lib/supabase";
@@ -336,8 +336,13 @@ export function Dashboard() {
       {role === "patient" ? (
         <PatientDashboard name={profile?.full_name ?? null} />
       ) : loading ? (
-        <div className="flex h-48 items-center justify-center">
-          <Spinner />
+        <div className="space-y-6">
+          <Skeleton className="h-56 rounded-2xl" />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-28 rounded-xl" />
+            ))}
+          </div>
         </div>
       ) : !stats ? (
         <Card className="p-6 text-sm text-slate-600">

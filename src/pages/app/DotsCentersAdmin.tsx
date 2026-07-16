@@ -11,6 +11,7 @@ import {
   Button,
   Card,
   Input,
+  ListSkeleton,
   PageHeader,
   Select,
   Spinner,
@@ -179,9 +180,7 @@ export function DotsCentersAdmin() {
         </div>
 
         {loading ? (
-          <div className="flex h-32 items-center justify-center">
-            <Spinner />
-          </div>
+          <ListSkeleton rows={4} />
         ) : list.length === 0 ? (
           <div className="px-4 py-14 text-center">
             <MapPinOff className="mx-auto h-6 w-6 text-slate-300" />

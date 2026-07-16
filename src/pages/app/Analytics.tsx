@@ -7,7 +7,7 @@ import {
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Card, PageHeader, Spinner } from "../../components/ui";
+import { Card, PageHeader, Skeleton } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 
 interface RawCase {
@@ -66,8 +66,16 @@ export function Analytics() {
           title="AI Analytics for Outreach"
           subtitle="TB cases only · Last 12 months · Where to focus screening and contact-tracing campaigns."
         />
-        <div className="flex h-32 items-center justify-center">
-          <Spinner />
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-28 rounded-xl" />
+            ))}
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Skeleton className="h-72 rounded-xl" />
+            <Skeleton className="h-72 rounded-xl" />
+          </div>
         </div>
       </>
     );

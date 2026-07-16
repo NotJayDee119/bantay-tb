@@ -16,9 +16,23 @@ export const Button = forwardRef<
   ButtonHTMLAttributes<HTMLButtonElement> & {
     variant?: "primary" | "secondary" | "ghost" | "danger" | "accent";
     size?: "sm" | "md" | "lg";
+    /**
+     * Shows a small spinner beside the label and disables the button.
+     * Keep the label rendered (e.g. "Signing in…") so the button width
+     * stays stable instead of collapsing to a lone spinner.
+     */
+    loading?: boolean;
   }
 >(function Button(
-  { className, variant = "primary", size = "md", ...rest },
+  {
+    className,
+    variant = "primary",
+    size = "md",
+    loading = false,
+    disabled,
+    children,
+    ...rest
+  },
   ref
 ) {
   const base =
@@ -42,8 +56,12 @@ export const Button = forwardRef<
     <button
       ref={ref}
       className={cn(base, sizes[size], variants[variant], className)}
+      disabled={disabled || loading}
       {...rest}
-    />
+    >
+      {loading && <Spinner className="h-4 w-4 text-current" />}
+      {children}
+    </button>
   );
 });
 
@@ -243,6 +261,39 @@ export function Spinner({ className }: { className?: string }) {
         d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
       />
     </svg>
+  );
+}
+
+/**
+ * Loading placeholder block. Size it with width/height utilities to match
+ * the content it stands in for, so the layout doesn't jump when data lands.
+ */
+export function Skeleton({ className }: { className?: string }) {
+  return (
+    <div
+      aria-hidden
+      className={cn("animate-pulse rounded-md bg-slate-200/70", className)}
+    />
+  );
+}
+
+/**
+ * Skeleton rows for list/table cards — an avatar dot plus two text lines,
+ * repeated. Drop inside a `Card` (p-0) in place of the loaded rows.
+ */
+export function ListSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <div aria-hidden className="divide-y divide-slate-100">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 px-4 py-3.5">
+          <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-3.5 w-1/3 max-w-[10rem]" />
+            <Skeleton className="h-3 w-2/3 max-w-[22rem]" />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

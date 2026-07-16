@@ -8,7 +8,6 @@ import {
   Label,
   PasswordInput,
   Select,
-  Spinner,
 } from "../../components/ui";
 import { useAuth } from "../../hooks/useAuth";
 import barangays from "../../data/barangays.json";
@@ -299,12 +298,8 @@ export function Register() {
                     </p>
                   </div>
 
-                  <Button type="submit" className="!mt-7 w-full" disabled={loading}>
-                    {loading ? (
-                      <Spinner className="h-4 w-4 text-white" />
-                    ) : (
-                      "Create account"
-                    )}
+                  <Button type="submit" className="!mt-7 w-full" loading={loading}>
+                    {loading ? "Creating account…" : "Create account"}
                   </Button>
                 </div>
               )}

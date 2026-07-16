@@ -196,9 +196,9 @@ export function ResetPassword() {
                     onChange={(e) => setConfirm(e.target.value)}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full" loading={loading}>
                   {loading ? (
-                    <Spinner className="h-4 w-4 text-white" />
+                    "Updating…"
                   ) : (
                     <>
                       <ShieldCheck className="h-4 w-4" /> Update password

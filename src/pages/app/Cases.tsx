@@ -11,9 +11,9 @@ import {
   Badge,
   Card,
   Input,
+  ListSkeleton,
   PageHeader,
   Select,
-  Spinner,
 } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
@@ -204,9 +204,7 @@ export function Cases() {
         </div>
 
         {loading ? (
-          <div className="flex h-32 items-center justify-center">
-            <Spinner />
-          </div>
+          <ListSkeleton rows={8} />
         ) : filtered.length === 0 ? (
           <div className="px-4 py-14 text-center">
             <SearchX className="mx-auto h-6 w-6 text-slate-300" />

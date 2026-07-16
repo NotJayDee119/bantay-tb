@@ -12,6 +12,7 @@ import {
   Button,
   Card,
   Input,
+  ListSkeleton,
   PageHeader,
   Select,
   Spinner,
@@ -232,9 +233,7 @@ export function Users() {
           </div>
         </div>
         {loading ? (
-          <div className="flex h-32 items-center justify-center">
-            <Spinner />
-          </div>
+          <ListSkeleton rows={6} />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">

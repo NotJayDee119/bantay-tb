@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { PublicLayout } from "./components/PublicLayout";
@@ -54,11 +54,25 @@ function RequireRole({
   return <>{children}</>;
 }
 
-const LazyFallback = () => (
-  <div className="flex h-64 items-center justify-center">
-    <Spinner />
-  </div>
-);
+/**
+ * Suspense fallback for lazy route chunks. Chunks usually resolve well
+ * under 300ms, so the spinner only appears on genuinely slow loads — a
+ * spinner that flashes for a few frames on every navigation reads as
+ * jank, and it would double up with each page's own skeleton state.
+ */
+function LazyFallback() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShow(true), 300);
+    return () => clearTimeout(t);
+  }, []);
+  if (!show) return null;
+  return (
+    <div className="flex h-64 items-center justify-center">
+      <Spinner />
+    </div>
+  );
+}
 
 export default function App() {
   return (

@@ -26,9 +26,12 @@ export function PublicLayout() {
   const outlet = useOutlet();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Close drawer on navigation.
+  // Close drawer and jump back to the top on navigation — public pages
+  // scroll the document itself, and the browser keeps the old scroll
+  // position across client-side route changes.
   useEffect(() => {
     setMobileOpen(false);
+    window.scrollTo(0, 0);
   }, [location.pathname]);
 
   // Check if current page should hide footer
@@ -114,7 +117,7 @@ export function PublicLayout() {
         </div>
         {/* Mobile dropdown */}
         {mobileOpen && (
-          <div className="border-t border-slate-200/70 bg-white/95 backdrop-blur-xl lg:hidden">
+          <div className="dropdown-in border-t border-slate-200/70 bg-white/95 backdrop-blur-xl lg:hidden">
             <nav className="mx-auto flex max-w-7xl flex-col gap-1.5 px-4 py-4 text-sm sm:px-6">
               {NAV.map((l) => (
                 <NavLink
@@ -140,7 +143,11 @@ export function PublicLayout() {
           </div>
         )}
       </header>
-      <main className="flex-1 overflow-x-hidden">{outlet}</main>
+      <main className="flex-1 overflow-x-hidden">
+        <div key={location.pathname} className="page-in">
+          {outlet}
+        </div>
+      </main>
       {!hideFooter && (
         <footer className="relative overflow-hidden bg-brand-950">
           <div aria-hidden className="pointer-events-none absolute inset-0 bg-vigil-grid opacity-40" />
