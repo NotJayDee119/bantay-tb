@@ -86,30 +86,42 @@ export function Alerts() {
     };
   }, [recipientId, load]);
 
+  // Both mark-read actions are optimistic: the row flips to "read" the
+  // instant it's clicked, and only rolls back (with a toast) if the write
+  // fails. The realtime channel re-syncs the list afterwards regardless.
   async function markRead(id: string) {
     if (!recipientId) return;
+    const previous = list;
+    const now = new Date().toISOString();
+    setList((l) => l.map((a) => (a.id === id ? { ...a, read_at: now } : a)));
     const { error } = await supabase
       .from("hotspot_alerts")
-      .update({ read_at: new Date().toISOString() })
+      .update({ read_at: now })
       .eq("id", id)
       .eq("recipient_id", recipientId);
-    if (error) toast.error(error.message);
-    else load();
+    if (error) {
+      setList(previous);
+      toast.error(`Could not mark as read: ${error.message}`);
+    }
   }
 
   async function markAllRead() {
     if (!recipientId) return;
     const ids = list.filter((a) => !a.read_at).map((a) => a.id);
     if (ids.length === 0) return;
+    const previous = list;
+    const now = new Date().toISOString();
+    setList((l) => l.map((a) => (a.read_at ? a : { ...a, read_at: now })));
     const { error } = await supabase
       .from("hotspot_alerts")
-      .update({ read_at: new Date().toISOString() })
+      .update({ read_at: now })
       .in("id", ids)
       .eq("recipient_id", recipientId);
-    if (error) toast.error(error.message);
-    else {
+    if (error) {
+      setList(previous);
+      toast.error(`Could not mark all as read: ${error.message}`);
+    } else {
       toast.success(`Marked ${ids.length} alert(s) as read`);
-      load();
     }
   }
 

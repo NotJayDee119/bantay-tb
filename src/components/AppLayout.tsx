@@ -210,6 +210,16 @@ export function AppLayout() {
     mainRef.current?.scrollTo(0, 0);
   }, [location.pathname]);
 
+  // Escape closes the mobile drawer, like any modal surface.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileOpen]);
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -227,25 +237,36 @@ export function AppLayout() {
   );
 
   // The sidebar is rendered twice (desktop + mobile drawer).
-  const renderSidebar = (_scope: "desktop" | "mobile") => (
+  const renderSidebar = (scope: "desktop" | "mobile") => (
     <>
-      <Link
-        to="/app"
-        className="flex items-center gap-2.5 px-5 py-5"
-        onClick={() => setMobileOpen(false)}
-      >
-        <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-accent-500 text-white shadow-soft">
-          <Activity className="h-5 w-5" />
-        </span>
-        <div>
-          <div className="font-display text-base font-bold tracking-tight text-slate-900">
-            BANTAY-TB
+      <div className="flex items-center justify-between pr-3">
+        <Link
+          to="/app"
+          className="flex items-center gap-2.5 px-5 py-5"
+          onClick={() => setMobileOpen(false)}
+        >
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-accent-500 text-white shadow-soft">
+            <Activity className="h-5 w-5" />
+          </span>
+          <div>
+            <div className="font-display text-base font-bold tracking-tight text-slate-900">
+              BANTAY-TB
+            </div>
+            <div className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+              Davao City surveillance
+            </div>
           </div>
-          <div className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
-            Davao City surveillance
-          </div>
-        </div>
-      </Link>
+        </Link>
+        {scope === "mobile" && (
+          <button
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close menu"
+            className="grid h-9 w-9 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
+      </div>
       <nav className="flex-1 overflow-y-auto px-3 pb-4">
         {NAV_GROUPS.map((group) => {
           const items = visibleNav.filter((n) => n.group === group);
@@ -352,25 +373,52 @@ export function AppLayout() {
         </Link>
         <button
           onClick={() => setMobileOpen((v) => !v)}
-          className="rounded-md p-2 text-slate-700 transition hover:bg-slate-100"
+          className="rounded-md p-2 text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileOpen}
+          aria-controls="app-mobile-drawer"
         >
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          {/* Burger ↔ X cross-fade with a quarter turn. */}
+          <span className="relative grid h-5 w-5 place-items-center">
+            <Menu
+              className={
+                "absolute h-5 w-5 transition-all duration-200 " +
+                (mobileOpen ? "rotate-90 opacity-0" : "rotate-0 opacity-100")
+              }
+            />
+            <X
+              className={
+                "absolute h-5 w-5 transition-all duration-200 " +
+                (mobileOpen ? "rotate-0 opacity-100" : "-rotate-90 opacity-0")
+              }
+            />
+          </span>
         </button>
       </div>
 
-      {/* Mobile drawer */}
-      {mobileOpen && (
-        <>
-          <div
-            className="backdrop-in fixed inset-0 z-40 bg-slate-900/40 md:hidden"
-            onClick={() => setMobileOpen(false)}
-          />
-          <aside className="drawer-in fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white md:hidden">
-            {renderSidebar("mobile")}
-          </aside>
-        </>
-      )}
+      {/* Mobile drawer — always mounted so both open and close animate.
+          `visibility` rides along with the transition: it stays visible
+          while sliding out, then goes hidden (unfocusable) at the end. */}
+      <div
+        className={
+          "fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-300 md:hidden " +
+          (mobileOpen ? "opacity-100" : "pointer-events-none opacity-0")
+        }
+        onClick={() => setMobileOpen(false)}
+        aria-hidden="true"
+      />
+      <aside
+        id="app-mobile-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation menu"
+        className={
+          "fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-2xl transition-[transform,visibility] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] md:hidden " +
+          (mobileOpen ? "visible translate-x-0" : "invisible -translate-x-full")
+        }
+      >
+        {renderSidebar("mobile")}
+      </aside>
 
       {/* Desktop sidebar */}
       <aside className="hidden w-64 flex-shrink-0 flex-col border-r border-slate-200 bg-white md:flex">

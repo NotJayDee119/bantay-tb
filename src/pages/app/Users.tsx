@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   AlertCircle,
   Pencil,
@@ -15,10 +17,10 @@ import {
   ListSkeleton,
   PageHeader,
   Select,
-  Spinner,
 } from "../../components/ui";
 import { supabase, ROLE_LABELS, type AppRole } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import { useDebounce } from "../../hooks/useDebounce";
 import { formatDate } from "../../lib/utils";
 import barangays from "../../data/barangays.json";
 
@@ -61,32 +63,53 @@ const MICRO_LABEL =
 
 export function Users() {
   const { profile } = useAuth();
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState({ role: "all", search: "" });
+  const search = useDebounce(filter.search, 300);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<{
     role: AppRole;
     barangay_psgc: number | null;
   }>({ role: "patient", barangay_psgc: null });
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const canEdit = profile?.role === "system_admin";
 
-  async function load() {
-    setLoading(true);
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, email, full_name, role, barangay_psgc, created_at")
-      .order("created_at", { ascending: false });
-    setRows((data ?? []) as Row[]);
-    setLoading(false);
-  }
+  const { data, isPending: loading } = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, email, full_name, role, barangay_psgc, created_at")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+  });
+  const rows = data ?? [];
 
-  useEffect(() => {
-    load();
-  }, []);
+  const saveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          role: draft.role,
+          barangay_psgc: draft.barangay_psgc,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setEditingId(null);
+      toast.success("User updated");
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+      toast.error("Could not update user");
+    },
+  });
+  const saving = saveMutation.isPending;
 
   function startEdit(row: Row) {
     setEditingId(row.id);
@@ -94,7 +117,7 @@ export function Users() {
     setError(null);
   }
 
-  async function save(id: string) {
+  function save(id: string) {
     if (
       (draft.role === "barangay_admin" || draft.role === "health_worker") &&
       draft.barangay_psgc == null
@@ -102,27 +125,14 @@ export function Users() {
       setError("Barangay admins and health workers must have an assigned area.");
       return;
     }
-    setSaving(true);
-    const { error: err } = await supabase
-      .from("profiles")
-      .update({
-        role: draft.role,
-        barangay_psgc: draft.barangay_psgc,
-      })
-      .eq("id", id);
-    setSaving(false);
-    if (err) {
-      setError(err.message);
-      return;
-    }
-    setEditingId(null);
-    await load();
+    setError(null);
+    saveMutation.mutate(id);
   }
 
   const filtered = rows.filter((r) => {
     if (filter.role !== "all" && r.role !== filter.role) return false;
-    if (!filter.search) return true;
-    const s = filter.search.toLowerCase();
+    if (!search) return true;
+    const s = search.toLowerCase();
     return (
       (r.full_name ?? "").toLowerCase().includes(s) ||
       r.email.toLowerCase().includes(s)
@@ -346,13 +356,9 @@ export function Users() {
                                 size="sm"
                                 variant="primary"
                                 onClick={() => save(r.id)}
-                                disabled={saving}
+                                loading={saving}
                               >
-                                {saving ? (
-                                  <Spinner className="h-3.5 w-3.5 text-white" />
-                                ) : (
-                                  <Save className="h-3.5 w-3.5" />
-                                )}{" "}
+                                {!saving && <Save className="h-3.5 w-3.5" />}
                                 Save
                               </Button>
                               <Button

@@ -23,10 +23,56 @@ const GREETING: Record<Locale, string> = {
 };
 
 const SUGGESTIONS = [
+  "How does BANTAY-TB work?",
   "What are the symptoms of TB?",
   "Ano ang sintomas ng pulmonya?",
   "Unsa ang tambal sa hubak?",
 ];
+
+// "How does this website/system work?" gets a curated answer built in —
+// deterministic, always correct, and available even when the AI service
+// is offline.
+const ABOUT_SYSTEM: Record<Locale, string> = {
+  en: [
+    "BANTAY-TB is Davao City's tuberculosis surveillance and care platform. Here's what you can do:",
+    "",
+    "🗺️ DOTS Locator — find the nearest free TB treatment center with directions.",
+    "📚 Health Education — learn about TB symptoms, treatment, and prevention.",
+    "💬 This chatbot — ask health questions in English, Filipino, or Bisaya.",
+    "",
+    "Patients with an account also get medication schedules, dose reminders, and a personal health assistant. Health workers and TB coordinators sign in to report cases, view the GIS surveillance map, and receive hotspot alerts.",
+    "",
+    "To get started, tap “Sign in” or “Request an account” in the menu. TB screening and DOTS treatment are free!",
+  ].join("\n"),
+  tl: [
+    "Ang BANTAY-TB ay plataporma ng Davao City para sa pagbabantay at pangangalaga sa TB. Narito ang magagawa mo:",
+    "",
+    "🗺️ DOTS Locator — hanapin ang pinakamalapit na libreng TB treatment center na may direksyon.",
+    "📚 Health Education — alamin ang sintomas, paggamot, at pag-iwas sa TB.",
+    "💬 Ang chatbot na ito — magtanong sa English, Filipino, o Bisaya.",
+    "",
+    "Ang mga pasyenteng may account ay may iskedyul ng gamot, paalala sa dose, at personal na health assistant. Ang mga health worker at TB coordinator ay nag-sign in para mag-ulat ng kaso at makita ang surveillance map.",
+    "",
+    "Para magsimula, pindutin ang “Sign in” o “Request an account”. Libre ang TB screening at DOTS treatment!",
+  ].join("\n"),
+  ceb: [
+    "Ang BANTAY-TB mao ang plataporma sa Davao City alang sa pagbantay ug pag-atiman sa TB. Ania ang imong mahimo:",
+    "",
+    "🗺️ DOTS Locator — pangitaa ang pinaka-duol nga libre nga TB treatment center nga adunay direksyon.",
+    "📚 Health Education — hibaloi ang sintomas, tambal, ug paglikay sa TB.",
+    "💬 Kini nga chatbot — pangutana sa English, Filipino, o Bisaya.",
+    "",
+    "Ang mga pasyente nga adunay account makakuha og iskedyul sa tambal, pahinumdom sa dose, ug personal nga health assistant. Ang mga health worker ug TB coordinator mo-sign in aron mag-report og kaso ug makita ang surveillance map.",
+    "",
+    "Aron magsugod, i-tap ang “Sign in” o “Request an account”. Libre ang TB screening ug DOTS treatment!",
+  ].join("\n"),
+};
+
+function isSystemQuery(text: string): boolean {
+  return /\b(bantay[\s-]?tb|this (website|site|app|system|platform)|the (website|site|app|system|platform)|how (does|do) (this|it|the)|paano (gamitin|gumagana)|unsaon (paggamit|paggana)|sign ?in|log ?in|register|account|features?|dots locator)\b/i.test(
+    text
+  );
+}
 
 const FALLBACK: Record<Locale, string> = {
   en: "I can help with TB, pneumonia, COVID-19, influenza, bronchitis, COPD, and asthma. For diagnosis please visit your nearest DOTS Center. (Local fallback — chatbot service is offline.)",
@@ -70,6 +116,26 @@ export function PublicChatbotFab() {
       language,
     };
     setMessages((m) => [...m, userMsg]);
+
+    // System questions get the curated built-in answer — shown after a
+    // brief typing pause so the reply doesn't pop in robotically.
+    if (isSystemQuery(trimmed)) {
+      setSending(true);
+      setTimeout(() => {
+        setMessages((m) => [
+          ...m,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: ABOUT_SYSTEM[language],
+            language,
+          },
+        ]);
+        setSending(false);
+      }, 700);
+      return;
+    }
+
     setSending(true);
     try {
       const { data, error } = await supabase.functions.invoke("chatbot", {
@@ -78,6 +144,7 @@ export function PublicChatbotFab() {
           message: trimmed,
           language,
           user_id: null,
+          role: "public",
         },
       });
       if (error) throw error;
@@ -159,7 +226,7 @@ export function PublicChatbotFab() {
                 <div
                   key={m.id}
                   className={
-                    "flex gap-2 " +
+                    "panel-in flex gap-2 " +
                     (m.role === "user" ? "justify-end" : "justify-start")
                   }
                 >
@@ -186,13 +253,21 @@ export function PublicChatbotFab() {
                 </div>
               ))}
               {sending && (
-                <div className="flex items-center gap-2 text-xs text-slate-400">
-                  <span className="flex gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                    <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-                    <span className="h-1.5 w-1.5 rounded-full bg-slate-200" />
-                  </span>
-                  Thinking…
+                /* Typing indicator — bot bubble with bouncing dots */
+                <div className="panel-in flex justify-start gap-2">
+                  <div className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-full bg-slate-100 text-slate-500">
+                    <Bot className="h-3 w-3" />
+                  </div>
+                  <div
+                    className="flex items-center rounded-2xl rounded-bl-md bg-slate-100 px-3.5 py-2.5"
+                    aria-label="Assistant is typing"
+                  >
+                    <span className="flex gap-1">
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+                    </span>
+                  </div>
                 </div>
               )}
               {messages.length <= 1 && (

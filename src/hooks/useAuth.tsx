@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -41,6 +42,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  // Which user's profile is currently loaded. Lets the auth listener tell
+  // a real sign-in apart from token refreshes for the same user.
+  const loadedUserRef = useRef<string | null>(null);
 
   async function loadProfile(userId: string) {
     const { data, error } = await supabase
@@ -50,9 +54,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
     if (error) {
       console.warn("Failed to load profile:", error.message);
+      loadedUserRef.current = null;
       setProfile(null);
       return;
     }
+    loadedUserRef.current = data ? userId : null;
     setProfile(data as Profile | null);
   }
 
@@ -69,13 +75,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
-      if (s?.user.id) {
-        setLoading(true);
-        void loadProfile(s.user.id).finally(() => setLoading(false));
-      } else {
+      const uid = s?.user.id ?? null;
+      if (!uid) {
+        loadedUserRef.current = null;
         setProfile(null);
         setLoading(false);
+        return;
       }
+      // Supabase re-emits auth events for the SAME user whenever the tab
+      // regains focus and the token refreshes. Flipping `loading` here
+      // would unmount the whole app into a spinner and remount it (looks
+      // like a page refresh) — so only reload when the user truly changed.
+      if (uid === loadedUserRef.current) return;
+      setLoading(true);
+      void loadProfile(uid).finally(() => setLoading(false));
     });
     return () => {
       cancelled = true;

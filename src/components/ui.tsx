@@ -1,5 +1,7 @@
 import {
   forwardRef,
+  useEffect,
+  useRef,
   useState,
   type ButtonHTMLAttributes,
   type HTMLAttributes,
@@ -8,7 +10,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { cn } from "../lib/utils";
 
 export const Button = forwardRef<
@@ -324,6 +326,98 @@ export function PageHeader({
         )}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+/**
+ * Styled confirmation modal for destructive actions — use instead of
+ * `window.confirm`. Render it always and drive visibility with `open`;
+ * Escape and the backdrop both cancel. `loading` keeps the dialog up and
+ * the confirm button spinning while the action runs.
+ */
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel = "Delete",
+  cancelLabel = "Cancel",
+  loading = false,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  description?: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  loading?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    // Focus the safe action first so Enter never destroys by accident.
+    cancelRef.current?.focus();
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !loading) onCancel();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, loading, onCancel]);
+
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-dialog-title"
+    >
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
+        onClick={() => !loading && onCancel()}
+      />
+      <div className="panel-in relative w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-lift">
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-600">
+            <AlertTriangle className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <h2
+              id="confirm-dialog-title"
+              className="font-display text-base font-bold text-slate-900"
+            >
+              {title}
+            </h2>
+            {description && (
+              <p className="mt-1 text-sm text-slate-600">{description}</p>
+            )}
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button
+            ref={cancelRef}
+            variant="secondary"
+            size="sm"
+            onClick={onCancel}
+            disabled={loading}
+          >
+            {cancelLabel}
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            loading={loading}
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

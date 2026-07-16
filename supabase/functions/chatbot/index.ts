@@ -5,9 +5,12 @@
 //   • role: "patient" -> support-only prompt; no case statistics.
 //     All other roles (health_worker, barangay_admin, tb_coordinator,
 //     system_admin) -> clinical staff prompt; context is injected when present.
-//   • context: optional pre-fetched live DB stats (case counts, hotspots, etc.)
-//     injected into the system prompt so the AI can answer data queries
-//     accurately. Only injected for non-patient roles.
+//   • context: optional pre-fetched live DB data injected into the system
+//     prompt. For staff roles this is case stats/hotspots; for patients it is
+//     their OWN treatment record (the client builds it via RLS-scoped
+//     queries, so a patient can never receive another patient's data).
+//   • role: "public" (or absent) -> platform knowledge is added so the
+//     homepage chatbot can explain how BANTAY-TB works.
 //   • Detects the language if not supplied.
 //   • If OPENAI_API_KEY is set, forwards the message to OpenAI Chat Completions.
 //   • Otherwise returns a deterministic, locale-aware fallback.
@@ -135,6 +138,18 @@ const PATIENT_PROMPTS: Record<Locale, string> = {
   ceb: "Ikaw si BANTAY-TB, usa ka health support assistant para sa mga pasyente sa TB ug ilang pamilya sa Davao City. Maghatag og kinatibuk-ang edukasyon sa kahimsog, giya sa sintomas, ug emosyonal nga suporta. Tubaga sa mubo (ubos sa 120 ka pulong) sa Bisaya. Irekomenda ang DOTS Center para sa medikal nga mga kabalaka. AYAW paghatag og estadistika sa kaso o surveillance data.",
 };
 
+// Platform knowledge for public visitors — lets the homepage chatbot
+// explain how BANTAY-TB works, in any of the three languages.
+const SYSTEM_INFO = `
+
+ABOUT THE BANTAY-TB PLATFORM (use this when visitors ask how the system, website, or app works):
+- BANTAY-TB is Davao City's tuberculosis surveillance and care platform.
+- Public visitors can: use the DOTS Center Locator (a map with directions to free TB treatment centers), read Health Education articles about TB symptoms/treatment/prevention, and chat with this assistant in English, Filipino, or Bisaya.
+- Patients with accounts get: medication schedules, dose reminders (including SMS), dose tracking, health education, and a personal health assistant that can report their own treatment progress.
+- Health workers, barangay admins, and TB coordinators sign in to: encode and track TB cases, view the GIS surveillance map and heatmaps, detect hotspot clusters, receive alerts, and view outreach analytics.
+- To get an account: patients use "Request an account" on the site; staff use the staff registration page.
+- TB screening and DOTS treatment are free at DOTS centers in Davao City.`;
+
 const FALLBACKS: Record<Locale, string> = {
   en: "I can answer questions about TB, pneumonia, COVID-19, and asthma -- symptoms, treatment, prevention, and DOTS center information. For diagnosis, please visit the nearest DOTS center. (No AI key configured.)",
   tl: "Maaari akong sumagot tungkol sa TB, pulmonya, COVID-19, at hika -- sintomas, paggamot, pag-iwas, at DOTS Center. Para sa diagnosis, bumisita sa pinakamalapit na DOTS Center.",
@@ -176,15 +191,30 @@ Deno.serve(async (req: Request) => {
         "https://api.openai.com";
       const baseUrl = rawBase.replace(/\/v1$/, "");
 
+      const isPublic = !body.role || body.role === "public";
+
       let systemContent = isPatient
         ? PATIENT_PROMPTS[language]
         : SYSTEM_PROMPTS[language];
 
-      if (!isPatient && body.context) {
+      // Public visitors get platform knowledge so the homepage chatbot can
+      // explain how BANTAY-TB works.
+      if (isPublic) {
+        systemContent += SYSTEM_INFO;
+      }
+
+      if (isPatient && body.context) {
+        // The client only ever sends a patient their OWN adherence record
+        // (RLS-scoped queries) — never case statistics.
+        systemContent +=
+          "\n\nTHE PATIENT'S OWN TREATMENT RECORD (this belongs to the patient you are talking to — share it with them clearly and kindly):\n" +
+          body.context +
+          "\nUse these figures when the patient asks about their own treatment, doses, or progress. Encourage adherence; if doses were missed, advise gently and suggest telling their health worker. Never invent figures that are not listed above.";
+      } else if (!isPatient && body.context) {
         systemContent +=
           "\n\nLIVE DATABASE CONTEXT (use this to answer statistics questions):\n" +
           body.context +
-          "\nWhen answering questions about case counts or statistics, use only the figures above and state that they come from the live BANTAY-TB database.";
+          "\nWhen answering questions about case counts or statistics, use only the figures above and state that they come from the live BANTAY-TB database. If a figure the user asks for is not listed, say it is not available rather than guessing.";
       }
 
       const res = await fetch(`${baseUrl}/v1/chat/completions`, {

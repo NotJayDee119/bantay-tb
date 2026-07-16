@@ -10,6 +10,7 @@ import { MapPin, MapPinOff, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import {
   Button,
   Card,
+  ConfirmDialog,
   Input,
   ListSkeleton,
   PageHeader,
@@ -72,6 +73,8 @@ export function DotsCentersAdmin() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<DotsForm | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<DotsCenter | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -145,11 +148,13 @@ export function DotsCentersAdmin() {
   }
 
   async function remove(c: DotsCenter) {
-    if (!confirm(`Delete "${c.name}"? This cannot be undone.`)) return;
+    setDeleting(true);
     const { error } = await supabase.from("dots_centers").delete().eq("id", c.id);
+    setDeleting(false);
+    setPendingDelete(null);
     if (error) toast.error(error.message);
     else {
-      toast.success("Deleted");
+      toast.success(`"${c.name}" deleted`);
       load();
     }
   }
@@ -231,7 +236,7 @@ export function DotsCentersAdmin() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => remove(c)}
+                    onClick={() => setPendingDelete(c)}
                     aria-label={`Delete ${c.name}`}
                   >
                     <Trash2 className="h-4 w-4 text-red-600" />
@@ -242,6 +247,16 @@ export function DotsCentersAdmin() {
           </ul>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Delete "${pendingDelete?.name}"?`}
+        description="This removes the center from the public DOTS Locator. This cannot be undone."
+        confirmLabel="Delete center"
+        loading={deleting}
+        onConfirm={() => pendingDelete && remove(pendingDelete)}
+        onCancel={() => setPendingDelete(null)}
+      />
 
       {form && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-950/60 p-4 backdrop-blur-sm">

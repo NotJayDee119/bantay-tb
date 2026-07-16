@@ -34,6 +34,21 @@ export function PublicLayout() {
     window.scrollTo(0, 0);
   }, [location.pathname]);
 
+  // While the mobile menu is open: lock the page scroll behind it and let
+  // Escape close it, like any modal surface.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [mobileOpen]);
+
   // Check if current page should hide footer
   const hideFooter = [
     "/login",
@@ -103,46 +118,92 @@ export function PublicLayout() {
             </Link>
             <button
               onClick={() => setMobileOpen((v) => !v)}
-              className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-soft transition hover:bg-slate-100"
+              className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-soft transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
               aria-label={mobileOpen ? "Close menu" : "Open menu"}
               aria-expanded={mobileOpen}
+              aria-controls="public-mobile-menu"
             >
-              {mobileOpen ? (
-                <X className="h-5 w-5" />
-              ) : (
-                <Menu className="h-5 w-5" />
-              )}
+              {/* Burger ↔ X cross-fade with a quarter turn. */}
+              <span className="relative grid h-5 w-5 place-items-center">
+                <Menu
+                  className={
+                    "absolute h-5 w-5 transition-all duration-200 " +
+                    (mobileOpen ? "rotate-90 opacity-0" : "rotate-0 opacity-100")
+                  }
+                />
+                <X
+                  className={
+                    "absolute h-5 w-5 transition-all duration-200 " +
+                    (mobileOpen ? "rotate-0 opacity-100" : "-rotate-90 opacity-0")
+                  }
+                />
+              </span>
             </button>
           </div>
         </div>
-        {/* Mobile dropdown */}
-        {mobileOpen && (
-          <div className="dropdown-in border-t border-slate-200/70 bg-white/95 backdrop-blur-xl lg:hidden">
-            <nav className="mx-auto flex max-w-7xl flex-col gap-1.5 px-4 py-4 text-sm sm:px-6">
-              {NAV.map((l) => (
-                <NavLink
-                  key={l.to}
-                  to={l.to}
-                  end={l.to === "/"}
-                  className={({ isActive }) =>
-                    "flex items-center justify-between rounded-xl px-4 py-3 font-medium transition " +
-                    (isActive
-                      ? "bg-brand-950 text-white shadow-soft"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900")
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      {l.label}
-                      {isActive && <ArrowRight className="h-4 w-4" />}
-                    </>
-                  )}
-                </NavLink>
-              ))}
-            </nav>
-          </div>
-        )}
+        {/* Mobile menu — always mounted so both open and close animate
+            (max-height slide + fade). Capped at the viewport minus the
+            header and scrollable inside, so it works in landscape phones
+            too; `invisible` when closed keeps links unfocusable. */}
+        <div
+          id="public-mobile-menu"
+          className={
+            "overflow-y-auto bg-white/95 backdrop-blur-xl transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] lg:hidden " +
+            (mobileOpen
+              ? "visible max-h-[calc(100dvh-4.25rem)] border-t border-slate-200/70 opacity-100"
+              : "invisible max-h-0 opacity-0")
+          }
+        >
+          <nav className="mx-auto flex max-w-7xl flex-col gap-1.5 px-4 py-4 text-sm sm:px-6">
+            {NAV.map((l) => (
+              <NavLink
+                key={l.to}
+                to={l.to}
+                end={l.to === "/"}
+                className={({ isActive }) =>
+                  "flex items-center justify-between rounded-xl px-4 py-3 font-medium transition " +
+                  (isActive
+                    ? "bg-brand-950 text-white shadow-soft"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900")
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    {l.label}
+                    {isActive && <ArrowRight className="h-4 w-4" />}
+                  </>
+                )}
+              </NavLink>
+            ))}
+            <div className="mt-2 flex flex-col gap-2 border-t border-slate-200/70 pt-4">
+              <Link
+                to="/login"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-950 px-4 font-semibold text-white shadow-soft transition hover:bg-brand-900"
+              >
+                Sign in
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                to="/register"
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 font-medium text-slate-700 shadow-soft transition hover:bg-slate-50"
+              >
+                Request an account
+              </Link>
+            </div>
+          </nav>
+        </div>
       </header>
+
+      {/* Backdrop behind the open mobile menu — sits under the sticky
+          header (z-40) so the menu and burger stay interactive. */}
+      <div
+        className={
+          "fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-300 lg:hidden " +
+          (mobileOpen ? "opacity-100" : "pointer-events-none opacity-0")
+        }
+        onClick={() => setMobileOpen(false)}
+        aria-hidden="true"
+      />
       <main className="flex-1 overflow-x-hidden">
         <div key={location.pathname} className="page-in">
           {outlet}

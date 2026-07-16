@@ -36,6 +36,20 @@ interface Session {
   created_at: string;
 }
 
+/** A patient's own treatment picture, built from their adherence rows. */
+interface TreatmentSummary {
+  medication: string;
+  dose: string;
+  timesPerDay: number;
+  startDate: string;
+  endDate: string;
+  taken: number;
+  missed: number;
+  late: number;
+  lastTakenAt: string | null;
+  nextDoseAt: string | null;
+}
+
 // Roles that can access live surveillance data
 const DATA_ROLES = new Set(["health_worker", "barangay_admin", "tb_coordinator", "system_admin"]);
 
@@ -46,6 +60,7 @@ export function Chatbot() {
   const { profile } = useAuth();
   const isPatient = profile?.role === "patient";
   const canAccessData = !isPatient && DATA_ROLES.has(profile?.role ?? "");
+  const firstName = profile?.full_name?.trim().split(/\s+/)[0] ?? null;
 
   const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
   const [history, setHistory] = useState<Session[]>([]);
@@ -53,7 +68,18 @@ export function Chatbot() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // History panel visibility — remembered across visits. Patients start
+  // chat-first (hidden); staff start with it open.
+  const [showHistory, setShowHistory] = useState<boolean>(() => {
+    const saved = localStorage.getItem("bantay-chatbot-history");
+    if (saved !== null) return saved === "1";
+    return profile?.role !== "patient";
+  });
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem("bantay-chatbot-history", showHistory ? "1" : "0");
+  }, [showHistory]);
 
   async function loadHistory() {
     if (!profile?.id) return;
@@ -209,39 +235,176 @@ export function Chatbot() {
       );
     }
 
-    // If a specific barangay name appears in the query, fetch its stats too
-    const mentionedBgy = (barangays as { psgc: number; name: string }[]).find(
-      (b) => lower.includes(b.name.toLowerCase())
-    );
-    if (mentionedBgy && mentionedBgy.psgc !== profile?.barangay_psgc) {
+    // Barangays mentioned in the query — match full names and distinctive
+    // name parts so "cases in matina" finds Matina Crossing / Aplaya / Pangi.
+    const mentioned = (barangays as { psgc: number; name: string }[])
+      .filter((b) => {
+        const name = b.name.toLowerCase();
+        if (lower.includes(name)) return true;
+        return name
+          .split(/\s+/)
+          .some((part) => part.length >= 4 && lower.includes(part));
+      })
+      .slice(0, 3);
+
+    for (const bgy of mentioned) {
       const [bgyTotal, bgyRecent] = await Promise.all([
         safeCount(
           supabase
             .from("cases")
             .select("*", { count: "exact", head: true })
             .eq("disease", "tb")
-            .eq("barangay_psgc", mentionedBgy.psgc)
+            .eq("barangay_psgc", bgy.psgc)
         ),
         safeCount(
           supabase
             .from("cases")
             .select("*", { count: "exact", head: true })
             .eq("disease", "tb")
-            .eq("barangay_psgc", mentionedBgy.psgc)
+            .eq("barangay_psgc", bgy.psgc)
             .gte("reported_at", isoThirty)
         ),
       ]);
       lines.push(
-        `- ${mentionedBgy.name}: ${bgyTotal} total cases, ${bgyRecent} in last 30 days`
+        `- ${bgy.name}: ${bgyTotal} total TB cases, ${bgyRecent} in the last 30 days`
       );
+
+      // Case details for this barangay — classification breakdown plus the
+      // most recent reports (age/sex/classification only, never PII).
+      try {
+        const { data: rows } = await supabase
+          .from("cases")
+          .select("age, sex, tb_classification, reported_at")
+          .eq("disease", "tb")
+          .eq("barangay_psgc", bgy.psgc)
+          .order("reported_at", { ascending: false })
+          .limit(200);
+        if (rows && rows.length > 0) {
+          const byClass = new Map<string, number>();
+          for (const r of rows) {
+            const k = r.tb_classification ?? "unclassified";
+            byClass.set(k, (byClass.get(k) ?? 0) + 1);
+          }
+          lines.push(
+            `- ${bgy.name} by classification (latest ${rows.length}): ` +
+              [...byClass.entries()].map(([k, n]) => `${k}: ${n}`).join(", ")
+          );
+          const recentList = rows.slice(0, 5).map((r) => {
+            const d = new Date(r.reported_at).toLocaleDateString("en-PH", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            });
+            const sex = (r.sex ?? "?").toString().charAt(0).toUpperCase();
+            return `${r.age ?? "?"}/${sex} ${r.tb_classification ?? "unclassified"} (${d})`;
+          });
+          lines.push(`- ${bgy.name} most recent reports: ${recentList.join("; ")}`);
+        }
+      } catch {
+        /* detail lines are best-effort */
+      }
+
+      // Active hotspot cluster in this barangay, if any
+      try {
+        const { data: hs } = await supabase
+          .from("hotspots")
+          .select("severity, case_count, detected_at")
+          .eq("barangay_psgc", bgy.psgc)
+          .order("detected_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (hs) {
+          lines.push(
+            `- ${bgy.name} hotspot: ${hs.severity} severity, ${hs.case_count} clustered cases (detected ${new Date(hs.detected_at).toLocaleDateString("en-PH")})`
+          );
+        } else {
+          lines.push(`- ${bgy.name}: no hotspot cluster on record`);
+        }
+      } catch {
+        /* best-effort */
+      }
     }
 
     return lines.join("\n");
   }
 
-  async function send() {
-    if (!draft.trim()) return;
-    const text = draft.trim();
+  // ── Patient self-service data ─────────────────────────────────────────
+  // Patients asking about their own care ("Kumusta ang aking paggamot?",
+  // "When was my last dose?") get their real treatment record pulled in as
+  // context. RLS restricts every query to the patient's own rows.
+  function isSelfCareQuery(text: string): boolean {
+    return /\b(treatment|paggamot|pagtambal|tambal|gamot|medicine|medication|medisina|dose|dosis|inom|took|taken?|missed|nakalimutan|nalimtan|schedule|iskedyul|progress|adherence|kumusta|kamusta|reminder)\b/i.test(
+      text
+    );
+  }
+
+  async function fetchTreatmentSummary(): Promise<TreatmentSummary | null> {
+    if (!profile?.id) return null;
+    try {
+      const { data: schedule } = await supabase
+        .from("adherence_schedules")
+        .select("medication, dose, times_per_day, start_date, end_date")
+        .eq("patient_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!schedule) return null;
+
+      const countByStatus = async (status: "taken" | "missed" | "late") => {
+        const { count } = await supabase
+          .from("adherence_logs")
+          .select("id", { count: "exact", head: true })
+          .eq("patient_id", profile.id)
+          .eq("status", status);
+        return count ?? 0;
+      };
+
+      const [taken, missed, late, lastTaken, nextDose] = await Promise.all([
+        countByStatus("taken"),
+        countByStatus("missed"),
+        countByStatus("late"),
+        supabase
+          .from("adherence_logs")
+          .select("taken_at")
+          .eq("patient_id", profile.id)
+          .eq("status", "taken")
+          .not("taken_at", "is", null)
+          .order("taken_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("adherence_logs")
+          .select("scheduled_at")
+          .eq("patient_id", profile.id)
+          .eq("status", "scheduled")
+          .gte("scheduled_at", new Date().toISOString())
+          .order("scheduled_at", { ascending: true })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      return {
+        medication: schedule.medication,
+        dose: schedule.dose,
+        timesPerDay: schedule.times_per_day,
+        startDate: schedule.start_date,
+        endDate: schedule.end_date,
+        taken,
+        missed,
+        late,
+        lastTakenAt: lastTaken.data?.taken_at ?? null,
+        nextDoseAt: nextDose.data?.scheduled_at ?? null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // Accepts optional text so quick-reply cards can send in one tap
+  // instead of just filling the input.
+  async function send(textArg?: string) {
+    const text = (textArg ?? draft).trim();
+    if (!text) return;
     setDraft("");
     const language = detectLocale(text);
 
@@ -266,8 +429,15 @@ export function Chatbot() {
     }
 
     setSending(true);
+    // Kept outside the try so the catch can build a data-aware fallback
+    // reply even when the Edge Function is unreachable.
+    let patientSummary: TreatmentSummary | null = null;
     try {
-      const context = await fetchDataContext(text);
+      let context = await fetchDataContext(text);
+      if (isPatient && isSelfCareQuery(text)) {
+        patientSummary = await fetchTreatmentSummary();
+        if (patientSummary) context = buildPatientContext(patientSummary);
+      }
       const { data, error } = await supabase.functions.invoke("chatbot", {
         body: {
           session_id: sessionId,
@@ -294,7 +464,11 @@ export function Chatbot() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const fallback = localFallback(text, language, isPatient);
+      // If we already fetched the patient's treatment record, answer from
+      // it directly — real data beats a canned reply.
+      const fallback = patientSummary
+        ? treatmentFallbackReply(patientSummary, language)
+        : localFallback(text, language, isPatient);
       setMessages((m) => [
         ...m,
         {
@@ -305,7 +479,13 @@ export function Chatbot() {
           created_at: new Date().toISOString(),
         },
       ]);
-      toast.message(`Edge Function unavailable — using local fallback. (${message})`);
+      // Patients get the fallback answer seamlessly — the technical toast
+      // is only useful to staff.
+      if (!isPatient) {
+        toast.message(
+          `Edge Function unavailable — using local fallback. (${message})`
+        );
+      }
     } finally {
       setSending(false);
       loadHistory();
@@ -318,7 +498,6 @@ export function Chatbot() {
         "What are the symptoms of TB?",
         "How long is TB treatment?",
         "What should I do if I miss a dose?",
-        "Ano ang sintomas ng TB?",
         "Kumusta ang aking paggamot sa TB?",
       ]
     : [
@@ -332,32 +511,50 @@ export function Chatbot() {
   return (
     <div className="mx-auto flex h-full w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8">
       <PageHeader
-        title="Multilingual Chatbot"
+        title={isPatient ? "Health Assistant" : "Multilingual Chatbot"}
         subtitle={
           isPatient
-            ? "Your personal TB health support. Ask in English, Filipino, or Bisaya."
+            ? "I'm here to help with your TB care — ask me anything in English, Filipino, or Bisaya."
             : "Ask in English, Filipino (Tagalog), or Bisaya. Language is detected automatically."
         }
         actions={
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setSessionId(crypto.randomUUID());
-              setMessages([]);
-            }}
-          >
-            <Plus className="h-4 w-4" /> New chat
-          </Button>
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setShowHistory((v) => !v)}
+              aria-pressed={showHistory}
+            >
+              <History className="h-4 w-4" />
+              {showHistory ? "Hide history" : "Show history"}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setSessionId(crypto.randomUUID());
+                setMessages([]);
+              }}
+            >
+              <Plus className="h-4 w-4" /> New chat
+            </Button>
+          </>
         }
       />
 
-      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 lg:grid-cols-[260px_minmax(0,1fr)] lg:grid-rows-1">
-        {/* History panel */}
-        <Card className="flex min-h-0 flex-col overflow-hidden p-0">
+      <div
+        className={
+          "grid min-h-0 flex-1 gap-4 " +
+          (showHistory
+            ? "grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] lg:grid-rows-1"
+            : "grid-cols-1 grid-rows-[minmax(0,1fr)]")
+        }
+      >
+        {/* History panel — toggleable so the chat can go full-width. */}
+        {showHistory && (
+        <Card className="panel-in flex min-h-0 flex-col overflow-hidden p-0">
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
             <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
               <History className="h-3.5 w-3.5 text-brand-600" />
-              History
+              {isPatient ? "Your chats" : "History"}
             </div>
             {history.length > 0 && (
               <span className="font-mono text-[10px] tabular-nums text-slate-500">
@@ -420,6 +617,7 @@ export function Chatbot() {
             </ul>
           )}
         </Card>
+        )}
 
         {/* Chat panel */}
         <Card className="flex min-h-0 flex-col overflow-hidden p-0">
@@ -427,44 +625,79 @@ export function Chatbot() {
             ref={scrollRef}
             className="flex-1 space-y-3 overflow-y-auto p-4"
           >
-            {messages.length === 0 && (
-              <div className="space-y-3 text-sm text-slate-500">
-                <p>
-                  {isPatient
-                    ? "How can I help you today? Ask about your TB care:"
-                    : "Ask about TB health topics or live case data:"}
-                </p>
-                <ul className="flex flex-wrap gap-1.5">
-                  {quickReplies.map((q) => (
-                    <li key={q}>
+            {messages.length === 0 &&
+              (isPatient ? (
+                /* Patient welcome — warm, personal, one-tap suggestions. */
+                <div className="flex h-full flex-col items-center justify-center gap-5 px-4 text-center">
+                  <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-accent-500 text-white shadow-soft">
+                    <Bot className="h-7 w-7" />
+                  </div>
+                  <div>
+                    <p className="font-display text-xl font-bold tracking-tight text-slate-900">
+                      Hi{firstName ? ` ${firstName}` : ""}! 👋
+                    </p>
+                    <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-slate-600">
+                      I&apos;m your TB care assistant. Ask me about symptoms,
+                      treatment, or your medicines — in English, Filipino, or
+                      Bisaya.
+                    </p>
+                  </div>
+                  <div className="grid w-full max-w-md gap-2 sm:grid-cols-2">
+                    {quickReplies.map((q) => (
                       <button
+                        key={q}
                         type="button"
-                        className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-left text-xs text-slate-700 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
-                        onClick={() => setDraft(q)}
+                        onClick={() => send(q)}
+                        disabled={sending}
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 shadow-soft transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-50"
                       >
                         {q}
                       </button>
-                    </li>
-                  ))}
-                </ul>
-                {canAccessData && (
-                  <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-400">
-                    <Database className="h-3 w-3 text-accent-600" />
-                    Data queries pull live figures from the BANTAY-TB database.
-                  </p>
-                )}
-              </div>
-            )}
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 text-sm text-slate-500">
+                  <p>Ask about TB health topics or live case data:</p>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {quickReplies.map((q) => (
+                      <li key={q}>
+                        <button
+                          type="button"
+                          className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-left text-xs text-slate-700 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+                          onClick={() => setDraft(q)}
+                        >
+                          {q}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {canAccessData && (
+                    <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-400">
+                      <Database className="h-3 w-3 text-accent-600" />
+                      Data queries pull live figures from the BANTAY-TB
+                      database.
+                    </p>
+                  )}
+                </div>
+              ))}
             {messages.map((m) => (
               <div
                 key={m.id}
                 className={
-                  "flex gap-3 " +
+                  "panel-in flex gap-3 " +
                   (m.role === "user" ? "justify-end" : "justify-start")
                 }
               >
                 {m.role === "assistant" && (
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-950 text-white">
+                  <div
+                    className={
+                      "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-white " +
+                      (isPatient
+                        ? "bg-gradient-to-br from-brand-500 to-accent-500"
+                        : "bg-brand-950")
+                    }
+                  >
                     <Bot className="h-4 w-4" />
                   </div>
                 )}
@@ -479,7 +712,7 @@ export function Chatbot() {
                   <div className="whitespace-pre-line leading-relaxed">
                     {m.content}
                   </div>
-                  {m.language && (
+                  {m.language && !isPatient && (
                     <div
                       className={
                         "mt-1.5 font-mono text-[9px] font-semibold uppercase tracking-wider " +
@@ -498,8 +731,29 @@ export function Chatbot() {
               </div>
             ))}
             {sending && (
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <Spinner className="h-4 w-4" /> Thinking…
+              /* Typing indicator — three bouncing dots in an assistant
+                 bubble, friendlier than a spinner. */
+              <div className="panel-in flex gap-3">
+                <div
+                  className={
+                    "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-white " +
+                    (isPatient
+                      ? "bg-gradient-to-br from-brand-500 to-accent-500"
+                      : "bg-brand-950")
+                  }
+                >
+                  <Bot className="h-4 w-4" />
+                </div>
+                <div
+                  className="flex items-center rounded-2xl rounded-bl-md border border-slate-200/80 bg-white px-4 py-3 shadow-soft"
+                  aria-label="Assistant is typing"
+                >
+                  <span className="flex gap-1">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+                  </span>
+                </div>
               </div>
             )}
           </div>
@@ -514,7 +768,11 @@ export function Chatbot() {
               <Textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="Type in English, Filipino, or Bisaya…"
+                placeholder={
+                  isPatient
+                    ? "Ask me anything about your TB care…"
+                    : "Type in English, Filipino, or Bisaya…"
+                }
                 aria-label="Message"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -571,6 +829,77 @@ const FALLBACKS: Record<Locale, Record<string, string>> = {
       "Ania ako aron suportahan ang imong paggamot sa TB. Pwede kang mangutana bahin sa sintomas, tambal, ug kung kanus-a adtoon ang DOTS Center.",
   },
 };
+
+const fmtDoseTime = (iso: string | null) =>
+  iso
+    ? new Date(iso).toLocaleString("en-PH", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : null;
+
+/** Context block sent to the Edge Function for the AI to answer from. */
+function buildPatientContext(s: TreatmentSummary): string {
+  const done = s.taken + s.missed + s.late;
+  const rate = done === 0 ? null : Math.round((s.taken / done) * 100);
+  return [
+    "PATIENT'S OWN TREATMENT RECORD from the BANTAY-TB database (this data belongs to the patient asking — share it with them clearly and kindly):",
+    `- Medication: ${s.medication} ${s.dose}, ${s.timesPerDay}x per day`,
+    `- Treatment period: ${s.startDate} to ${s.endDate}`,
+    `- Doses taken: ${s.taken} · missed: ${s.missed} · late: ${s.late}` +
+      (rate !== null ? ` (adherence ${rate}%)` : ""),
+    `- Last dose taken: ${fmtDoseTime(s.lastTakenAt) ?? "no dose recorded yet"}`,
+    `- Next scheduled dose: ${fmtDoseTime(s.nextDoseAt) ?? "none upcoming on record"}`,
+  ].join("\n");
+}
+
+/** Offline answer built straight from the patient's data, per language. */
+function treatmentFallbackReply(s: TreatmentSummary, locale: Locale): string {
+  const last = fmtDoseTime(s.lastTakenAt);
+  const next = fmtDoseTime(s.nextDoseAt);
+  const lines: string[] = [];
+  if (locale === "tl") {
+    lines.push("Narito ang iyong treatment record mula sa BANTAY-TB:", "");
+    lines.push(
+      `💊 ${s.medication} ${s.dose} — ${s.timesPerDay}x kada araw (hanggang ${s.endDate})`,
+      `✅ Nainom: ${s.taken} · ❌ Nakalimutan: ${s.missed} · ⏰ Nahuli: ${s.late}`
+    );
+    lines.push(last ? `Huling dose: ${last}` : "Wala pang naitalang dose.");
+    if (next) lines.push(`Susunod na dose: ${next}`);
+    lines.push(
+      "",
+      "Ipagpatuloy mo lang! Kung may nakalimutang dose, inumin ang susunod sa tamang oras at sabihin sa iyong health worker."
+    );
+  } else if (locale === "ceb") {
+    lines.push("Ania ang imong treatment record gikan sa BANTAY-TB:", "");
+    lines.push(
+      `💊 ${s.medication} ${s.dose} — ${s.timesPerDay}x kada adlaw (hangtod ${s.endDate})`,
+      `✅ Nainom: ${s.taken} · ❌ Nakalimtan: ${s.missed} · ⏰ Naulahi: ${s.late}`
+    );
+    lines.push(last ? `Kataposang dose: ${last}` : "Wala pay narekord nga dose.");
+    if (next) lines.push(`Sunod nga dose: ${next}`);
+    lines.push(
+      "",
+      "Padayon lang! Kung adunay nakalimtan nga dose, inoma ang sunod sa saktong oras ug isulti sa imong health worker."
+    );
+  } else {
+    lines.push("Here is your treatment record from BANTAY-TB:", "");
+    lines.push(
+      `💊 ${s.medication} ${s.dose} — ${s.timesPerDay}x a day (until ${s.endDate})`,
+      `✅ Taken: ${s.taken} · ❌ Missed: ${s.missed} · ⏰ Late: ${s.late}`
+    );
+    lines.push(last ? `Last dose taken: ${last}` : "No dose has been recorded yet.");
+    if (next) lines.push(`Next scheduled dose: ${next}`);
+    lines.push(
+      "",
+      "Keep it up! If you missed a dose, take the next one on schedule and let your health worker know."
+    );
+  }
+  return lines.join("\n");
+}
 
 function localFallback(text: string, locale: Locale, patient: boolean): string {
   const lower = text.toLowerCase();

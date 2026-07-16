@@ -22,9 +22,9 @@ import {
   Card,
   Input,
   Label,
+  ListSkeleton,
   PageHeader,
   Select,
-  Spinner,
 } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
@@ -264,15 +264,26 @@ export function Adherence() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id]);
 
+  // Optimistic: the dose flips to "taken" immediately so the tap feels
+  // instant (especially on the kid-friendly patient view), and rolls back
+  // with an error toast if the write fails.
   async function markTaken(logId: string) {
+    const previous = logs;
+    const now = new Date().toISOString();
+    setLogs((ls) =>
+      ls.map((l) =>
+        l.id === logId ? { ...l, status: "taken" as const, taken_at: now } : l
+      )
+    );
     const { error } = await supabase
       .from("adherence_logs")
-      .update({ status: "taken", taken_at: new Date().toISOString() })
+      .update({ status: "taken", taken_at: now })
       .eq("id", logId);
-    if (error) toast.error(error.message);
-    else {
+    if (error) {
+      setLogs(previous);
+      toast.error(`Could not save: ${error.message}`);
+    } else {
       toast.success("Marked as taken");
-      load();
     }
   }
 
@@ -303,7 +314,7 @@ export function Adherence() {
             >
               {showForm ? "Close" : "Add schedule"}
             </Button>
-            <Button onClick={sendReminders} disabled={sending}>
+            <Button onClick={sendReminders} loading={sending}>
               {sending ? "Sending…" : "Send SMS reminders"}
             </Button>
           </div>
@@ -343,9 +354,7 @@ export function Adherence() {
             )}
           </div>
           {loading ? (
-            <div className="flex h-32 items-center justify-center">
-              <Spinner />
-            </div>
+            <ListSkeleton rows={3} />
           ) : schedules.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-slate-500">
               No schedules yet.
@@ -390,9 +399,7 @@ export function Adherence() {
             )}
           </div>
           {loading ? (
-            <div className="flex h-32 items-center justify-center">
-              <Spinner />
-            </div>
+            <ListSkeleton rows={3} />
           ) : logs.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-slate-500">
               No dose logs yet.
@@ -434,9 +441,7 @@ export function Adherence() {
           </span>
         </div>
         {loading ? (
-          <div className="flex h-20 items-center justify-center">
-            <Spinner />
-          </div>
+          <ListSkeleton rows={2} />
         ) : flags.length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-slate-500">
             No missed or late doses in the last 14 days.
@@ -481,9 +486,7 @@ export function Adherence() {
           )}
         </div>
         {loading ? (
-          <div className="flex h-32 items-center justify-center">
-            <Spinner />
-          </div>
+          <ListSkeleton rows={3} />
         ) : smsRows.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-slate-500">
             No SMS messages yet. Create a schedule and click &ldquo;Send SMS
@@ -737,9 +740,7 @@ function PatientAdherence({
             </h2>
           </div>
           {loading ? (
-            <div className="flex h-32 items-center justify-center">
-              <Spinner />
-            </div>
+            <ListSkeleton rows={3} />
           ) : schedules.length === 0 ? (
             <p className="px-5 py-10 text-center text-sm text-slate-500">
               No medicines listed yet. Your health worker will add them soon!
@@ -780,9 +781,7 @@ function PatientAdherence({
             </h2>
           </div>
           {loading ? (
-            <div className="flex h-32 items-center justify-center">
-              <Spinner />
-            </div>
+            <ListSkeleton rows={3} />
           ) : logs.length === 0 ? (
             <p className="px-5 py-10 text-center text-sm text-slate-500">
               No doses to show yet. Check back soon!
@@ -1019,7 +1018,7 @@ function NewScheduleForm({
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" loading={submitting}>
             {submitting ? "Saving…" : "Create schedule"}
           </Button>
         </div>

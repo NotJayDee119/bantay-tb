@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   MapPin,
   Plus,
@@ -9,6 +12,7 @@ import {
 } from "lucide-react";
 import {
   Badge,
+  Button,
   Card,
   Input,
   ListSkeleton,
@@ -17,6 +21,7 @@ import {
 } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import { useDebounce } from "../../hooks/useDebounce";
 import { formatDate } from "../../lib/utils";
 import barangays from "../../data/barangays.json";
 
@@ -54,18 +59,41 @@ const TONE_DOT: Record<string, string> = {
 const MICRO_LABEL =
   "font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500";
 
+const PAGE_SIZE = 50;
+
+async function fetchCasesPage(
+  barangay: string,
+  disease: string,
+  page: number
+): Promise<{ rows: Row[]; total: number }> {
+  let q = supabase
+    .from("cases")
+    .select(
+      "id, reported_at, barangay_psgc, disease, tb_classification, age, sex, treatment_outcome, source",
+      { count: "exact" }
+    )
+    .order("reported_at", { ascending: false })
+    .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+  if (barangay) q = q.eq("barangay_psgc", Number(barangay));
+  if (disease !== "all")
+    q = q.eq("disease", disease as "tb" | "pneumonia" | "covid19" | "asthma");
+  const { data, count, error } = await q;
+  if (error) throw error;
+  return { rows: (data ?? []) as Row[], total: count ?? 0 };
+}
+
 export function Cases() {
   const { profile } = useAuth();
   const canCreateCase =
     profile?.role === "tb_coordinator" || profile?.role === "barangay_admin";
   const assignedPsgc = profile?.barangay_psgc ?? null;
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
   const [filter, setFilter] = useState({
     barangay: "",
     disease: "all",
     search: "",
   });
+  const search = useDebounce(filter.search, 300);
 
   // Pre-select the assigned barangay for health_worker / barangay_admin once
   // the profile is available so they land on their area by default.
@@ -79,30 +107,22 @@ export function Cases() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id]);
 
-  useEffect(() => {
-    setLoading(true);
-    let q = supabase
-      .from("cases")
-      .select(
-        "id, reported_at, barangay_psgc, disease, tb_classification, age, sex, treatment_outcome, source"
-      )
-      .order("reported_at", { ascending: false })
-      .limit(500);
-    if (filter.barangay) q = q.eq("barangay_psgc", Number(filter.barangay));
-    if (filter.disease !== "all")
-      q = q.eq(
-        "disease",
-        filter.disease as "tb" | "pneumonia" | "covid19" | "asthma"
-      );
-    q.then(({ data }) => {
-      setRows((data ?? []) as Row[]);
-      setLoading(false);
-    });
-  }, [filter.barangay, filter.disease]);
+  // Server-side pagination — cached per filter+page so revisiting a page is
+  // instant; keepPreviousData keeps the current rows on screen while the next
+  // page loads instead of flashing a skeleton.
+  const { data, isPending, isFetching } = useQuery({
+    queryKey: ["cases", filter.barangay, filter.disease, page],
+    queryFn: () => fetchCasesPage(filter.barangay, filter.disease, page),
+    placeholderData: keepPreviousData,
+  });
+  const rows = data?.rows ?? [];
+  const total = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const loading = isPending;
 
   const filtered = rows.filter((r) => {
-    if (!filter.search) return true;
-    const s = filter.search.toLowerCase();
+    if (!search) return true;
+    const s = search.toLowerCase();
     return (
       r.disease.toLowerCase().includes(s) ||
       (r.tb_classification ?? "").toLowerCase().includes(s) ||
@@ -139,17 +159,16 @@ export function Cases() {
           </div>
           <div className="flex items-center gap-3">
             <span className="font-mono text-[10px] tabular-nums text-slate-500">
-              {filtered.length}
-              {filtered.length !== rows.length && ` / ${rows.length}`}{" "}
-              {filtered.length === 1 ? "case" : "cases"}
+              {total.toLocaleString()} {total === 1 ? "case" : "cases"}
             </span>
             {hasActiveFilter && (
               <button
                 type="button"
                 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-brand-700 transition hover:text-brand-900 hover:underline"
-                onClick={() =>
-                  setFilter({ barangay: "", disease: "all", search: "" })
-                }
+                onClick={() => {
+                  setFilter({ barangay: "", disease: "all", search: "" });
+                  setPage(0);
+                }}
               >
                 Clear
               </button>
@@ -159,7 +178,10 @@ export function Cases() {
         <div className="grid gap-3 p-4 sm:grid-cols-3">
           <Select
             value={filter.barangay}
-            onChange={(e) => setFilter({ ...filter, barangay: e.target.value })}
+            onChange={(e) => {
+              setFilter({ ...filter, barangay: e.target.value });
+              setPage(0);
+            }}
             aria-label="Filter by barangay"
           >
             <option value="">All barangays</option>
@@ -171,7 +193,10 @@ export function Cases() {
           </Select>
           <Select
             value={filter.disease}
-            onChange={(e) => setFilter({ ...filter, disease: e.target.value })}
+            onChange={(e) => {
+              setFilter({ ...filter, disease: e.target.value });
+              setPage(0);
+            }}
             aria-label="Filter by disease"
           >
             <option value="all">All diseases</option>
@@ -198,7 +223,8 @@ export function Cases() {
           </div>
           {!loading && filtered.length > 0 && (
             <span className="font-mono text-[10px] tabular-nums text-slate-500">
-              latest 500 · newest first
+              {isFetching && "updating · "}page {page + 1} of {pageCount} ·
+              newest first
             </span>
           )}
         </div>
@@ -310,6 +336,37 @@ export function Cases() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* ── Pagination ─────────────────────────────────────────────── */}
+        {!loading && total > PAGE_SIZE && (
+          <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/60 px-4 py-2.5">
+            <span className="font-mono text-[10px] tabular-nums text-slate-500">
+              {(page * PAGE_SIZE + 1).toLocaleString()}–
+              {Math.min((page + 1) * PAGE_SIZE, total).toLocaleString()} of{" "}
+              {total.toLocaleString()}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={page === 0 || isFetching}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" /> Prev
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={page + 1 >= pageCount || isFetching}
+                onClick={() => setPage((p) => p + 1)}
+                aria-label="Next page"
+              >
+                Next <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         )}
       </Card>

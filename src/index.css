@@ -165,44 +165,9 @@ body {
   animation: page-in 0.2s ease-out;
 }
 
-/* Mobile nav — the drawer slides in from the left and its backdrop fades
-   in; the public header dropdown drops down. These are enter-only (the
-   close is an instant unmount), which keeps the markup conditional-render
-   simple while covering the transition that's actually noticeable. */
-@keyframes drawer-in {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-.drawer-in {
-  animation: drawer-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
-}
-@keyframes backdrop-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-.backdrop-in {
-  animation: backdrop-in 0.2s ease-out;
-}
-@keyframes dropdown-in {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.dropdown-in {
-  animation: dropdown-in 0.2s ease-out;
+/* Same fade-up, for panels and chat messages that appear in place. */
+.panel-in {
+  animation: page-in 0.2s ease-out;
 }
 
 /* DOTS Locator — floating cards slide up into view. */
