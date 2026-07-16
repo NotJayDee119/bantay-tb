@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Activity, ArrowLeft, MapPin, Phone } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, MapPin, Phone } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "motion/react";
 import {
   Button,
   Input,
@@ -78,46 +77,53 @@ export function Register() {
   }
 
   return (
-    <div className="grid h-[calc(100vh-57px)] grid-cols-1 lg:grid-cols-2">
-      {/* Left panel */}
+    <div className="grid min-h-[calc(100vh-57px)] grid-cols-1 lg:grid-cols-2">
+      {/* Left panel — photo with the surveillance treatment */}
       <div className="relative hidden overflow-hidden bg-brand-950 lg:flex lg:flex-col">
         <img
           src={tbdotsImage}
           alt="A community health worker checking a patient"
-          className="absolute inset-0 h-full w-full object-cover opacity-50"
+          className="absolute inset-0 h-full w-full object-cover opacity-40"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-brand-950/95 via-brand-950/60 to-brand-950/30" />
+        <div className="absolute inset-0 bg-gradient-to-t from-brand-950/95 via-brand-950/65 to-brand-950/40" />
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-vigil-grid" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -left-32 top-[-20%] h-[28rem] w-[28rem] rounded-full bg-accent-500/15 blur-[110px]"
+        />
 
         <div className="relative z-10 flex flex-1 flex-col justify-between p-10 xl:p-14">
           <Link to="/" className="inline-flex w-fit items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.06] text-white backdrop-blur-sm">
+            <span className="relative grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.08] text-white backdrop-blur-sm">
               <Activity className="h-5 w-5" />
+              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-brand-950 bg-vigil-400" />
             </span>
-            <span className="font-display text-lg font-bold tracking-tight text-white">
+            <span className="font-display text-lg font-extrabold tracking-tight text-white">
               BANTAY-TB
             </span>
           </Link>
 
           <div className="max-w-lg">
-            <motion.h2
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
-              className="font-display text-[2.75rem] font-extrabold leading-[1.1] tracking-tight text-white"
-            >
+            <p className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-vigil-400" />
+              For patients &amp; residents
+            </p>
+            <h2 className="font-display mt-5 text-[2.75rem] font-extrabold leading-[1.1] tracking-tight text-white">
               Stay informed.
               <br />
               Stay supported.
-            </motion.h2>
-            <motion.p
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.25, ease: "easeOut" }}
-              className="mt-5 max-w-sm text-[0.9375rem] leading-relaxed text-slate-300"
-            >
-              Follow your DOTS treatment, receive medication reminders,
-              and access trusted TB health information.
-            </motion.p>
+            </h2>
+            <p className="mt-5 max-w-sm text-[0.9375rem] leading-relaxed text-slate-300">
+              Follow your DOTS treatment, receive medication reminders, and
+              access trusted TB health information.
+            </p>
+
+            <div className="mt-7 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 backdrop-blur-sm">
+              <span className="h-2 w-2 rounded-full bg-accent-400" />
+              <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-300">
+                Free diagnostics &middot; free medication
+              </span>
+            </div>
           </div>
 
           <p className="text-xs text-white/30">Davao City Health Office</p>
@@ -128,19 +134,15 @@ export function Register() {
 
       {/* Right panel */}
       <div className="flex items-center justify-center bg-slate-50 px-5 py-12 sm:px-8 lg:bg-white lg:px-12">
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-          className="w-full max-w-[420px]"
-        >
+        <div className="w-full max-w-[420px]">
           {/* Mobile-only logo */}
           <div className="mb-10 lg:hidden">
             <Link to="/" className="inline-flex items-center gap-2.5">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-950 text-white">
+              <span className="relative grid h-10 w-10 place-items-center rounded-xl bg-brand-950 text-white shadow-soft">
                 <Activity className="h-5 w-5" />
+                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-slate-50 bg-vigil-400" />
               </span>
-              <span className="font-display text-lg font-bold tracking-tight text-slate-900">
+              <span className="font-display text-lg font-extrabold tracking-tight text-slate-900">
                 BANTAY-TB
               </span>
             </Link>
@@ -158,10 +160,13 @@ export function Register() {
                 Back
               </button>
             )}
-            <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600">
+              For patients &amp; residents
+            </p>
+            <h1 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-slate-900">
               Create your account
             </h1>
-            <p className="mt-1.5 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-slate-500">
               {step === 0
                 ? "Start with your login credentials."
                 : "Just a few more details to connect you with local care."}
@@ -172,16 +177,14 @@ export function Register() {
           <div className="mt-6 flex items-center gap-2">
             {STEPS.map((label, i) => (
               <div key={label} className="flex flex-1 flex-col gap-1.5">
-                <div className="h-1 rounded-full bg-slate-200 overflow-hidden">
-                  <motion.div
-                    className="h-full rounded-full bg-brand-600"
-                    initial={false}
-                    animate={{ width: i <= step ? "100%" : "0%" }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
+                <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className="h-full rounded-full bg-accent-500 transition-all duration-500"
+                    style={{ width: i <= step ? "100%" : "0%" }}
                   />
                 </div>
-                <span className={`text-[0.6875rem] font-medium ${i <= step ? "text-brand-700" : "text-slate-400"}`}>
-                  {label}
+                <span className={`font-mono text-[0.625rem] font-semibold uppercase tracking-wider ${i <= step ? "text-accent-700" : "text-slate-400"}`}>
+                  {i + 1}. {label}
                 </span>
               </div>
             ))}
@@ -189,16 +192,8 @@ export function Register() {
 
           {/* Steps */}
           <form onSubmit={step === 0 ? (e) => { e.preventDefault(); goNext(); } : handleSubmit}>
-            <AnimatePresence mode="wait">
               {step === 0 && (
-                <motion.div
-                  key="step-0"
-                  initial={{ opacity: 0, x: -12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -12 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="mt-6 space-y-5"
-                >
+                <div className="step-in-left mt-6 space-y-5">
                   <div className="space-y-1.5">
                     <Label htmlFor="fullName">Full name</Label>
                     <Input
@@ -242,21 +237,15 @@ export function Register() {
                     </p>
                   </div>
 
-                  <Button type="submit" className="!mt-7 w-full">
+                  <Button type="submit" className="!mt-7 w-full gap-2">
                     Continue
+                    <ArrowRight className="h-4 w-4" />
                   </Button>
-                </motion.div>
+                </div>
               )}
 
               {step === 1 && (
-                <motion.div
-                  key="step-1"
-                  initial={{ opacity: 0, x: 12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 12 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="mt-6 space-y-5"
-                >
+                <div className="step-in-right mt-6 space-y-5">
                   <div className="space-y-1.5">
                     <Label htmlFor="phone">
                       Mobile number{" "}
@@ -317,9 +306,8 @@ export function Register() {
                       "Create account"
                     )}
                   </Button>
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
           </form>
 
           {/* Divider */}
@@ -336,22 +324,27 @@ export function Register() {
 
           <Link
             to="/login"
-            className="mt-5 flex h-10 w-full items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-soft transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:ring-offset-2 lg:bg-slate-50 lg:hover:bg-white"
+            className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lift focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:ring-offset-2 lg:bg-slate-50 lg:hover:bg-white"
           >
             Sign in instead
           </Link>
 
           {/* Staff callout */}
-          <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 lg:bg-white">
-            Davao City health worker?{" "}
-            <Link
-              to="/register/staff"
-              className="font-medium text-brand-700 transition hover:text-brand-800"
-            >
-              Register as staff
-            </Link>
+          <div className="mt-6 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 lg:bg-white">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700 ring-1 ring-brand-100">
+              <Activity className="h-4 w-4" />
+            </span>
+            <p className="text-xs text-slate-500">
+              Davao City health worker?{" "}
+              <Link
+                to="/register/staff"
+                className="font-semibold text-brand-700 transition hover:text-brand-800"
+              >
+                Register as staff
+              </Link>
+            </p>
           </div>
-        </motion.div>
+        </div>
       </div>
     </div>
   );

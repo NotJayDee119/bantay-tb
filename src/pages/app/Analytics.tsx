@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { BarChart3, Lightbulb, Users } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  HeartPulse,
+  Lightbulb,
+  Users,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Card, PageHeader, Spinner } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 
@@ -27,6 +34,9 @@ const AGE_BANDS = [
   { label: "55+", min: 55, max: 200 },
 ];
 
+const MICRO_LABEL =
+  "font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500";
+
 export function Analytics() {
   const [data, setData] = useState<AnalyticsData | null>(null);
 
@@ -51,13 +61,37 @@ export function Analytics() {
 
   if (!data) {
     return (
-      <div className="flex h-32 items-center justify-center">
-        <Spinner />
-      </div>
+      <>
+        <PageHeader
+          title="AI Analytics for Outreach"
+          subtitle="TB cases only · Last 12 months · Where to focus screening and contact-tracing campaigns."
+        />
+        <div className="flex h-32 items-center justify-center">
+          <Spinner />
+        </div>
+      </>
     );
   }
 
   const insights = buildInsights(data);
+  const workingShare =
+    data.total === 0
+      ? 0
+      : Math.round(
+          (((data.byAgeBand.find((b) => b.band === "18–34")?.count ?? 0) +
+            (data.byAgeBand.find((b) => b.band === "35–54")?.count ?? 0)) /
+            data.total) *
+            100
+        );
+  const curedShare =
+    data.total === 0
+      ? 0
+      : Math.round(
+          (((data.byOutcome.find((o) => o.label === "cured")?.count ?? 0) +
+            (data.byOutcome.find((o) => o.label === "completed")?.count ?? 0)) /
+            data.total) *
+            100
+        );
 
   return (
     <>
@@ -66,64 +100,104 @@ export function Analytics() {
         subtitle="TB cases only · Last 12 months · Where to focus screening and contact-tracing campaigns."
       />
 
+      {/* ── Headline stats ───────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Stat label="Cases (12 months)" value={data.total} />
-        <Stat
-          label="Working-age share"
-          value={
-            data.total === 0
-              ? 0
-              : Math.round(
-                  ((data.byAgeBand.find((b) => b.band === "18–34")?.count ?? 0) +
-                    (data.byAgeBand.find((b) => b.band === "35–54")?.count ?? 0)) /
-                    data.total *
-                    100
-                )
-          }
-          suffix="%"
+        <StatTile
+          icon={Activity}
+          iconClass="bg-brand-50 text-brand-700"
+          accentClass="bg-brand-500"
+          label="Cases · 12 months"
+          value={data.total.toLocaleString()}
         />
-        <Stat
+        <StatTile
+          icon={Users}
+          iconClass="bg-sky-50 text-sky-700"
+          accentClass="bg-sky-500"
+          label="Working-age share"
+          value={`${workingShare}%`}
+          footer="Cases aged 18–54"
+        />
+        <StatTile
+          icon={HeartPulse}
+          iconClass="bg-accent-50 text-accent-700"
+          accentClass="bg-accent-500"
           label="Cured / completed"
-          value={
-            data.total === 0
-              ? 0
-              : Math.round(
-                  ((data.byOutcome.find((o) => o.label === "cured")?.count ?? 0) +
-                    (data.byOutcome.find((o) => o.label === "completed")?.count ??
-                      0)) /
-                    data.total *
-                    100
-                )
-          }
-          suffix="%"
+          value={`${curedShare}%`}
+          footer="Favourable treatment outcomes"
         />
       </div>
 
-      <Card className="mt-4 p-5">
-        <SectionTitle icon={Lightbulb}>Outreach recommendations</SectionTitle>
+      {/* ── Outreach recommendations ─────────────────────────────────── */}
+      <Card className="mt-4 overflow-hidden p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+          <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+            <Lightbulb className="h-3.5 w-3.5 text-vigil-500" />
+            Outreach recommendations
+          </div>
+          {insights.length > 0 && (
+            <span className="font-mono text-[10px] tabular-nums text-slate-500">
+              {insights.length} signal{insights.length === 1 ? "" : "s"}
+            </span>
+          )}
+        </div>
         {insights.length === 0 ? (
-          <p className="text-sm text-slate-500">
+          <p className="px-4 py-8 text-center text-sm text-slate-500">
             Not enough data yet. Encode more cases or run Bulk Import.
           </p>
         ) : (
-          <ul className="ml-4 list-disc space-y-1.5 text-sm text-slate-800">
+          <ul className="divide-y divide-slate-100">
             {insights.map((i) => (
-              <li key={i}>{i}</li>
+              <li key={i} className="flex items-start gap-3 px-4 py-3">
+                <span
+                  aria-hidden
+                  className="mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-vigil-400/40 bg-vigil-300/20 text-vigil-600"
+                >
+                  <Lightbulb className="h-3.5 w-3.5" />
+                </span>
+                <p className="text-sm leading-relaxed text-slate-800">{i}</p>
+              </li>
             ))}
           </ul>
         )}
-        <p className="mt-3 text-xs text-slate-400">
+        <p className="border-t border-slate-100 bg-slate-50/40 px-4 py-2.5 text-xs text-slate-400">
           Heuristics derived from the rolling 12-month case set. Combine with
           local epidemiologic context before finalising campaign targets.
         </p>
       </Card>
 
+      {/* ── Distribution charts ──────────────────────────────────────── */}
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <ChartCard title="Cases by month" icon={BarChart3} bars={data.byMonth.map((m) => ({ label: m.month, value: m.count }))} />
-        <ChartCard title="Age distribution" icon={Users} bars={data.byAgeBand.map((m) => ({ label: m.band, value: m.count }))} />
-        <ChartCard title="By sex" icon={Users} bars={data.bySex.map((m) => ({ label: m.label, value: m.count }))} />
-        <ChartCard title="TB classification" icon={BarChart3} bars={data.byClassification.map((m) => ({ label: m.label.replace(/_/g, " "), value: m.count }))} />
-        <ChartCard title="Treatment outcome" icon={BarChart3} bars={data.byOutcome.map((m) => ({ label: m.label.replace(/_/g, " "), value: m.count }))} />
+        <ChartCard
+          title="Cases by month"
+          icon={BarChart3}
+          bars={data.byMonth.map((m) => ({ label: m.month, value: m.count }))}
+        />
+        <ChartCard
+          title="Age distribution"
+          icon={Users}
+          bars={data.byAgeBand.map((m) => ({ label: m.band, value: m.count }))}
+        />
+        <ChartCard
+          title="By sex"
+          icon={Users}
+          bars={data.bySex.map((m) => ({ label: m.label, value: m.count }))}
+        />
+        <ChartCard
+          title="TB classification"
+          icon={BarChart3}
+          bars={data.byClassification.map((m) => ({
+            label: m.label.replace(/_/g, " "),
+            value: m.count,
+          }))}
+        />
+        <ChartCard
+          title="Treatment outcome"
+          icon={BarChart3}
+          bars={data.byOutcome.map((m) => ({
+            label: m.label.replace(/_/g, " "),
+            value: m.count,
+          }))}
+        />
       </div>
     </>
   );
@@ -241,36 +315,34 @@ function buildInsights(d: AnalyticsData): string[] {
   return out;
 }
 
-function Stat({
+function StatTile({
+  icon: Icon,
+  iconClass,
+  accentClass,
   label,
   value,
-  suffix,
+  footer,
 }: {
+  icon: LucideIcon;
+  iconClass: string;
+  accentClass: string;
   label: string;
-  value: number;
-  suffix?: string;
+  value: string;
+  footer?: string;
 }) {
   return (
-    <Card className="p-5">
-      <div className="text-3xl font-bold text-slate-900">
-        {value.toLocaleString()}
-        {suffix}
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft transition-shadow hover:shadow-lift">
+      <span aria-hidden className={"absolute inset-y-0 left-0 w-1 " + accentClass} />
+      <span className={"inline-flex rounded-xl p-2.5 " + iconClass}>
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="mt-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+        {label}
       </div>
-      <div className="text-sm text-slate-500">{label}</div>
-    </Card>
-  );
-}
-
-function SectionTitle({
-  icon: Icon,
-  children,
-}: {
-  icon: typeof Users;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-      <Icon className="h-4 w-4" /> {children}
+      <div className="mt-1 font-display text-3xl font-extrabold tracking-tight text-slate-900">
+        {value}
+      </div>
+      {footer && <p className="mt-2 text-xs text-slate-500">{footer}</p>}
     </div>
   );
 }
@@ -281,27 +353,41 @@ function ChartCard({
   bars,
 }: {
   title: string;
-  icon: typeof Users;
+  icon: LucideIcon;
   bars: { label: string; value: number }[];
 }) {
   const max = Math.max(1, ...bars.map((b) => b.value));
   return (
-    <Card className="p-5">
-      <SectionTitle icon={Icon}>{title}</SectionTitle>
+    <Card className="overflow-hidden p-0">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+        <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+          <Icon className="h-3.5 w-3.5 text-brand-600" />
+          {title}
+        </div>
+        {bars.length > 0 && (
+          <span className="font-mono text-[10px] tabular-nums text-slate-500">
+            {bars.length} {bars.length === 1 ? "group" : "groups"}
+          </span>
+        )}
+      </div>
       {bars.length === 0 ? (
-        <p className="text-sm text-slate-500">No data.</p>
+        <p className="px-4 py-8 text-center text-sm text-slate-500">No data.</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-3 p-4">
           {bars.map((b) => (
             <li key={b.label}>
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-slate-800">{b.label}</span>
-                <span className="text-slate-500">{b.value}</span>
+              <div className="flex items-baseline justify-between gap-2 text-sm">
+                <span className="font-medium capitalize text-slate-800">
+                  {b.label}
+                </span>
+                <span className="font-display font-bold tabular-nums text-slate-900">
+                  {b.value.toLocaleString()}
+                </span>
               </div>
               <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
                 <div
-                  className="h-full bg-brand-500"
-                  style={{ width: `${(b.value / max) * 100}%` }}
+                  className="h-full rounded-full bg-brand-500"
+                  style={{ width: `${Math.max(2, (b.value / max) * 100)}%` }}
                 />
               </div>
             </li>

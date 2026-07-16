@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Bot, Send, X, MessageCircle } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
 import { supabase } from "../lib/supabase";
 import { detectLocale, LOCALE_LABEL, type Locale } from "../lib/i18n";
 
@@ -112,34 +111,39 @@ export function PublicChatbotFab() {
 
   return (
     <>
-      {/* Chat window */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: 12, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.97 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-            className="fixed bottom-20 right-4 z-50 flex h-[min(560px,80vh)] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xl sm:right-6"
-            role="dialog"
-            aria-label="BANTAY-TB chatbot"
-          >
-            {/* Header */}
-            <div className="flex items-center gap-3 border-b border-accent-700/20 bg-accent-600 px-4 py-3 text-white">
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-white/15">
-                <Bot className="h-4 w-4" />
+      {/* Chat window — stays mounted so open/close can animate */}
+      <div
+        className={
+          "fixed bottom-24 right-4 z-50 flex h-[min(560px,calc(100dvh-8rem))] w-[min(380px,calc(100vw-2rem))] origin-bottom-right flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xl transition-all duration-300 ease-out sm:right-6 " +
+          (open
+            ? "visible translate-y-0 scale-100 opacity-100"
+            : "invisible pointer-events-none translate-y-4 scale-90 opacity-0")
+        }
+        role="dialog"
+        aria-label="BANTAY-TB chatbot"
+        aria-hidden={!open}
+      >
+            {/* Header — dark brand, matching the site's surveillance styling */}
+            <div className="relative flex items-center gap-3 overflow-hidden bg-brand-950 px-4 py-3.5 text-white">
+              <div aria-hidden className="pointer-events-none absolute inset-0 bg-vigil-grid opacity-50" />
+              <span className="relative grid h-9 w-9 place-items-center rounded-xl border border-white/15 bg-white/10 text-accent-400">
+                <Bot className="h-5 w-5" />
               </span>
-              <div className="flex-1">
-                <div className="text-sm font-semibold leading-tight">
-                  BANTAY-TB
+              <div className="relative flex-1">
+                <div className="font-display text-sm font-bold leading-tight tracking-tight">
+                  BANTAY-TB Assistant
                 </div>
-                <div className="text-[0.6875rem] text-white/60">
-                  English · Filipino · Bisaya
+                <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[0.625rem] uppercase tracking-wider text-slate-400">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-400 opacity-75" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent-400" />
+                  </span>
+                  Online &middot; EN &middot; FIL &middot; BIS
                 </div>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white"
+                className="relative grid h-8 w-8 place-items-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white"
                 aria-label="Close chatbot"
               >
                 <X className="h-4 w-4" />
@@ -184,16 +188,16 @@ export function PublicChatbotFab() {
               {sending && (
                 <div className="flex items-center gap-2 text-xs text-slate-400">
                   <span className="flex gap-1">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-300 [animation-delay:150ms]" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-200 [animation-delay:300ms]" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-200" />
                   </span>
                   Thinking…
                 </div>
               )}
               {messages.length <= 1 && (
                 <div className="pt-1">
-                  <div className="mb-2 text-[0.6875rem] font-medium text-slate-400">
+                  <div className="mb-2 font-mono text-[0.625rem] font-semibold uppercase tracking-wider text-slate-400">
                     Try asking
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -202,7 +206,7 @@ export function PublicChatbotFab() {
                         key={s}
                         type="button"
                         onClick={() => send(s)}
-                        className="rounded-lg border border-slate-150 bg-white px-3 py-2 text-left text-xs text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                        className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-left text-xs text-slate-600 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:border-accent-200 hover:bg-accent-50/50 hover:text-slate-900 hover:shadow-lift"
                       >
                         {s}
                       </button>
@@ -225,16 +229,16 @@ export function PublicChatbotFab() {
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder={PLACEHOLDER.en}
-                  className="h-9 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-300 focus:bg-white focus:ring-1 focus:ring-brand-200"
+                  className="h-10 flex-1 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-accent-300 focus:bg-white focus:ring-2 focus:ring-accent-100"
                   disabled={sending}
                 />
                 <button
                   type="submit"
                   disabled={sending || !draft.trim()}
-                  className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-accent-600 text-white transition hover:bg-accent-700 disabled:opacity-40"
+                  className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-accent-600 text-white shadow-soft transition-all duration-200 hover:bg-accent-700 enabled:hover:scale-105 disabled:opacity-40"
                   aria-label="Send"
                 >
-                  <Send className="h-3.5 w-3.5" />
+                  <Send className="h-4 w-4" />
                 </button>
               </form>
             </div>
@@ -246,31 +250,42 @@ export function PublicChatbotFab() {
                 Visit the nearest DOTS Center for screening.
               </p>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </div>
 
-      {/* FAB — accent green pill */}
-      <motion.button
+      {/* FAB — accent pill; icon cross-fades between chat and close */}
+      <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        whileHover={{ scale: 1.03 }}
-        whileTap={{ scale: 0.97 }}
-        className="fixed bottom-5 right-4 z-50 flex h-12 items-center gap-2 rounded-full bg-accent-600 px-4 text-white shadow-lg transition hover:bg-accent-700 sm:right-6"
+        className={
+          "fixed bottom-5 right-4 z-50 flex h-12 items-center gap-2 rounded-full px-4 text-white shadow-lift transition-all duration-300 hover:scale-105 active:scale-95 sm:right-6 " +
+          (open ? "bg-brand-950 hover:bg-brand-900" : "bg-accent-600 hover:bg-accent-700")
+        }
         aria-expanded={open}
         aria-label={open ? "Close chatbot" : "Open BANTAY-TB chatbot"}
       >
-        {open ? (
-          <X className="h-4 w-4" />
-        ) : (
-          <>
-            <MessageCircle className="h-4 w-4" />
-            <span className="hidden text-sm font-medium sm:inline">
-              Ask BANTAY-TB
-            </span>
-          </>
-        )}
-      </motion.button>
+        <span className="relative h-5 w-5">
+          <MessageCircle
+            className={
+              "absolute inset-0 h-5 w-5 transition-all duration-300 " +
+              (open ? "-rotate-90 scale-50 opacity-0" : "rotate-0 scale-100 opacity-100")
+            }
+          />
+          <X
+            className={
+              "absolute inset-0 h-5 w-5 transition-all duration-300 " +
+              (open ? "rotate-0 scale-100 opacity-100" : "rotate-90 scale-50 opacity-0")
+            }
+          />
+        </span>
+        <span
+          className={
+            "hidden overflow-hidden whitespace-nowrap text-sm font-semibold transition-all duration-300 sm:inline-block " +
+            (open ? "max-w-0 opacity-0" : "max-w-[10rem] opacity-100")
+          }
+        >
+          Ask BANTAY-TB
+        </span>
+      </button>
     </>
   );
 }

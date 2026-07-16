@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Bell, CheckCheck } from "lucide-react";
-import { Badge, Button, Card, PageHeader, Spinner } from "../../components/ui";
+import { Bell, BellOff, CheckCheck } from "lucide-react";
+import { Button, Card, PageHeader, Spinner } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { formatDateTime } from "../../lib/utils";
@@ -23,14 +23,27 @@ interface AlertRow {
   } | null;
 }
 
-const SEVERITY_TONE: Record<Severity, "warning" | "danger" | "info"> = {
-  watch: "info",
-  moderate: "warning",
-  high: "warning",
-  urgent: "danger",
-  low: "info",
-  medium: "warning",
+// Shared severity scale — watch blue → urgent red, same as the map pages.
+const SEVERITY_COLOR: Record<Severity, string> = {
+  watch: "#0284c7",
+  moderate: "#d97706",
+  high: "#ea580c",
+  urgent: "#dc2626",
+  low: "#0284c7",
+  medium: "#d97706",
 };
+
+function SeverityChip({ severity }: { severity: Severity }) {
+  const c = SEVERITY_COLOR[severity];
+  return (
+    <span
+      className="inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider"
+      style={{ color: c, borderColor: `${c}55`, background: `${c}14` }}
+    >
+      {severity}
+    </span>
+  );
+}
 
 export function Alerts() {
   const { profile } = useAuth();
@@ -107,66 +120,81 @@ export function Alerts() {
       <PageHeader
         title="Hotspot Alerts"
         subtitle="DBSCAN-detected clusters that require frontline follow-up."
-        actions={
-          unreadCount > 0 ? (
-            <Button variant="secondary" onClick={markAllRead}>
-              <CheckCheck className="h-4 w-4" /> Mark all read
-            </Button>
-          ) : null
-        }
       />
 
-      <Card className="p-0">
+      <Card className="overflow-hidden p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+          <div className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            <Bell className="h-3.5 w-3.5 text-vigil-500" />
+            Alert inbox
+            {unreadCount > 0 && (
+              <span className="ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full border border-vigil-400/50 bg-vigil-300/20 px-1.5 py-0.5 font-mono text-[9px] font-semibold tabular-nums text-vigil-600">
+                {unreadCount} new
+              </span>
+            )}
+          </div>
+          {unreadCount > 0 && (
+            <Button variant="secondary" size="sm" onClick={markAllRead}>
+              <CheckCheck className="h-3.5 w-3.5" />
+              Mark all read
+            </Button>
+          )}
+        </div>
+
         {loading ? (
           <div className="flex h-32 items-center justify-center">
             <Spinner />
           </div>
         ) : list.length === 0 ? (
-          <p className="px-4 py-12 text-center text-sm text-slate-500">
-            No alerts yet. Run DBSCAN from the Hotspots page to generate
-            alerts.
-          </p>
+          <div className="px-4 py-14 text-center">
+            <BellOff className="mx-auto h-6 w-6 text-slate-300" />
+            <p className="mt-3 text-sm text-slate-500">
+              No alerts yet. Run DBSCAN from the{" "}
+              <span className="font-semibold text-slate-700">Hotspots</span>{" "}
+              page to generate alerts.
+            </p>
+          </div>
         ) : (
-          <ul className="divide-y divide-slate-200">
+          <ul className="divide-y divide-slate-100">
             {list.map((a) => {
               const unread = !a.read_at;
               const h = a.hotspots;
+              const color = h ? SEVERITY_COLOR[h.severity] : "#64748b";
               return (
                 <li
                   key={a.id}
-                  className={
-                    "flex items-start gap-3 px-4 py-3 " +
-                    (unread ? "bg-amber-50/60" : "")
-                  }
+                  className="flex items-start gap-3 border-l-2 px-4 py-3 transition"
+                  style={{
+                    borderLeftColor: unread ? color : "transparent",
+                    background: unread ? `${color}0d` : undefined,
+                  }}
                 >
-                  <div
-                    className={
-                      "mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full " +
-                      (h?.severity === "high"
-                        ? "bg-red-100 text-red-700"
-                        : "bg-amber-100 text-amber-700")
-                    }
+                  <span
+                    className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border"
+                    style={{
+                      color,
+                      borderColor: `${color}40`,
+                      background: `${color}14`,
+                    }}
                   >
                     <Bell className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
                       {h ? barangayName(h.barangay_psgc) : "(hotspot deleted)"}
-                      {h && (
-                        <Badge tone={SEVERITY_TONE[h.severity]}>
-                          {h.severity}
-                        </Badge>
-                      )}
+                      {h && <SeverityChip severity={h.severity} />}
                       {unread && (
-                        <span className="rounded-full bg-red-100 px-2 text-xs font-semibold text-red-700">
-                          new
-                        </span>
+                        <span
+                          aria-hidden
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ background: color }}
+                        />
                       )}
                     </div>
                     {h && (
                       <div className="mt-0.5 text-xs text-slate-600">
-                        {h.case_count} cases · radius {h.radius_km.toFixed(1)} km
-                        · detected {formatDateTime(h.detected_at)}
+                        {h.case_count} cases · {h.radius_km.toFixed(1)} km
+                        radius · detected {formatDateTime(h.detected_at)}
                       </div>
                     )}
                     <div className="mt-0.5 text-xs text-slate-400">

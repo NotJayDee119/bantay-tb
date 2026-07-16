@@ -1,5 +1,6 @@
 @import "leaflet/dist/leaflet.css";
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap");
+@import "maplibre-gl/dist/maplibre-gl.css";
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -32,13 +33,156 @@ body {
 }
 
 .font-display {
-  font-family: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui;
+  font-family: "Archivo", "Inter", ui-sans-serif, system-ui;
   letter-spacing: -0.02em;
+}
+
+/* Map shapes: the browser draws a black rectangular focus outline around
+   clicked SVG paths (outlines follow the bounding box, so a circle gets a
+   square). The selected bubble already shows its own circular ring, so the
+   outline is pure noise — remove it. */
+.leaflet-container path.leaflet-interactive:focus {
+  outline: none;
+}
+
+/* Public hero map — soft-edged case bubbles. The halo melts into the
+   basemap; the core keeps just enough blur to lose its hard SVG edge. */
+.pcm-glow {
+  filter: blur(6px);
+}
+.pcm-core {
+  filter: blur(1.25px);
+}
+
+/* Public hero map — hover tooltip. The Leaflet root is stripped bare
+   (it carries the inline positioning transform); the inner card holds
+   the glass styling and the smooth pop-in animation. */
+.leaflet-tooltip.pcm-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0;
+}
+.leaflet-tooltip.pcm-tooltip::before,
+.leaflet-tooltip.pcm-tooltip::after,
+.leaflet-tooltip-top.pcm-tooltip::before,
+.leaflet-tooltip-bottom.pcm-tooltip::before,
+.leaflet-tooltip-left.pcm-tooltip::before,
+.leaflet-tooltip-right.pcm-tooltip::before {
+  display: none !important; /* no arrow — the card floats above the bubble */
+  border: none !important;
+  background: none !important;
+}
+.pcm-tooltip-inner {
+  background: #0b1220;
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  transform-origin: bottom center;
+  animation: pcm-tooltip-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes pcm-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* GIS surveillance map — dark glass popups. Leaflet's default popup is a
+   white card that clashes with the map's console chrome; this reskins the
+   wrapper while the React content inside supplies its own dark styling. */
+.ghm-popup .leaflet-popup-content-wrapper {
+  background: rgba(6, 16, 32, 0.94);
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.875rem;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+}
+.ghm-popup .leaflet-popup-content {
+  margin: 12px 14px;
+  line-height: 1.45;
+}
+.ghm-popup .leaflet-popup-tip {
+  background: rgba(6, 16, 32, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+.ghm-popup .leaflet-popup-close-button {
+  color: #64748b;
+}
+.ghm-popup .leaflet-popup-close-button:hover {
+  color: #f8fafc;
+}
+
+/* Multi-step forms (Register / Staff Register) — steps slide in the
+   direction of travel, matching the old motion/react transition. */
+@keyframes step-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes step-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.step-in-left {
+  animation: step-in-left 0.25s ease-out;
+}
+.step-in-right {
+  animation: step-in-right 0.25s ease-out;
+}
+
+/* DOTS Locator — floating cards slide up into view. */
+@keyframes dl-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.dl-card-in {
+  animation: dl-card-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .bg-grid {
   background-image: var(--grid-bg);
   background-size: 24px 24px;
+}
+
+/* Monumental wordmark treatment for the hero — the name set as civic signage. */
+.wordmark {
+  font-family: "Archivo", "Inter", ui-sans-serif, system-ui;
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  line-height: 0.92;
+  font-feature-settings: "ss01";
+}
+
+/* Faint monitoring grid used on dark hero grounds. */
+.bg-vigil-grid {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
 }
 
 .leaflet-container {
@@ -59,6 +203,44 @@ body {
 
 .leaflet-dragging .leaflet-grab {
   cursor: default !important;
+}
+
+/* Map credit is legally required (OpenStreetMap/OpenFreeMap licensing) so it
+   stays in the DOM and reachable, but collapses to a small "i" marker rather
+   than sitting as a full text banner across the map corner. Expands on
+   hover/focus so the underlying links remain fully usable. */
+.leaflet-control-attribution {
+  max-width: 22px;
+  height: 20px;
+  overflow: hidden;
+  white-space: nowrap;
+  border-radius: 9999px !important;
+  transition: max-width 160ms ease;
+}
+
+.leaflet-control-attribution::before {
+  content: "i";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin: 2px 4px 0 3px;
+  border-radius: 9999px;
+  border: 1px solid currentColor;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 11px;
+  line-height: 13px;
+  text-align: center;
+}
+
+.leaflet-control-attribution:hover,
+.leaflet-control-attribution:focus-within {
+  max-width: 420px;
+}
+
+.leaflet-control-attribution:hover::before,
+.leaflet-control-attribution:focus-within::before {
+  content: none;
 }
 
 /* Subtle scrollbars */

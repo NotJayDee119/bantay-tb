@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import {
   computeHotspotInsights,
@@ -81,14 +82,18 @@ export function GISMapTab({ focusBarangay = null }: GISMapTabProps) {
     };
   }, []);
 
+  // Full-bleed frame — AppLayout gives this route the whole content area;
+  // `isolate` traps Leaflet's internal z-indexes inside the view.
+  const frame = "relative isolate h-full overflow-hidden bg-brand-950";
+
   if (error) {
     return (
-      <div className="flex h-[calc(100vh-8rem)] items-center justify-center rounded-2xl border border-slate-200 bg-white">
+      <div className={"flex items-center justify-center bg-vigil-grid " + frame}>
         <div className="max-w-md px-6 text-center">
-          <p className="text-base font-semibold text-slate-900">
+          <p className="font-display text-base font-bold tracking-tight text-white">
             Map data unavailable
           </p>
-          <p className="mt-2 text-sm text-slate-600">{error}</p>
+          <p className="mt-2 text-sm text-slate-400">{error}</p>
         </div>
       </div>
     );
@@ -96,17 +101,17 @@ export function GISMapTab({ focusBarangay = null }: GISMapTabProps) {
 
   if (loading) {
     return (
-      <div className="flex h-[calc(100vh-8rem)] items-center justify-center rounded-2xl border border-slate-200 bg-white">
-        <div className="text-center">
-          <div className="inline-block h-12 w-12 animate-spin rounded-full border-b-2 border-brand-600"></div>
-          <p className="mt-4 text-sm text-slate-600">Loading map data…</p>
+      <div className={"flex items-center justify-center bg-vigil-grid " + frame}>
+        <div className="flex items-center gap-2 text-sm text-slate-300">
+          <Loader2 className="h-4 w-4 animate-spin text-accent-400" />
+          Loading surveillance map…
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-[calc(100vh-8rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className={frame}>
       <AdminHotspotMap
         hotspotInsights={hotspotInsights}
         focusBarangay={resolvedFocus}

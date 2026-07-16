@@ -2,13 +2,13 @@ import {
   forwardRef,
   useState,
   type ButtonHTMLAttributes,
+  type HTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { motion, type HTMLMotionProps } from "motion/react";
 import { cn } from "../lib/utils";
 
 export const Button = forwardRef<
@@ -171,23 +171,16 @@ export function Card({
 }
 
 /**
- * Motion-aware Card: animates in on mount + lifts subtly on hover. Use this
- * for prominent surfaces (dashboard tiles, hero cards). Falls back to a static
- * `Card` for users who prefer reduced motion (motion/react respects this
- * automatically).
+ * Card for prominent surfaces (dashboard tiles, hero cards). Lifts subtly on
+ * hover via the `hover:shadow-lift` utility.
  */
 export function MotionCard({
   className,
   children,
-  delay = 0,
   ...rest
-}: HTMLMotionProps<"div"> & { className?: string; delay?: number }) {
+}: HTMLAttributes<HTMLDivElement> & { className?: string }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, delay, ease: "easeOut" }}
-      whileHover={{ y: -2 }}
+    <div
       className={cn(
         "rounded-xl border border-slate-200/80 bg-white shadow-soft transition-shadow hover:shadow-lift",
         className
@@ -195,7 +188,7 @@ export function MotionCard({
       {...rest}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 
@@ -265,12 +258,7 @@ export function PageHeader({
   eyebrow?: ReactNode;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: "easeOut" }}
-      className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
-    >
+    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
         {eyebrow && (
           <div className="mb-1 text-xs font-medium uppercase tracking-wider text-brand-700">
@@ -285,7 +273,7 @@ export function PageHeader({
         )}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
-    </motion.div>
+    </div>
   );
 }
 

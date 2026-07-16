@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import {
   MapContainer,
   Marker,
-  TileLayer,
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
-import { Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { OpenFreeMapLayer } from "../../components/OpenFreeMapLayer";
+import { MapPin, MapPinOff, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import {
   Button,
   Card,
@@ -62,6 +62,9 @@ const EMPTY: DotsForm = {
   hours: "",
   services: "",
 };
+
+const MICRO_LABEL =
+  "font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500";
 
 export function DotsCentersAdmin() {
   const [list, setList] = useState<DotsCenter[]>([]);
@@ -162,22 +165,42 @@ export function DotsCentersAdmin() {
         }
       />
 
-      <Card className="p-0">
+      <Card className="overflow-hidden p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+          <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+            <MapPin className="h-3.5 w-3.5 text-accent-600" />
+            Registered centers
+          </div>
+          {!loading && list.length > 0 && (
+            <span className="font-mono text-[10px] tabular-nums text-slate-500">
+              {list.length} center{list.length === 1 ? "" : "s"}
+            </span>
+          )}
+        </div>
+
         {loading ? (
           <div className="flex h-32 items-center justify-center">
             <Spinner />
           </div>
         ) : list.length === 0 ? (
-          <p className="px-4 py-12 text-center text-sm text-slate-500">
-            No DOTS centers yet. Click "Add center".
-          </p>
+          <div className="px-4 py-14 text-center">
+            <MapPinOff className="mx-auto h-6 w-6 text-slate-300" />
+            <p className="mt-3 text-sm text-slate-500">
+              No DOTS centers yet. Click{" "}
+              <span className="font-semibold text-slate-700">Add center</span>{" "}
+              to publish the first location.
+            </p>
+          </div>
         ) : (
-          <ul className="divide-y divide-slate-200">
+          <ul className="divide-y divide-slate-100">
             {list.map((c) => (
               <li
                 key={c.id}
-                className="flex items-start justify-between gap-3 px-4 py-3"
+                className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70"
               >
+                <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-accent-200 bg-accent-50 text-accent-700">
+                  <MapPin className="h-4 w-4" />
+                </span>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold text-slate-900">
                     {c.name}
@@ -191,7 +214,7 @@ export function DotsCentersAdmin() {
                       </>
                     )}
                   </div>
-                  <div className="mt-0.5 text-xs text-slate-400">
+                  <div className="mt-1 font-mono text-[10px] uppercase tracking-wider text-slate-400">
                     {c.lat.toFixed(4)}, {c.lon.toFixed(4)}
                     {c.phone && <> · {c.phone}</>}
                     {c.hours && <> · {c.hours}</>}
@@ -202,6 +225,7 @@ export function DotsCentersAdmin() {
                     variant="ghost"
                     size="sm"
                     onClick={() => openEdit(c)}
+                    aria-label={`Edit ${c.name}`}
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -209,6 +233,7 @@ export function DotsCentersAdmin() {
                     variant="ghost"
                     size="sm"
                     onClick={() => remove(c)}
+                    aria-label={`Delete ${c.name}`}
                   >
                     <Trash2 className="h-4 w-4 text-red-600" />
                   </Button>
@@ -220,123 +245,131 @@ export function DotsCentersAdmin() {
       </Card>
 
       {form && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <Card className="max-h-[92vh] w-full max-w-3xl overflow-y-auto p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-base font-semibold text-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-950/60 p-4 backdrop-blur-sm">
+          <Card className="max-h-[92vh] w-full max-w-3xl overflow-y-auto p-0">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/95 px-5 py-3 backdrop-blur">
+              <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+                <MapPin className="h-3.5 w-3.5 text-accent-600" />
                 {form.id ? "Edit DOTS Center" : "Add DOTS Center"}
               </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setForm(null)}
+                aria-label="Close"
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Name *">
-                <Input
-                  value={form.name}
-                  onChange={(e) =>
-                    setForm({ ...form, name: e.target.value })
-                  }
-                  placeholder="Davao City Health Center"
-                />
-              </Field>
-              <Field label="Phone">
-                <Input
-                  value={form.phone}
-                  onChange={(e) =>
-                    setForm({ ...form, phone: e.target.value })
-                  }
-                  placeholder="+63 82 ..."
-                />
-              </Field>
-              <Field label="Address" full>
-                <Input
-                  value={form.address}
-                  onChange={(e) =>
-                    setForm({ ...form, address: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Barangay">
-                <Select
-                  value={form.barangay_psgc}
-                  onChange={(e) =>
-                    setForm({ ...form, barangay_psgc: e.target.value })
-                  }
-                >
-                  <option value="">— Select —</option>
-                  {barangays.map((b) => (
-                    <option key={b.psgc} value={String(b.psgc)}>
-                      {b.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Hours">
-                <Input
-                  value={form.hours}
-                  onChange={(e) =>
-                    setForm({ ...form, hours: e.target.value })
-                  }
-                  placeholder="Mon–Fri 8:00–17:00"
-                />
-              </Field>
-              <Field label="Services (comma-separated)" full>
-                <Textarea
-                  rows={2}
-                  value={form.services}
-                  onChange={(e) =>
-                    setForm({ ...form, services: e.target.value })
-                  }
-                  placeholder="DOTS, sputum AFB, IPT, contact tracing"
-                />
-              </Field>
-              <Field label="Latitude">
-                <Input
-                  type="number"
-                  step="0.0001"
-                  value={form.lat}
-                  onChange={(e) =>
-                    setForm({ ...form, lat: Number(e.target.value) })
-                  }
-                />
-              </Field>
-              <Field label="Longitude">
-                <Input
-                  type="number"
-                  step="0.0001"
-                  value={form.lon}
-                  onChange={(e) =>
-                    setForm({ ...form, lon: Number(e.target.value) })
-                  }
-                />
-              </Field>
-            </div>
+            <div className="p-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Name *">
+                  <Input
+                    value={form.name}
+                    onChange={(e) =>
+                      setForm({ ...form, name: e.target.value })
+                    }
+                    placeholder="Davao City Health Center"
+                  />
+                </Field>
+                <Field label="Phone">
+                  <Input
+                    value={form.phone}
+                    onChange={(e) =>
+                      setForm({ ...form, phone: e.target.value })
+                    }
+                    placeholder="+63 82 ..."
+                  />
+                </Field>
+                <Field label="Address" full>
+                  <Input
+                    value={form.address}
+                    onChange={(e) =>
+                      setForm({ ...form, address: e.target.value })
+                    }
+                  />
+                </Field>
+                <Field label="Barangay">
+                  <Select
+                    value={form.barangay_psgc}
+                    onChange={(e) =>
+                      setForm({ ...form, barangay_psgc: e.target.value })
+                    }
+                  >
+                    <option value="">— Select —</option>
+                    {barangays.map((b) => (
+                      <option key={b.psgc} value={String(b.psgc)}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Hours">
+                  <Input
+                    value={form.hours}
+                    onChange={(e) =>
+                      setForm({ ...form, hours: e.target.value })
+                    }
+                    placeholder="Mon–Fri 8:00–17:00"
+                  />
+                </Field>
+                <Field label="Services (comma-separated)" full>
+                  <Textarea
+                    rows={2}
+                    value={form.services}
+                    onChange={(e) =>
+                      setForm({ ...form, services: e.target.value })
+                    }
+                    placeholder="DOTS, sputum AFB, IPT, contact tracing"
+                  />
+                </Field>
+                <Field label="Latitude">
+                  <Input
+                    type="number"
+                    step="0.0001"
+                    value={form.lat}
+                    onChange={(e) =>
+                      setForm({ ...form, lat: Number(e.target.value) })
+                    }
+                  />
+                </Field>
+                <Field label="Longitude">
+                  <Input
+                    type="number"
+                    step="0.0001"
+                    value={form.lon}
+                    onChange={(e) =>
+                      setForm({ ...form, lon: Number(e.target.value) })
+                    }
+                  />
+                </Field>
+              </div>
 
-            <div className="mt-3 overflow-hidden rounded-md border border-slate-200">
-              <MapPicker
-                lat={form.lat}
-                lon={form.lon}
-                onPick={(lat, lon) => setForm({ ...form, lat, lon })}
-              />
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              Click anywhere on the map to set the center's location.
-            </p>
+              <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 shadow-soft">
+                <MapPicker
+                  lat={form.lat}
+                  lon={form.lon}
+                  onPick={(lat, lon) => setForm({ ...form, lat, lon })}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-slate-500">
+                Click anywhere on the map to set the center's location.
+              </p>
 
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <Button variant="secondary" onClick={() => setForm(null)}>
-                Cancel
-              </Button>
-              <Button onClick={save} disabled={saving}>
-                {saving ? <Spinner className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-                {form.id ? "Save changes" : "Add center"}
-              </Button>
+              <div className="mt-5 flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+                <Button variant="secondary" onClick={() => setForm(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={save} disabled={saving}>
+                  {saving ? (
+                    <Spinner className="h-4 w-4 text-white" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  {form.id ? "Save changes" : "Add center"}
+                </Button>
+              </div>
             </div>
           </Card>
         </div>
@@ -361,10 +394,7 @@ function MapPicker({
       zoom={12}
       style={{ height: 280, width: "100%" }}
     >
-      <TileLayer
-        attribution="&copy; OpenStreetMap"
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      <OpenFreeMapLayer styleName="positron" />
       <Marker position={[lat, lon]} icon={PIN_ICON} />
       <ClickHandler onPick={onPick} />
     </MapContainer>

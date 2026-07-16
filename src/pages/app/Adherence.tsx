@@ -1,6 +1,21 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  Check,
+  Clock,
+  Frown,
+  ListChecks,
+  Lock,
+  MessageSquareText,
+  Pill,
+  Smile,
+  Sparkles,
+  Star,
+  Sun,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   Badge,
   Button,
@@ -61,6 +76,40 @@ const STATUS_TONE = {
   late: "warning",
   missed: "danger",
 } as const;
+
+const MICRO_LABEL =
+  "font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500";
+
+// Kid-friendly status treatment for the patient ("nursery") view.
+const KID_STATUS: Record<
+  Log["status"],
+  { label: string; icon: LucideIcon; chip: string; bubble: string }
+> = {
+  taken: {
+    label: "Yay! Taken",
+    icon: Smile,
+    chip: "border-emerald-200 bg-emerald-100 text-emerald-700",
+    bubble: "border-emerald-200 bg-emerald-50 text-emerald-600",
+  },
+  scheduled: {
+    label: "Coming up",
+    icon: Clock,
+    chip: "border-sky-200 bg-sky-100 text-sky-700",
+    bubble: "border-sky-200 bg-sky-50 text-sky-600",
+  },
+  late: {
+    label: "A bit late",
+    icon: Clock,
+    chip: "border-amber-200 bg-amber-100 text-amber-800",
+    bubble: "border-amber-200 bg-amber-50 text-amber-600",
+  },
+  missed: {
+    label: "Oops, missed",
+    icon: Frown,
+    chip: "border-rose-200 bg-rose-100 text-rose-700",
+    bubble: "border-rose-200 bg-rose-50 text-rose-600",
+  },
+};
 
 export function Adherence() {
   const { profile } = useAuth();
@@ -227,33 +276,41 @@ export function Adherence() {
     }
   }
 
+  // ── Patient ("nursery") experience ─────────────────────────────────
+  if (isPatient) {
+    return (
+      <PatientAdherence
+        name={profile?.full_name ?? null}
+        schedules={schedules}
+        logs={logs}
+        loading={loading}
+        onMarkTaken={markTaken}
+      />
+    );
+  }
+
+  // ── Staff console experience ───────────────────────────────────────
   return (
     <>
       <PageHeader
         title="Medication Adherence"
-        subtitle={
-          isPatient
-            ? "Your TB medication schedule and dose log."
-            : "Schedules, dose logs, and SMS notifications for TB patients."
-        }
+        subtitle="Schedules, dose logs, and SMS notifications for TB patients."
         actions={
-          !isPatient && (
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => setShowForm((v) => !v)}
-              >
-                {showForm ? "Close" : "Add schedule"}
-              </Button>
-              <Button onClick={sendReminders} disabled={sending}>
-                {sending ? "Sending…" : "Send SMS reminders"}
-              </Button>
-            </div>
-          )
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setShowForm((v) => !v)}
+            >
+              {showForm ? "Close" : "Add schedule"}
+            </Button>
+            <Button onClick={sendReminders} disabled={sending}>
+              {sending ? "Sending…" : "Send SMS reminders"}
+            </Button>
+          </div>
         }
       />
 
-      {showForm && !isPatient && (
+      {showForm && (
         <NewScheduleForm
           onClose={() => setShowForm(false)}
           onCreated={() => {
@@ -263,10 +320,27 @@ export function Adherence() {
         />
       )}
 
+      <AdherenceStatRow
+        loading={loading}
+        activeSchedules={schedules.length}
+        takenCount={logs.filter((l) => l.status === "taken").length}
+        loggedCount={logs.length}
+        flaggedPatients={flags.length}
+        smsCount={smsRows.length}
+      />
+
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="p-0">
-          <div className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900">
-            {isPatient ? "Your schedules" : "Active schedules"}
+        <Card className="overflow-hidden p-0">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+            <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+              <CalendarClock className="h-3.5 w-3.5 text-brand-600" />
+              Active schedules
+            </div>
+            {!loading && schedules.length > 0 && (
+              <span className="font-mono text-[10px] tabular-nums text-slate-500">
+                {schedules.length}
+              </span>
+            )}
           </div>
           {loading ? (
             <div className="flex h-32 items-center justify-center">
@@ -277,20 +351,23 @@ export function Adherence() {
               No schedules yet.
             </p>
           ) : (
-            <ul className="divide-y divide-slate-200">
+            <ul className="divide-y divide-slate-100">
               {schedules.map((s) => (
-                <li key={s.id} className="px-4 py-3">
-                  <div className="flex items-center justify-between">
-                    <div>
+                <li
+                  key={s.id}
+                  className="px-4 py-3 transition-colors hover:bg-slate-50/70"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
                       <div className="font-medium text-slate-900">
                         {s.medication}
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="mt-0.5 text-xs text-slate-500">
                         {s.patient?.full_name ?? s.patient?.email ?? "—"} ·{" "}
                         {s.dose} × {s.times_per_day}/day
                       </div>
                     </div>
-                    <div className="text-xs text-slate-500">
+                    <div className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-slate-500">
                       {formatDate(s.start_date)} → {formatDate(s.end_date)}
                     </div>
                   </div>
@@ -300,9 +377,17 @@ export function Adherence() {
           )}
         </Card>
 
-        <Card className="p-0">
-          <div className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900">
-            {isPatient ? "Recent doses" : "Recent dose logs (all patients)"}
+        <Card className="overflow-hidden p-0">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+            <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+              <ListChecks className="h-3.5 w-3.5 text-accent-600" />
+              Recent dose logs · all patients
+            </div>
+            {!loading && logs.length > 0 && (
+              <span className="font-mono text-[10px] tabular-nums text-slate-500">
+                {logs.length}
+              </span>
+            )}
           </div>
           {loading ? (
             <div className="flex h-32 items-center justify-center">
@@ -313,33 +398,24 @@ export function Adherence() {
               No dose logs yet.
             </p>
           ) : (
-            <ul className="max-h-[480px] divide-y divide-slate-200 overflow-y-auto">
+            <ul className="max-h-[480px] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
               {logs.map((l) => (
                 <li
                   key={l.id}
-                  className="flex items-center justify-between px-4 py-3"
+                  className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70"
                 >
-                  <div>
-                    <div className="text-sm font-medium text-slate-900">
-                      {!isPatient && (
-                        <span>{l.patient?.full_name ?? "—"} · </span>
-                      )}
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-slate-900">
+                      {l.patient?.full_name ?? "—"} ·{" "}
                       {formatDateTime(l.scheduled_at)}
                     </div>
-                    <div className="text-xs text-slate-500">
+                    <div className="mt-0.5 text-xs text-slate-500">
                       {l.taken_at
                         ? `Taken ${formatDateTime(l.taken_at)}`
                         : "Awaiting confirmation"}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge tone={STATUS_TONE[l.status]}>{l.status}</Badge>
-                    {isPatient && l.status !== "taken" && (
-                      <Button size="sm" onClick={() => markTaken(l.id)}>
-                        Mark taken
-                      </Button>
-                    )}
-                  </div>
+                  <Badge tone={STATUS_TONE[l.status]}>{l.status}</Badge>
                 </li>
               ))}
             </ul>
@@ -347,103 +423,437 @@ export function Adherence() {
         </Card>
       </div>
 
-      {!isPatient && (
-        <Card className="mt-4 p-0">
-          <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
-            <AlertTriangle className="h-4 w-4 text-amber-600" />
-            <span className="text-sm font-semibold text-slate-900">
-              Non-adherence flags
-            </span>
-            <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-              Last 14 days
-            </span>
+      <Card className="mt-4 overflow-hidden p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+          <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+            <AlertTriangle className="h-3.5 w-3.5 text-vigil-500" />
+            Non-adherence flags
           </div>
-          {loading ? (
-            <div className="flex h-20 items-center justify-center">
-              <Spinner />
-            </div>
-          ) : flags.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-slate-500">
-              No missed or late doses in the last 14 days.
-            </p>
-          ) : (
-            <ul className="divide-y divide-slate-200">
-              {flags.map((f) => (
-                <li key={f.patient_id} className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <div className="text-sm font-medium text-slate-900">{f.patient_name}</div>
-                    <div className="mt-0.5 flex gap-3 text-xs text-slate-500">
-                      {f.missed > 0 && (
-                        <span className="font-semibold text-red-600">{f.missed} missed</span>
-                      )}
-                      {f.late > 0 && (
-                        <span className="font-semibold text-amber-600">{f.late} late</span>
-                      )}
+          <span className="inline-flex items-center rounded-full border border-vigil-400/50 bg-vigil-300/20 px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-vigil-600">
+            Last 14 days
+          </span>
+        </div>
+        {loading ? (
+          <div className="flex h-20 items-center justify-center">
+            <Spinner />
+          </div>
+        ) : flags.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-slate-500">
+            No missed or late doses in the last 14 days.
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {flags.map((f) => (
+              <li
+                key={f.patient_id}
+                className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70"
+              >
+                <div>
+                  <div className="text-sm font-medium text-slate-900">{f.patient_name}</div>
+                  <div className="mt-0.5 flex gap-3 font-mono text-[10px] uppercase tracking-wider">
+                    {f.missed > 0 && (
+                      <span className="font-semibold text-red-600">{f.missed} missed</span>
+                    )}
+                    {f.late > 0 && (
+                      <span className="font-semibold text-amber-600">{f.late} late</span>
+                    )}
+                  </div>
+                </div>
+                <Badge tone={f.missed > 0 ? "danger" : "warning"}>
+                  {f.total} issue{f.total === 1 ? "" : "s"}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card className="mt-4 overflow-hidden p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+          <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+            <MessageSquareText className="h-3.5 w-3.5 text-brand-600" />
+            SMS outbox
+          </div>
+          {!loading && smsRows.length > 0 && (
+            <span className="font-mono text-[10px] tabular-nums text-slate-500">
+              {smsRows.length}
+            </span>
+          )}
+        </div>
+        {loading ? (
+          <div className="flex h-32 items-center justify-center">
+            <Spinner />
+          </div>
+        ) : smsRows.length === 0 ? (
+          <p className="px-4 py-8 text-center text-sm text-slate-500">
+            No SMS messages yet. Create a schedule and click &ldquo;Send SMS
+            reminders&rdquo; to queue messages.
+          </p>
+        ) : (
+          <ul className="max-h-[420px] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
+            {smsRows.map((s) => (
+              <li
+                key={s.id}
+                className="px-4 py-3 transition-colors hover:bg-slate-50/70"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-slate-900">
+                      {s.patient?.full_name ?? "—"} · {s.to_phone}
+                    </div>
+                    <div className="mt-0.5 line-clamp-2 text-xs text-slate-500">
+                      {s.body}
                     </div>
                   </div>
-                  <Badge tone={f.missed > 0 ? "danger" : "warning"}>
-                    {f.total} issue{f.total === 1 ? "" : "s"}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      )}
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <Badge
+                      tone={
+                        s.status === "sent" || s.status === "delivered"
+                          ? "success"
+                          : s.status === "failed"
+                            ? "danger"
+                            : s.status === "mocked"
+                              ? "warning"
+                              : "info"
+                      }
+                    >
+                      {s.status}
+                    </Badge>
+                    <span className="font-mono text-[9px] uppercase tracking-wider text-slate-400">
+                      {formatDateTime(s.created_at)}
+                    </span>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </>
+  );
+}
 
-      {!isPatient && (
-        <Card className="mt-4 p-0">
-          <div className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900">
-            SMS outbox
+function AdherenceStatRow({
+  loading,
+  activeSchedules,
+  takenCount,
+  loggedCount,
+  flaggedPatients,
+  smsCount,
+}: {
+  loading: boolean;
+  activeSchedules: number;
+  takenCount: number;
+  loggedCount: number;
+  flaggedPatients: number;
+  smsCount: number;
+}) {
+  if (loading) {
+    return (
+      <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-[104px] animate-pulse rounded-2xl border border-slate-200/80 bg-slate-100"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const adherencePct =
+    loggedCount > 0 ? Math.round((takenCount / loggedCount) * 100) : null;
+
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <StatTile
+        icon={<CalendarClock className="h-4.5 w-4.5" />}
+        iconClass="bg-brand-50 text-brand-700"
+        accentClass="bg-brand-500"
+        label="Active schedules"
+        value={activeSchedules.toLocaleString()}
+      />
+      <StatTile
+        icon={<ListChecks className="h-4.5 w-4.5" />}
+        iconClass="bg-accent-50 text-accent-600"
+        accentClass="bg-accent-500"
+        label="Dose adherence"
+        value={adherencePct === null ? "—" : `${adherencePct}%`}
+        footer={
+          <span className="text-slate-500">
+            {takenCount} of {loggedCount} recent logs
+          </span>
+        }
+      />
+      <StatTile
+        icon={<AlertTriangle className="h-4.5 w-4.5" />}
+        iconClass="bg-vigil-300/20 text-vigil-600"
+        accentClass="bg-vigil-500"
+        label="Flagged patients"
+        value={flaggedPatients.toLocaleString()}
+        footer={<span className="text-slate-500">Last 14 days</span>}
+      />
+      <StatTile
+        icon={<MessageSquareText className="h-4.5 w-4.5" />}
+        iconClass="bg-sky-50 text-sky-600"
+        accentClass="bg-sky-500"
+        label="SMS outbox"
+        value={smsCount.toLocaleString()}
+        footer={<span className="text-slate-500">Recent messages</span>}
+      />
+    </div>
+  );
+}
+
+function StatTile({
+  icon,
+  iconClass,
+  accentClass,
+  label,
+  value,
+  footer,
+}: {
+  icon: React.ReactNode;
+  iconClass: string;
+  accentClass: string;
+  label: string;
+  value: string;
+  footer?: React.ReactNode;
+}) {
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-4 shadow-soft transition-shadow hover:shadow-lift">
+      <span aria-hidden className={"absolute inset-y-0 left-0 w-1 " + accentClass} />
+      <span className={"inline-flex rounded-xl p-2 " + iconClass}>{icon}</span>
+      <div className="mt-2.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        {label}
+      </div>
+      <div className="font-display mt-0.5 text-2xl font-extrabold tracking-tight text-slate-900">
+        {value}
+      </div>
+      {footer && <div className="mt-1 text-xs">{footer}</div>}
+    </div>
+  );
+}
+
+/**
+ * Patient view — a friendly, nursery-style "medicine buddy" experience:
+ * pastel cards, stars for progress, and one big cheerful action per dose.
+ */
+function PatientAdherence({
+  name,
+  schedules,
+  logs,
+  loading,
+  onMarkTaken,
+}: {
+  name: string | null;
+  schedules: Schedule[];
+  logs: Log[];
+  loading: boolean;
+  onMarkTaken: (logId: string) => void;
+}) {
+  const firstName = (name ?? "").trim().split(/\s+/)[0] || "friend";
+  const taken = logs.filter((l) => l.status === "taken").length;
+  const done = logs.filter((l) => l.status !== "scheduled").length;
+  const stars = done === 0 ? 0 : Math.round((taken / done) * 5);
+
+  // Real-time clock so "I took it!" unlocks the moment a dose becomes due —
+  // patients can only confirm today's doses, never in advance.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      {/* ── Hero — big, warm welcome ─────────────────────────────────── */}
+      <section className="relative overflow-hidden rounded-3xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-100 via-sky-50 to-amber-100 p-6 sm:p-8">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-amber-200/50 blur-2xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-12 left-1/3 h-36 w-36 rounded-full bg-sky-200/50 blur-2xl"
+        />
+        <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-xs font-bold text-emerald-700 shadow-soft">
+              <Sun className="h-3.5 w-3.5 text-amber-500" />
+              Your medicine buddy
+            </span>
+            <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+              Hi, {firstName}!
+            </h1>
+            <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-700 sm:text-base">
+              Taking your medicine every day makes you stronger and stronger.
+              You can do it!
+            </p>
+          </div>
+          <div className="flex items-center gap-4 rounded-2xl border-2 border-white/70 bg-white/70 p-4 shadow-soft backdrop-blur-sm">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-500 text-white">
+              <Sparkles className="h-6 w-6" />
+            </span>
+            <div>
+              <div className="font-display text-3xl font-extrabold leading-none tracking-tight text-slate-900">
+                {taken}
+              </div>
+              <div className="mt-1 text-xs font-bold text-slate-600">
+                {taken === 1 ? "dose taken" : "doses taken"} — great job!
+              </div>
+              <div
+                className="mt-1.5 flex gap-0.5"
+                role="img"
+                aria-label={`${stars} of 5 stars`}
+              >
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <Star
+                    key={i}
+                    aria-hidden
+                    className={
+                      "h-4 w-4 " +
+                      (i < stars
+                        ? "fill-amber-400 text-amber-400"
+                        : "text-slate-300")
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* ── My medicines ───────────────────────────────────────────── */}
+        <section className="overflow-hidden rounded-3xl border-2 border-sky-200 bg-white shadow-soft">
+          <div className="flex items-center gap-2.5 border-b-2 border-sky-100 bg-sky-50/70 px-5 py-4">
+            <span className="grid h-9 w-9 place-items-center rounded-2xl bg-sky-500 text-white">
+              <Pill className="h-5 w-5" />
+            </span>
+            <h2 className="font-display text-lg font-extrabold tracking-tight text-slate-900">
+              My medicines
+            </h2>
           </div>
           {loading ? (
             <div className="flex h-32 items-center justify-center">
               <Spinner />
             </div>
-          ) : smsRows.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-slate-500">
-              No SMS messages yet. Create a schedule and click &ldquo;Send SMS
-              reminders&rdquo; to queue messages.
+          ) : schedules.length === 0 ? (
+            <p className="px-5 py-10 text-center text-sm text-slate-500">
+              No medicines listed yet. Your health worker will add them soon!
             </p>
           ) : (
-            <ul className="max-h-[420px] divide-y divide-slate-200 overflow-y-auto">
-              {smsRows.map((s) => (
-                <li key={s.id} className="px-4 py-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-medium text-slate-900">
-                        {s.patient?.full_name ?? "—"} · {s.to_phone}
-                      </div>
-                      <div className="mt-0.5 line-clamp-2 text-xs text-slate-500">
-                        {s.body}
-                      </div>
+            <ul className="divide-y-2 divide-sky-50">
+              {schedules.map((s) => (
+                <li key={s.id} className="flex items-start gap-3 px-5 py-4">
+                  <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-sky-100 text-sky-600">
+                    <Pill className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="font-bold text-slate-900">
+                      {s.medication}
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <Badge
-                        tone={
-                          s.status === "sent" || s.status === "delivered"
-                            ? "success"
-                            : s.status === "failed"
-                              ? "danger"
-                              : s.status === "mocked"
-                                ? "warning"
-                                : "info"
-                        }
-                      >
-                        {s.status}
-                      </Badge>
-                      <span className="text-[10px] text-slate-400">
-                        {formatDateTime(s.created_at)}
-                      </span>
+                    <div className="mt-0.5 text-xs font-semibold text-slate-500">
+                      {s.dose} · {s.times_per_day}{" "}
+                      {s.times_per_day === 1 ? "time" : "times"} a day
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      {formatDate(s.start_date)} → {formatDate(s.end_date)}
                     </div>
                   </div>
                 </li>
               ))}
             </ul>
           )}
-        </Card>
-      )}
-    </>
+        </section>
+
+        {/* ── My doses ───────────────────────────────────────────────── */}
+        <section className="overflow-hidden rounded-3xl border-2 border-pink-200 bg-white shadow-soft">
+          <div className="flex items-center gap-2.5 border-b-2 border-pink-100 bg-pink-50/70 px-5 py-4">
+            <span className="grid h-9 w-9 place-items-center rounded-2xl bg-pink-500 text-white">
+              <Star className="h-5 w-5" />
+            </span>
+            <h2 className="font-display text-lg font-extrabold tracking-tight text-slate-900">
+              My doses
+            </h2>
+          </div>
+          {loading ? (
+            <div className="flex h-32 items-center justify-center">
+              <Spinner />
+            </div>
+          ) : logs.length === 0 ? (
+            <p className="px-5 py-10 text-center text-sm text-slate-500">
+              No doses to show yet. Check back soon!
+            </p>
+          ) : (
+            <ul className="max-h-[480px] divide-y-2 divide-pink-50 overflow-y-auto overscroll-contain">
+              {logs.map((l) => {
+                const k = KID_STATUS[l.status];
+                const StatusIcon = k.icon;
+                const sched = new Date(l.scheduled_at);
+                const isToday = sched.toDateString() === now.toDateString();
+                const isDue = sched.getTime() <= now.getTime();
+                // Confirmable only once the dose is due, and only on its
+                // actual day — no confirming in advance, no back-filling.
+                const canTake = l.status !== "taken" && isToday && isDue;
+                const isLocked = l.status !== "taken" && !isDue;
+                return (
+                  <li
+                    key={l.id}
+                    className="flex items-center gap-3 px-5 py-4"
+                  >
+                    <span
+                      className={
+                        "grid h-10 w-10 shrink-0 place-items-center rounded-full border-2 " +
+                        k.bubble
+                      }
+                    >
+                      <StatusIcon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-slate-900">
+                        {formatDateTime(l.scheduled_at)}
+                      </div>
+                      <span
+                        className={
+                          "mt-1 inline-flex items-center rounded-full border-2 px-2 py-0.5 text-[11px] font-bold " +
+                          k.chip
+                        }
+                      >
+                        {k.label}
+                      </span>
+                    </div>
+                    {canTake && (
+                      <button
+                        type="button"
+                        onClick={() => onMarkTaken(l.id)}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500 px-4 py-2 text-sm font-bold text-white shadow-soft transition hover:bg-emerald-600 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
+                      >
+                        <Check className="h-4 w-4" />
+                        I took it!
+                      </button>
+                    )}
+                    {isLocked && (
+                      <button
+                        type="button"
+                        disabled
+                        title={`You can tap this on ${formatDateTime(l.scheduled_at)}`}
+                        className="inline-flex shrink-0 cursor-not-allowed items-center gap-1.5 rounded-full border-2 border-slate-200 bg-slate-100 px-4 py-2 text-sm font-bold text-slate-400"
+                      >
+                        <Lock className="h-4 w-4" />
+                        {isToday ? "Not yet!" : "Not today"}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
+    </div>
   );
 }
 
@@ -534,8 +944,12 @@ function NewScheduleForm({
   }
 
   return (
-    <Card className="mb-6 p-5">
-      <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-3">
+    <Card className="mb-6 overflow-hidden p-0">
+      <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+        <CalendarClock className="h-3.5 w-3.5 text-brand-600" />
+        <span className={MICRO_LABEL}>New adherence schedule</span>
+      </div>
+      <form onSubmit={onSubmit} className="grid gap-3 p-5 sm:grid-cols-3">
         <div className="space-y-1.5 sm:col-span-3">
           <Label htmlFor="patient">Patient</Label>
           <Select

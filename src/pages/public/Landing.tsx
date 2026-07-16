@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
-  Shield,
   MapPin,
   Users,
   Activity,
@@ -13,324 +12,466 @@ import {
   MessageSquare,
   CheckCircle2,
 } from "lucide-react";
-import { motion } from "motion/react";
-import { Badge, Button, MotionCard } from "../../components/ui";
+import { Button } from "../../components/ui";
+import { PublicCaseMap } from "../../components/PublicCaseMap";
 import heroImage from "../../assets/davao_city_midnight_blue_20260528_090346.png";
 import ctaImage from "../../assets/dots1.jpg";
 
-const FEATURES = [
+/* ── Capabilities — labelled by module, not a numbered sequence ──────── */
+const CAPABILITIES = [
   {
+    tag: "MAP",
     icon: MapPin,
     title: "GIS Mapping & Hotspots",
-    body: "Real-time geospatial visualization of TB cases and identification of high-risk areas for targeted interventions.",
+    body: "Near real-time geospatial view of TB cases with spatial detection of high-risk barangays for targeted response.",
   },
   {
+    tag: "CASES",
     icon: Users,
     title: "Case Management",
-    body: "Streamlined patient registration, treatment tracking, and outcome monitoring across all DOTS facilities.",
+    body: "Patient registration, treatment tracking, and outcome monitoring across every DOTS facility in the city.",
   },
   {
+    tag: "ALERTS",
     icon: Bell,
-    title: "Smart Alerts",
-    body: "Automated notifications for missed doses, treatment milestones, and outbreak detection via SMS.",
+    title: "Smart SMS Alerts",
+    body: "Automated notifications for missed doses, treatment milestones, and outbreak thresholds — over plain SMS.",
   },
   {
+    tag: "ADHERE",
     icon: Heart,
     title: "Treatment Adherence",
-    body: "Digital adherence monitoring with SMS reminders and visual progress tracking for patients.",
+    body: "Digital observation of the daily dose, with reminders and visual progress across the 6-month course.",
   },
   {
+    tag: "CDS",
     icon: Stethoscope,
     title: "Clinical Decision Support",
-    body: "Evidence-based treatment recommendations and drug interaction alerts for healthcare providers.",
+    body: "Evidence-based treatment guidance and drug-interaction checks at the point of care.",
   },
   {
+    tag: "DATA",
     icon: BarChart3,
     title: "Analytics & Reporting",
-    body: "Comprehensive dashboards and automated reports for program monitoring and evaluation.",
+    body: "Program dashboards and automated reports for monitoring, evaluation, and DOH submission.",
   },
 ];
 
 const RESIDENT_POINTS = [
   { icon: MapPin, text: "Find the nearest DOTS treatment center" },
   { icon: BookOpen, text: "Read health guides in your language" },
-  { icon: MessageSquare, text: "Ask questions to the AI health assistant" },
+  { icon: MessageSquare, text: "Ask the AI health assistant, any time" },
 ];
 
 const WORKER_POINTS = [
-  { icon: Activity, text: "Monitor TB cases across all barangays" },
+  { icon: Activity, text: "Monitor TB cases across every barangay" },
   { icon: MapPin, text: "Detect hotspots with spatial analysis" },
-  { icon: Bell, text: "Receive automated alerts when thresholds are crossed" },
+  { icon: Bell, text: "Get alerted the moment a threshold is crossed" },
+];
+
+const WHY_IT_MATTERS = [
+  "Runs on low-cost infrastructure",
+  "Minimal training for health workers",
+  "Fully usable by residents without an account",
+  "Fits alongside existing paper workflows",
 ];
 
 export function Landing() {
   return (
     <>
-      {/* ─── Hero ──────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden border-b border-slate-200 min-h-[600px] sm:min-h-[700px] lg:min-h-[750px]">
-        <div className="absolute inset-0">
-          <img
-            src={heroImage}
-            alt="Davao City"
-            className="h-full w-full object-cover object-center"
-          />
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-900/85 via-slate-900/75 to-brand-900/85" />
+      {/* ─── Hero — full-width live case map with barangay filter ──── */}
+      <section className="relative overflow-hidden bg-brand-950 text-white">
+        {/* midnight-blue city photo + monitoring grid + emerald glow */}
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <img src={heroImage} alt="" className="h-full w-full object-cover opacity-30" />
+          <div className="absolute inset-0 bg-gradient-to-b from-brand-950/70 via-brand-950/40 to-brand-950" />
         </div>
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-vigil-grid" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -left-40 top-[-10%] h-[36rem] w-[36rem] rounded-full bg-accent-500/15 blur-[120px]"
+        />
 
-        <div className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8 lg:py-40">
-          <div className="mx-auto max-w-3xl text-center">
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-              className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-medium text-white backdrop-blur-sm"
+        <div className="relative mx-auto max-w-screen-2xl px-3 py-6 sm:px-5 sm:py-8">
+          <PublicCaseMap className="h-[26rem] min-h-[24rem] sm:h-[32rem] md:h-[70vh] lg:h-[78vh] lg:min-h-[30rem]" />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 px-1">
+            <p className="flex items-center gap-2 text-xs text-slate-400">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-400" />
+              Live TB case map of Davao City — counts are grouped per barangay, so no
+              patient is ever identifiable.
+            </p>
+            <Link
+              to="/dots-locator"
+              className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-accent-400 transition hover:text-accent-300"
             >
-              <Shield className="h-4 w-4" />
-              Davao City Health Office
-            </motion.div>
-            <motion.h1
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
-              className="font-display mb-6 text-5xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl"
-            >
-              BANTAY-TB
-            </motion.h1>
-            <motion.p
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
-              className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed text-slate-100 sm:text-xl"
-            >
-              Comprehensive tuberculosis surveillance and management system for Davao City.
-              Empowering healthcare workers and communities to end TB.
-            </motion.p>
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.35, ease: "easeOut" }}
-              className="flex flex-wrap items-center justify-center gap-4"
-            >
-              <Link to="/login">
-                <Button size="lg" className="gap-2 text-base">
-                  Access System
-                  <ArrowRight className="h-5 w-5" />
-                </Button>
-              </Link>
-              <Link to="/about">
-                <Button size="lg" variant="secondary" className="border-white/20 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20">
-                  Learn More
-                </Button>
-              </Link>
-            </motion.div>
+              Find free treatment near you
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* ─── Features Grid ─────────────────────────────────────────── */}
-      <section className="border-b border-slate-200 bg-white py-16 sm:py-20">
+      {/* ─── Two doors — the primary fork, elevated cards ─────────── */}
+      <section className="border-b border-slate-200 bg-white py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-            className="mb-12 text-center"
-          >
-            <Badge tone="info" className="mb-3">
-              Platform capabilities
-            </Badge>
-            <h2 className="font-display mb-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-              Comprehensive TB Management
-            </h2>
-            <p className="mx-auto max-w-2xl text-base text-slate-600">
-              Integrated tools for surveillance, case management, and community health
+          <div className="max-w-2xl">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600">
+              Start here
             </p>
-          </motion.div>
+            <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+              Two ways to use BANTAY-TB
+            </h2>
+            <p className="mt-3 text-base leading-relaxed text-slate-600">
+              Residents can find care and answers without an account. Health
+              workers sign in for the tools they use every day.
+            </p>
+          </div>
 
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f, i) => (
-              <MotionCard key={f.title} delay={0.06 * i} className="p-6">
-                <div className="mb-4 grid h-12 w-12 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-soft">
-                  <f.icon className="h-6 w-6" />
+          <div className="mt-12 grid gap-5 lg:grid-cols-2">
+            {/* residents */}
+            <div className="group relative flex flex-col overflow-hidden rounded-3xl border border-accent-200/70 bg-gradient-to-br from-white via-accent-50/50 to-accent-50 p-7 shadow-soft transition-shadow duration-300 hover:shadow-lift sm:p-9">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent-100/80 blur-3xl transition-transform duration-500 group-hover:scale-125"
+              />
+              <div className="relative flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="grid h-12 w-12 place-items-center rounded-2xl bg-accent-600 text-white shadow-soft">
+                    <Heart className="h-6 w-6" />
+                  </div>
+                  <span className="rounded-full bg-accent-100 px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-accent-700">
+                    No account needed
+                  </span>
                 </div>
-                <h3 className="mb-2 text-base font-semibold text-slate-900">
-                  {f.title}
+                <h3 className="font-display mt-5 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                  Davao City residents
                 </h3>
-                <p className="text-sm leading-relaxed text-slate-600">
-                  {f.body}
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  Find treatment, learn about TB, and get answers — all without signing in.
                 </p>
-              </MotionCard>
+                <ul className="mt-6 space-y-2.5">
+                  {RESIDENT_POINTS.map((p) => (
+                    <li
+                      key={p.text}
+                      className="flex items-center gap-3 rounded-xl border border-accent-100 bg-white/80 px-3.5 py-2.5 backdrop-blur-sm"
+                    >
+                      <p.icon className="h-4 w-4 shrink-0 text-accent-600" />
+                      <span className="text-sm leading-relaxed text-slate-700">{p.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="relative mt-8">
+                <Link to="/dots-locator">
+                  <Button variant="accent" className="w-full justify-center gap-2 sm:w-auto">
+                    Find a DOTS center
+                    <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            {/* workers */}
+            <div className="group relative flex flex-col overflow-hidden rounded-3xl border border-brand-900 bg-brand-950 p-7 text-white shadow-soft transition-shadow duration-300 hover:shadow-lift sm:p-9">
+              <div aria-hidden className="pointer-events-none absolute inset-0 bg-vigil-grid opacity-60" />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent-500/10 blur-3xl transition-transform duration-500 group-hover:scale-125"
+              />
+              <div className="relative flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10 text-accent-400 ring-1 ring-white/15">
+                    <Activity className="h-6 w-6" />
+                  </div>
+                  <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-brand-200">
+                    Account required
+                  </span>
+                </div>
+                <h3 className="font-display mt-5 text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                  Health workers
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-300">
+                  Operational tools for TB coordinators, barangay admins, and frontline workers.
+                </p>
+                <ul className="mt-6 space-y-2.5">
+                  {WORKER_POINTS.map((p) => (
+                    <li
+                      key={p.text}
+                      className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5"
+                    >
+                      <p.icon className="h-4 w-4 shrink-0 text-accent-400" />
+                      <span className="text-sm leading-relaxed text-slate-200">{p.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="relative mt-8 flex flex-wrap gap-3">
+                <Link to="/login">
+                  <Button className="gap-2">
+                    Sign in
+                    <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+                  </Button>
+                </Link>
+                <Link to="/register">
+                  <Button
+                    variant="secondary"
+                    className="border-white/15 bg-white/5 text-white hover:border-white/25 hover:bg-white/10"
+                  >
+                    Request an account
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── How it works — plain numbered steps ───────────────────── */}
+      <section className="border-b border-slate-200 bg-slate-50 py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="max-w-2xl">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600">
+              How it works
+            </p>
+            <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+              From first visit to a completed course
+            </h2>
+            <p className="mt-3 text-base leading-relaxed text-slate-600">
+              Four steps, free of charge, from screening to a documented cure.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              {
+                step: "01",
+                title: "Get screened",
+                body: "Visit any DOTS center in Davao City for a free TB diagnosis — no appointment needed.",
+              },
+              {
+                step: "02",
+                title: "Start treatment",
+                body: "Begin the free 6-month medication course, dispensed at your chosen facility.",
+              },
+              {
+                step: "03",
+                title: "Daily observation",
+                body: "A health worker confirms every dose in person, the core of the DOTS protocol.",
+              },
+              {
+                step: "04",
+                title: "Complete the course",
+                body: "Finish all 6 months and get documented as cured in the city's TB registry.",
+              },
+            ].map((s, i, steps) => (
+              <div
+                key={s.step}
+                className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-lift"
+              >
+                <div className="flex items-center justify-between">
+                  <span
+                    className={
+                      "grid h-10 w-10 place-items-center rounded-xl font-display text-sm font-extrabold " +
+                      (i === steps.length - 1
+                        ? "bg-accent-600 text-white"
+                        : "bg-brand-950 text-white")
+                    }
+                  >
+                    {s.step}
+                  </span>
+                  {i === steps.length - 1 ? (
+                    <CheckCircle2 className="h-4 w-4 text-accent-500" />
+                  ) : (
+                    <ArrowRight className="h-4 w-4 text-slate-300 transition-all duration-300 group-hover:translate-x-1 group-hover:text-brand-600" />
+                  )}
+                </div>
+                <h3 className="font-display mt-4 text-lg font-bold tracking-tight text-slate-900">
+                  {s.title}
+                </h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{s.body}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ─── Who is this for? ──────────────────────────────────────── */}
-      <section className="border-b border-slate-200 bg-slate-50 bg-grid py-16 sm:py-20">
+      {/* ─── Capabilities — bento, GIS mapping as the flagship tile ── */}
+      <section className="border-b border-slate-200 bg-white py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-            className="mb-10 text-center"
+          <div
+            className="max-w-2xl"
           >
-            <h2 className="font-display text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-              Built for two audiences
-            </h2>
-            <p className="mt-3 mx-auto max-w-2xl text-base text-slate-600">
-              BANTAY-TB serves both the public and health professionals with purpose-built tools for each
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600">
+              What the platform does
             </p>
-          </motion.div>
+            <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+              Six modules, built around one goal
+            </h2>
+            <p className="mt-3 text-base leading-relaxed text-slate-600">
+              From detecting a hotspot to logging the final dose of a six-month course.
+            </p>
+          </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <MotionCard className="p-6 sm:p-8">
-              <Badge tone="accent" className="mb-4">
-                No account required
-              </Badge>
-              <h3 className="font-display text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-                For Davao City Residents
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                Access TB information, find treatment facilities, and get health guidance — all without signing in.
-              </p>
-              <ul className="mt-5 space-y-3">
-                {RESIDENT_POINTS.map((p) => (
-                  <li key={p.text} className="flex items-start gap-3">
-                    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-50 text-accent-600">
-                      <p.icon className="h-4 w-4" />
-                    </div>
-                    <span className="pt-1 text-sm leading-relaxed text-slate-700">{p.text}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-6">
-                <Link to="/dots-locator">
-                  <Button variant="accent" className="gap-2">
-                    Find a DOTS Center
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            </MotionCard>
-
-            <MotionCard delay={0.1} className="p-6 sm:p-8">
-              <Badge tone="info" className="mb-4">
-                Account required
-              </Badge>
-              <h3 className="font-display text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-                For Health Workers
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                Operational tools for TB coordinators, barangay admins, and frontline health workers.
-              </p>
-              <ul className="mt-5 space-y-3">
-                {WORKER_POINTS.map((p) => (
-                  <li key={p.text} className="flex items-start gap-3">
-                    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
-                      <p.icon className="h-4 w-4" />
-                    </div>
-                    <span className="pt-1 text-sm leading-relaxed text-slate-700">{p.text}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-6">
-                <Link to="/login">
-                  <Button className="gap-2">
-                    Sign in
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            </MotionCard>
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:grid-rows-[repeat(2,minmax(0,1fr))_auto]">
+            {CAPABILITIES.map((c, i) => {
+              const featured = i === 0;
+              return (
+                <div
+                  key={c.title}
+                  className={
+                    "group relative overflow-hidden border shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-lift " +
+                    (featured
+                      ? "rounded-3xl border-brand-900 bg-brand-950 p-7 text-white lg:col-span-2 lg:row-span-2 lg:p-9"
+                      : "rounded-2xl border-slate-200 bg-white p-6")
+                  }
+                >
+                  {featured && (
+                    <>
+                      <div aria-hidden className="pointer-events-none absolute inset-0 bg-vigil-grid opacity-60" />
+                      <div
+                        aria-hidden
+                        className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent-500/10 blur-3xl transition-transform duration-500 group-hover:scale-125"
+                      />
+                    </>
+                  )}
+                  <div className="relative flex items-start justify-between gap-3">
+                    <span
+                      className={
+                        "grid place-items-center transition-transform duration-300 group-hover:-translate-y-0.5 " +
+                        (featured
+                          ? "h-14 w-14 rounded-2xl bg-white/10 text-accent-400 ring-1 ring-white/15"
+                          : "h-11 w-11 rounded-xl bg-brand-950 text-white")
+                      }
+                    >
+                      <c.icon className={featured ? "h-7 w-7" : "h-5 w-5"} />
+                    </span>
+                    <span
+                      className={
+                        "rounded-full px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] " +
+                        (featured
+                          ? "border border-white/15 bg-white/10 text-brand-200"
+                          : "bg-slate-100 text-slate-500")
+                      }
+                    >
+                      {c.tag}
+                    </span>
+                  </div>
+                  <h3
+                    className={
+                      "relative font-display mt-4 font-bold tracking-tight " +
+                      (featured ? "text-2xl text-white lg:mt-8" : "text-lg text-slate-900")
+                    }
+                  >
+                    {c.title}
+                  </h3>
+                  <p
+                    className={
+                      "relative mt-1.5 leading-relaxed " +
+                      (featured ? "max-w-sm text-sm text-slate-300" : "text-sm text-slate-600")
+                    }
+                  >
+                    {c.body}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      {/* ─── Why BANTAY-TB ─────────────────────────────────────────── */}
-      <section className="border-b border-slate-200 bg-white py-16 sm:py-20">
+      {/* ─── Why it matters — 8,601 as the moment ──────────────────── */}
+      <section className="border-b border-slate-200 bg-white py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-10 lg:grid-cols-2 lg:gap-16 lg:items-center">
-            <motion.div
-              initial={{ opacity: 0, x: -16 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
+          <div className="grid gap-12 lg:grid-cols-2 lg:gap-16 lg:items-center">
+            <div
             >
-              <Badge tone="default" className="mb-3">
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600">
                 Why this matters
-              </Badge>
-              <h2 className="font-display text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+              </p>
+              <div className="mt-4 flex items-end gap-4">
+                <span className="font-display text-6xl font-black leading-none tracking-tight text-brand-950 sm:text-7xl">
+                  8,601
+                </span>
+                <span className="mb-1.5 font-mono text-xs uppercase leading-tight tracking-wider text-slate-500">
+                  TB cases in
+                  <br />
+                  Davao, 2024
+                </span>
+              </div>
+              <div className="mt-3 h-1 w-24 rounded-full bg-vigil-400" />
+
+              <h2 className="font-display mt-6 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                 TB is curable. The barrier is access.
               </h2>
-              <p className="mt-4 text-base leading-relaxed text-slate-600">
-                Davao City recorded <strong className="text-slate-900">8,601 TB cases</strong> in 2024.
-                The main barriers to treatment completion are awareness, proximity to care, and
-                follow-through on the 6-month DOTS protocol. BANTAY-TB addresses all three.
+              <p className="mt-3 text-base leading-relaxed text-slate-600">
+                The gap between diagnosis and a completed course comes down to three things:
+                awareness, proximity to care, and following through on the 6-month DOTS
+                protocol. BANTAY-TB is built to close all three.
               </p>
-              <ul className="mt-6 space-y-3">
-                {[
-                  "Designed for low-cost infrastructure",
-                  "Minimal training required for health workers",
-                  "Fully accessible to residents without an account",
-                  "Compatible with existing paper-based workflows",
-                ].map((text) => (
-                  <li key={text} className="flex items-center gap-3 text-sm text-slate-700">
-                    <CheckCircle2 className="h-5 w-5 shrink-0 text-accent-500" />
+              <div className="mt-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {WHY_IT_MATTERS.map((text) => (
+                  <div
+                    key={text}
+                    className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 shadow-soft transition-shadow duration-300 hover:shadow-lift"
+                  >
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-accent-500" />
                     {text}
-                  </li>
+                  </div>
                 ))}
-              </ul>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, x: 16 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
-              className="relative overflow-hidden rounded-2xl"
-            >
+              </div>
+            </div>
+
+            <div className="group relative overflow-hidden rounded-3xl border border-slate-200 shadow-lift">
               <img
                 src={ctaImage}
-                alt="DOTS center in Davao City"
-                className="h-full w-full object-cover object-top"
-                style={{ maxHeight: 400 }}
+                alt="A DOTS treatment center in Davao City"
+                className="h-full w-full object-cover object-top transition-transform duration-700 group-hover:scale-[1.03]"
+                style={{ maxHeight: 440 }}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-brand-900/40 to-transparent" />
-            </motion.div>
+              <div className="absolute inset-0 bg-gradient-to-t from-brand-950/70 via-brand-950/10 to-transparent" />
+              <div className="absolute bottom-4 left-4 right-4">
+                <div className="inline-flex flex-col rounded-xl border border-white/15 bg-brand-950/70 px-3.5 py-2.5 backdrop-blur">
+                  <span className="text-sm font-semibold text-white">
+                    A DOTS treatment center in Davao City
+                  </span>
+                  <span className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-slate-300">
+                    Directly Observed Treatment, Short-course
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* ─── CTA ───────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0">
-          <img
-            src={heroImage}
-            alt=""
-            className="h-full w-full object-cover object-center"
-          />
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-900/90 via-slate-900/85 to-brand-900/90" />
-        </div>
-
-        <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-40px" }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-            className="mx-auto max-w-3xl text-center"
+      <section className="relative overflow-hidden bg-brand-950">
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-vigil-grid" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-32 bottom-[-30%] h-[30rem] w-[30rem] rounded-full bg-accent-500/12 blur-[110px]"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -left-32 top-[-30%] h-[26rem] w-[26rem] rounded-full bg-brand-500/10 blur-[100px]"
+        />
+        <div className="relative mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 sm:py-24 lg:px-8">
+          <div
           >
-            <h2 className="font-display mb-4 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Need TB Treatment?
-            </h2>
-            <p className="mb-8 text-lg text-slate-200">
-              Find the nearest DOTS facility in Davao City. Free diagnostics and medication available.
+            <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-200 backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent-400" />
+              Free diagnostics &middot; free medication
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-4">
+            <h2 className="font-display mx-auto mt-4 max-w-2xl text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+              Need TB treatment? Care is closer than you think.
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-lg text-slate-300">
+              Find the nearest DOTS facility in Davao City and start the 6-month course.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Link to="/dots-locator">
-                <Button size="lg" className="gap-2 text-base">
-                  Find DOTS Centers
+                <Button variant="accent" size="lg" className="gap-2 text-base">
+                  Find DOTS centers
                   <ArrowRight className="h-5 w-5" />
                 </Button>
               </Link>
@@ -338,13 +479,13 @@ export function Landing() {
                 <Button
                   size="lg"
                   variant="secondary"
-                  className="border-white/20 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20"
+                  className="border-white/15 bg-white/5 text-white backdrop-blur-sm hover:border-white/25 hover:bg-white/10"
                 >
                   Learn about TB
                 </Button>
               </Link>
             </div>
-          </motion.div>
+          </div>
         </div>
       </section>
     </>

@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Database, Plus, Send, Trash2, User as UserIcon } from "lucide-react";
+import {
+  Bot,
+  Database,
+  History,
+  MessagesSquare,
+  Plus,
+  Send,
+  Trash2,
+  User as UserIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
-  Badge,
   Button,
   Card,
   PageHeader,
@@ -30,6 +38,9 @@ interface Session {
 
 // Roles that can access live surveillance data
 const DATA_ROLES = new Set(["health_worker", "barangay_admin", "tb_coordinator", "system_admin"]);
+
+const MICRO_LABEL =
+  "font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500";
 
 export function Chatbot() {
   const { profile } = useAuth();
@@ -319,7 +330,7 @@ export function Chatbot() {
       ];
 
   return (
-    <>
+    <div className="mx-auto flex h-full w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8">
       <PageHeader
         title="Multilingual Chatbot"
         subtitle={
@@ -340,63 +351,78 @@ export function Chatbot() {
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 lg:grid-cols-[260px_minmax(0,1fr)] lg:grid-rows-1">
         {/* History panel */}
-        <Card className="p-0">
-          <div className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900">
-            History
+        <Card className="flex min-h-0 flex-col overflow-hidden p-0">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+            <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+              <History className="h-3.5 w-3.5 text-brand-600" />
+              History
+            </div>
+            {history.length > 0 && (
+              <span className="font-mono text-[10px] tabular-nums text-slate-500">
+                {history.length}
+              </span>
+            )}
           </div>
           {history.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-slate-500">
-              No previous chats yet.
-            </p>
+            <div className="px-4 py-10 text-center">
+              <MessagesSquare className="mx-auto h-6 w-6 text-slate-300" />
+              <p className="mt-3 text-sm text-slate-500">
+                No previous chats yet.
+              </p>
+            </div>
           ) : (
-            <ul className="max-h-[480px] overflow-y-auto">
-              {history.map((s) => (
-                <li key={s.id} className="group relative">
-                  <button
-                    onClick={() => loadSession(s.id)}
-                    className={
-                      "block w-full px-4 py-2 pr-9 text-left text-sm transition " +
-                      (s.id === sessionId
-                        ? "bg-brand-50 text-brand-800"
-                        : "text-slate-700 hover:bg-slate-50")
-                    }
-                  >
-                    <div className="line-clamp-1 font-medium">{s.preview}</div>
-                    <div className="text-xs text-slate-500">
-                      {new Date(s.created_at).toLocaleString()}
-                    </div>
-                  </button>
-                  {/* Delete button — appears on hover */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteSession(s.id);
-                    }}
-                    disabled={deletingId === s.id}
-                    title="Delete this conversation"
-                    className={
-                      "absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 transition " +
-                      "text-slate-300 opacity-0 group-hover:opacity-100 " +
-                      "hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
-                    }
-                  >
-                    {deletingId === s.id ? (
-                      <Spinner className="h-3.5 w-3.5" />
-                    ) : (
-                      <Trash2 className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                </li>
-              ))}
+            <ul className="max-h-36 flex-1 divide-y divide-slate-100 overflow-y-auto lg:max-h-none">
+              {history.map((s) => {
+                const active = s.id === sessionId;
+                return (
+                  <li key={s.id} className="group relative">
+                    <button
+                      onClick={() => loadSession(s.id)}
+                      className={
+                        "block w-full border-l-2 px-4 py-2.5 pr-9 text-left text-sm transition " +
+                        (active
+                          ? "border-brand-600 bg-brand-50 text-brand-800"
+                          : "border-transparent text-slate-700 hover:bg-slate-50")
+                      }
+                    >
+                      <div className="line-clamp-1 font-medium">{s.preview}</div>
+                      <div className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-slate-400">
+                        {new Date(s.created_at).toLocaleString()}
+                      </div>
+                    </button>
+                    {/* Delete button — appears on hover */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteSession(s.id);
+                      }}
+                      disabled={deletingId === s.id}
+                      title="Delete this conversation"
+                      aria-label="Delete this conversation"
+                      className={
+                        "absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 transition " +
+                        "text-slate-300 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 " +
+                        "hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      }
+                    >
+                      {deletingId === s.id ? (
+                        <Spinner className="h-3.5 w-3.5" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>
 
         {/* Chat panel */}
-        <Card className="flex h-[560px] flex-col">
+        <Card className="flex min-h-0 flex-col overflow-hidden p-0">
           <div
             ref={scrollRef}
             className="flex-1 space-y-3 overflow-y-auto p-4"
@@ -408,12 +434,12 @@ export function Chatbot() {
                     ? "How can I help you today? Ask about your TB care:"
                     : "Ask about TB health topics or live case data:"}
                 </p>
-                <ul className="space-y-1.5">
+                <ul className="flex flex-wrap gap-1.5">
                   {quickReplies.map((q) => (
                     <li key={q}>
                       <button
                         type="button"
-                        className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-left text-xs text-slate-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+                        className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-left text-xs text-slate-700 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
                         onClick={() => setDraft(q)}
                       >
                         {q}
@@ -422,8 +448,8 @@ export function Chatbot() {
                   ))}
                 </ul>
                 {canAccessData && (
-                  <p className="flex items-center gap-1 text-xs text-slate-400">
-                    <Database className="h-3 w-3" />
+                  <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-400">
+                    <Database className="h-3 w-3 text-accent-600" />
                     Data queries pull live figures from the BANTAY-TB database.
                   </p>
                 )}
@@ -438,29 +464,34 @@ export function Chatbot() {
                 }
               >
                 {m.role === "assistant" && (
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-950 text-white">
                     <Bot className="h-4 w-4" />
                   </div>
                 )}
                 <div
                   className={
-                    "max-w-[78%] rounded-lg px-3 py-2 text-sm " +
+                    "max-w-[78%] px-3.5 py-2.5 text-sm shadow-soft " +
                     (m.role === "user"
-                      ? "bg-brand-600 text-white"
-                      : "bg-slate-100 text-slate-900")
+                      ? "rounded-2xl rounded-br-md bg-brand-600 text-white"
+                      : "rounded-2xl rounded-bl-md border border-slate-200/80 bg-white text-slate-900")
                   }
                 >
-                  <div className="whitespace-pre-line">{m.content}</div>
+                  <div className="whitespace-pre-line leading-relaxed">
+                    {m.content}
+                  </div>
                   {m.language && (
-                    <div className="mt-1.5">
-                      <Badge tone={m.role === "user" ? "default" : "info"}>
-                        {LOCALE_LABEL[m.language]}
-                      </Badge>
+                    <div
+                      className={
+                        "mt-1.5 font-mono text-[9px] font-semibold uppercase tracking-wider " +
+                        (m.role === "user" ? "text-brand-200" : "text-slate-400")
+                      }
+                    >
+                      {LOCALE_LABEL[m.language]}
                     </div>
                   )}
                 </div>
                 {m.role === "user" && (
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-slate-600">
                     <UserIcon className="h-4 w-4" />
                   </div>
                 )}
@@ -472,7 +503,7 @@ export function Chatbot() {
               </div>
             )}
           </div>
-          <div className="border-t border-slate-200 p-3">
+          <div className="border-t border-slate-200 bg-slate-50/60 p-3">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -484,6 +515,7 @@ export function Chatbot() {
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Type in English, Filipino, or Bisaya…"
+                aria-label="Message"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -492,14 +524,18 @@ export function Chatbot() {
                 }}
                 className="min-h-[44px]"
               />
-              <Button type="submit" disabled={sending || !draft.trim()}>
+              <Button
+                type="submit"
+                disabled={sending || !draft.trim()}
+                aria-label="Send message"
+              >
                 <Send className="h-4 w-4" />
               </Button>
             </form>
           </div>
         </Card>
       </div>
-    </>
+    </div>
   );
 }
 

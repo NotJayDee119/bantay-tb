@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
+  BarChart3,
   BookOpen,
   Bot,
   CalendarClock,
@@ -11,12 +13,12 @@ import {
   MapPin,
   MapPinned,
   Pill,
+  Sun,
   TrendingDown,
   TrendingUp,
   Upload,
   X,
 } from "lucide-react";
-import { motion } from "motion/react";
 import { Badge, Card, PageHeader, Spinner } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
@@ -298,19 +300,16 @@ export function Dashboard() {
 
   return (
     <>
-      <PageHeader
-        title={`Welcome${profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}`}
-        subtitle={subtitle}
-      />
+      {role !== "patient" && (
+        <PageHeader
+          title={`Welcome${profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}`}
+          subtitle={subtitle}
+        />
+      )}
 
       {assignedAreaName &&
         (role === "health_worker" || role === "barangay_admin") && (
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
-            className="mb-4"
-          >
+          <div className="mb-4">
             <Card className="flex items-center gap-3 border-brand-100 bg-brand-50/40 p-4">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-brand-100 text-brand-700">
                 <MapPinned className="h-5 w-5" />
@@ -331,11 +330,11 @@ export function Dashboard() {
                 </p>
               </div>
             </Card>
-          </motion.div>
+          </div>
         )}
 
       {role === "patient" ? (
-        <PatientTiles />
+        <PatientDashboard name={profile?.full_name ?? null} />
       ) : loading ? (
         <div className="flex h-48 items-center justify-center">
           <Spinner />
@@ -374,6 +373,13 @@ const SUBTITLE: Record<AppRole, string> = {
     "Welcome to BANTAY-TB. Track your medication, learn about TB, and chat with our health assistant.",
 };
 
+const QUICK_ACTIONS = [
+  { to: "/app/map", label: "GIS Map", icon: MapPinned },
+  { to: "/app/hotspots", label: "Hotspots", icon: Flame },
+  { to: "/app/cases", label: "Cases (ACF)", icon: ClipboardList },
+  { to: "/app/analytics", label: "Analytics", icon: BarChart3 },
+];
+
 function SurveillanceDashboard({
   stats,
   onOpenHotspots,
@@ -385,38 +391,76 @@ function SurveillanceDashboard({
 
   return (
     <div className="space-y-6">
-      {/* Stat bar */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile
-          icon={<ClipboardList className="h-5 w-5" />}
-          iconClass="bg-sky-50 text-sky-700"
-          label="Total cases (all records)"
-          value={stats.totalCases.toLocaleString()}
-          footer={
-            yoy.positive === null ? (
-              <span className="text-slate-500">{yoy.text}</span>
-            ) : (
-              <span
-                className={
-                  "inline-flex items-center gap-1 " +
-                  (yoy.positive ? "text-red-600" : "text-emerald-600")
-                }
-              >
-                {yoy.positive ? (
-                  <TrendingUp className="h-3.5 w-3.5" />
-                ) : (
-                  <TrendingDown className="h-3.5 w-3.5" />
-                )}
-                {yoy.text}
-                <span className="text-slate-500">
-                  vs {new Date().getFullYear() - 1}
-                </span>
-              </span>
-            )
-          }
-          delay={0}
+      {/* ── Command band — headline surveillance figure + quick actions ── */}
+      <div className="relative overflow-hidden rounded-2xl border border-brand-900 bg-brand-950 p-6 text-white shadow-soft sm:p-8">
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-vigil-grid opacity-60" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-accent-500/10 blur-3xl"
         />
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-300">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-vigil-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-vigil-400" />
+              </span>
+              Live &middot; City-wide TB surveillance
+            </p>
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <span className="font-display text-5xl font-black leading-none tracking-tight text-white sm:text-6xl">
+                {stats.totalCases.toLocaleString()}
+              </span>
+              {yoy.positive === null ? (
+                <span className="mb-1.5 font-mono text-xs uppercase tracking-wider text-slate-400">
+                  {yoy.text}
+                </span>
+              ) : (
+                <span
+                  className={
+                    "mb-1.5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold " +
+                    (yoy.positive
+                      ? "bg-red-500/15 text-red-300"
+                      : "bg-accent-500/15 text-accent-300")
+                  }
+                >
+                  {yoy.positive ? (
+                    <TrendingUp className="h-3.5 w-3.5" />
+                  ) : (
+                    <TrendingDown className="h-3.5 w-3.5" />
+                  )}
+                  {yoy.text} vs {new Date().getFullYear() - 1}
+                </span>
+              )}
+            </div>
+            <p className="mt-2 text-sm text-slate-400">
+              Total confirmed TB cases across{" "}
+              <span className="font-semibold text-slate-200">
+                {stats.barangaysWithCases}
+              </span>{" "}
+              barangays.
+            </p>
+          </div>
 
+          {/* Quick actions */}
+          <div className="grid grid-cols-2 gap-2 sm:max-w-xs">
+            {QUICK_ACTIONS.map((a) => (
+              <Link
+                key={a.to}
+                to={a.to}
+                className="group flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-slate-200 backdrop-blur-sm transition hover:border-white/25 hover:bg-white/10 hover:text-white"
+              >
+                <a.icon className="h-4 w-4 shrink-0 text-accent-400" />
+                <span className="truncate">{a.label}</span>
+                <ArrowRight className="ml-auto h-3.5 w-3.5 shrink-0 -translate-x-1 text-slate-500 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Stat bar ──────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <button
           type="button"
           onClick={onOpenHotspots}
@@ -425,23 +469,24 @@ function SurveillanceDashboard({
         >
           <StatTile
             icon={<Flame className="h-5 w-5" />}
-            iconClass="bg-red-50 text-red-700"
+            iconClass="bg-red-50 text-red-600"
+            accentClass="bg-red-500"
             label="Active hotspots"
             value={stats.activeHotspots.toLocaleString()}
             footer={
-              <span className="inline-flex items-center gap-1 text-red-600">
+              <span className="inline-flex items-center gap-1 font-medium text-red-600">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 Click to inspect clusters
               </span>
             }
-            delay={0.05}
             interactive
           />
         </button>
 
         <StatTile
           icon={<Activity className="h-5 w-5" />}
-          iconClass="bg-emerald-50 text-emerald-700"
+          iconClass="bg-accent-50 text-accent-600"
+          accentClass="bg-accent-500"
           label="Detection rate"
           value={`${stats.detectionRatePct}%`}
           footer={
@@ -449,12 +494,12 @@ function SurveillanceDashboard({
               {stats.barangaysWithCases} of {TOTAL_BARANGAYS} barangays covered
             </span>
           }
-          delay={0.1}
         />
 
         <StatTile
           icon={<Upload className="h-5 w-5" />}
-          iconClass="bg-violet-50 text-violet-700"
+          iconClass="bg-brand-50 text-brand-700"
+          accentClass="bg-brand-500"
           label="Last upload"
           value={formatUpload(stats.lastUpload)}
           footer={
@@ -462,7 +507,6 @@ function SurveillanceDashboard({
               CHO records · {stats.rowCount.toLocaleString()} rows
             </span>
           }
-          delay={0.15}
         />
       </div>
 
@@ -475,44 +519,47 @@ function SurveillanceDashboard({
 function StatTile({
   icon,
   iconClass,
+  accentClass = "bg-slate-300",
   label,
   value,
   footer,
-  delay = 0,
   interactive = false,
 }: {
   icon: React.ReactNode;
   iconClass: string;
+  accentClass?: string;
   label: string;
   value: string;
   footer?: React.ReactNode;
-  delay?: number;
   interactive?: boolean;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, delay, ease: "easeOut" }}
-      whileHover={interactive ? { y: -2 } : undefined}
+    <div
       className={
-        "rounded-xl border border-slate-200/80 bg-white p-5 shadow-soft transition-shadow " +
-        (interactive ? "cursor-pointer hover:shadow-lift" : "")
+        "group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft transition-all duration-300 " +
+        (interactive ? "cursor-pointer hover:-translate-y-1 hover:shadow-lift" : "hover:shadow-lift")
       }
     >
+      <span
+        aria-hidden
+        className={"absolute inset-y-0 left-0 w-1 " + accentClass}
+      />
       <div className="flex items-center justify-between">
-        <span className={`inline-flex rounded-lg p-2 ${iconClass}`}>
+        <span className={`inline-flex rounded-xl p-2.5 ${iconClass}`}>
           {icon}
         </span>
+        {interactive && (
+          <ArrowRight className="h-4 w-4 -translate-x-1 text-slate-300 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
+        )}
       </div>
-      <div className="mt-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <div className="mt-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-slate-500">
         {label}
       </div>
-      <div className="font-display mt-1 text-3xl font-bold tracking-tight text-slate-900">
+      <div className="font-display mt-1 text-3xl font-extrabold tracking-tight text-slate-900">
         {value}
       </div>
       {footer && <div className="mt-2 text-xs">{footer}</div>}
-    </motion.div>
+    </div>
   );
 }
 
@@ -521,71 +568,100 @@ function BarangayTable({
 }: {
   rows: DashboardStats["topBarangays"];
 }) {
+  const maxCount = rows[0]?.caseCount ?? 0;
   return (
-    <Card className="p-5">
-      <div className="mb-4 flex items-center justify-between gap-2">
+    <Card className="p-0">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-100 p-5">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <MapPin className="h-4 w-4 text-brand-600" /> Barangay cases
+          <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+            <MapPin className="h-4 w-4 text-brand-600" /> Cases by barangay
           </div>
           <p className="mt-0.5 text-xs text-slate-500">
-            Indicator scales by case count relative to the most affected
-            barangay.
+            Ranked by total case count, most affected first.
           </p>
         </div>
         <Badge tone="info">{rows.length} active</Badge>
       </div>
       {rows.length === 0 ? (
-        <p className="py-6 text-center text-sm text-slate-500">
+        <p className="py-10 text-center text-sm text-slate-500">
           No cases recorded yet.
         </p>
       ) : (
-        <div className="max-h-[28rem] overflow-y-auto overscroll-contain">
+        <div className="max-h-[30rem] overflow-y-auto overscroll-contain">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-white">
-              <tr className="text-xs uppercase tracking-wider text-slate-500">
-                <th className="py-2 pr-2 text-left font-semibold">
+            <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
+              <tr className="font-mono text-[10px] uppercase tracking-wider text-slate-500">
+                <th className="py-2.5 pl-5 pr-2 text-left font-semibold">
                   Barangay
                 </th>
-                <th className="py-2 px-2 text-right font-semibold">Total</th>
-                <th className="py-2 px-2 text-right font-semibold">
-                  Last 30d
+                <th className="hidden w-[34%] px-3 text-left font-semibold sm:table-cell">
+                  Share
                 </th>
-                <th className="py-2 pl-2 text-right font-semibold">Status</th>
+                <th className="px-3 text-right font-semibold">Total</th>
+                <th className="px-3 text-right font-semibold">Last 30d</th>
+                <th className="py-2.5 pl-2 pr-5 text-right font-semibold">
+                  Status
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map((b) => (
-                <tr
-                  key={b.psgc}
-                  className="transition-colors hover:bg-slate-50/60"
-                >
-                  <td className="py-3 pr-2 font-medium text-slate-800">
-                    {b.name}
-                  </td>
-                  <td className="py-3 px-2 text-right tabular-nums text-slate-900">
-                    {b.caseCount}
-                  </td>
-                  <td className="py-3 px-2 text-right tabular-nums text-slate-600">
-                    {b.recentCases}
-                  </td>
-                  <td className="py-3 pl-2 text-right">
-                    <span
-                      className={
-                        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold " +
-                        b.indicator.pillClass
-                      }
-                    >
+              {rows.map((b, i) => {
+                const pct =
+                  maxCount > 0 ? Math.max(4, (b.caseCount / maxCount) * 100) : 0;
+                return (
+                  <tr
+                    key={b.psgc}
+                    className="transition-colors hover:bg-slate-50/70"
+                  >
+                    <td className="py-3 pl-5 pr-2">
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          className={
+                            "grid h-6 w-6 shrink-0 place-items-center rounded-md font-mono text-[11px] font-bold " +
+                            (i < 3
+                              ? "bg-brand-950 text-white"
+                              : "bg-slate-100 text-slate-500")
+                          }
+                        >
+                          {i + 1}
+                        </span>
+                        <span className="font-medium text-slate-800">
+                          {b.name}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="hidden px-3 sm:table-cell">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className={"h-full rounded-full " + b.indicator.dotClass}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </td>
+                    <td className="px-3 text-right font-display font-bold tabular-nums text-slate-900">
+                      {b.caseCount}
+                    </td>
+                    <td className="px-3 text-right tabular-nums text-slate-600">
+                      {b.recentCases}
+                    </td>
+                    <td className="py-3 pl-2 pr-5 text-right">
                       <span
                         className={
-                          "h-1.5 w-1.5 rounded-full " + b.indicator.dotClass
+                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold " +
+                          b.indicator.pillClass
                         }
-                      />
-                      {b.indicator.label}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                      >
+                        <span
+                          className={
+                            "h-1.5 w-1.5 rounded-full " + b.indicator.dotClass
+                          }
+                        />
+                        {b.indicator.label}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -623,10 +699,7 @@ function HotspotsModal({
       aria-labelledby="hotspots-modal-title"
       onClick={onClose}
     >
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
+      <div
         className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -732,7 +805,7 @@ function HotspotsModal({
             Open hotspots page
           </Link>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }
@@ -745,50 +818,104 @@ function SeverityBadge({ severity }: { severity: HotspotCluster["severity"] }) {
   return <Badge tone="info">Watch</Badge>;
 }
 
-function PatientTiles() {
+/**
+ * Patient home — friendly, nursery-style landing that matches the patient
+ * Adherence and Health Education pages: pastel hero + big colorful tiles.
+ */
+function PatientDashboard({ name }: { name: string | null }) {
+  const firstName = (name ?? "").trim().split(/\s+/)[0] || "friend";
   const tiles = [
     {
       to: "/app/adherence",
-      label: "Mark today's dose",
-      blurb: "Log your medication and track streaks.",
+      label: "My medicine",
+      blurb: "Tap when you take your dose and earn stars!",
       icon: Pill,
+      card: "border-emerald-200 bg-emerald-50 hover:border-emerald-300",
+      iconBg: "bg-emerald-500",
+      arrow: "text-emerald-400",
     },
     {
       to: "/app/chatbot",
-      label: "Ask the health chatbot",
-      blurb: "English, Filipino, or Bisaya — anytime.",
+      label: "Ask a question",
+      blurb: "Chat in English, Filipino, o Bisaya — anytime.",
       icon: Bot,
+      card: "border-sky-200 bg-sky-50 hover:border-sky-300",
+      iconBg: "bg-sky-500",
+      arrow: "text-sky-400",
     },
     {
       to: "/app/education",
-      label: "Read health education",
-      blurb: "Plain-language guides on TB and respiratory care.",
+      label: "Learn & grow",
+      blurb: "Easy step-by-step guides about TB and getting better.",
       icon: BookOpen,
+      card: "border-pink-200 bg-pink-50 hover:border-pink-300",
+      iconBg: "bg-pink-500",
+      arrow: "text-pink-400",
     },
   ];
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      {tiles.map((t, i) => (
-        <motion.div
-          key={t.to}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, delay: i * 0.05 }}
-        >
+    <div className="space-y-6">
+      {/* ── Hero — warm welcome ──────────────────────────────────────── */}
+      <section className="relative overflow-hidden rounded-3xl border-2 border-sky-200 bg-gradient-to-br from-sky-100 via-emerald-50 to-amber-100 p-6 sm:p-8">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-amber-200/50 blur-2xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-12 left-1/3 h-36 w-36 rounded-full bg-emerald-200/50 blur-2xl"
+        />
+        <div className="relative">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-xs font-bold text-sky-700 shadow-soft">
+            <Sun className="h-3.5 w-3.5 text-amber-500" />
+            Your health home
+          </span>
+          <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+            Hi, {firstName}!
+          </h1>
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-700 sm:text-base">
+            Every day you take your medicine, you get closer to feeling great.
+            What would you like to do today?
+          </p>
+        </div>
+      </section>
+
+      {/* ── Big friendly tiles ───────────────────────────────────────── */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        {tiles.map((t) => (
           <Link
+            key={t.to}
             to={t.to}
-            className="group block rounded-xl border border-slate-200/80 bg-gradient-to-br from-white to-brand-50/40 p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lift"
+            className={
+              "group block rounded-3xl border-2 p-5 shadow-soft transition-all duration-200 hover:-translate-y-1 hover:shadow-lift active:scale-[0.98] " +
+              t.card
+            }
           >
-            <div className="grid h-10 w-10 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-accent-500 text-white shadow-soft">
-              <t.icon className="h-5 w-5" />
+            <div className="flex items-start justify-between">
+              <span
+                className={
+                  "grid h-12 w-12 place-items-center rounded-2xl text-white shadow-soft " +
+                  t.iconBg
+                }
+              >
+                <t.icon className="h-6 w-6" />
+              </span>
+              <ArrowRight
+                className={
+                  "h-5 w-5 -translate-x-1 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100 " +
+                  t.arrow
+                }
+              />
             </div>
-            <div className="mt-4 font-display text-base font-semibold tracking-tight text-slate-900">
+            <div className="mt-4 font-display text-lg font-extrabold tracking-tight text-slate-900">
               {t.label}
             </div>
-            <div className="mt-1 text-sm text-slate-600">{t.blurb}</div>
+            <div className="mt-1 text-sm font-medium text-slate-600">
+              {t.blurb}
+            </div>
           </Link>
-        </motion.div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

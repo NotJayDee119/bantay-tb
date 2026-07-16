@@ -7,12 +7,15 @@ import {
   ShieldAlert,
   Stethoscope,
 } from "lucide-react";
-import { Badge, Card, PageHeader } from "../../components/ui";
+import { Badge, Card, Input, Label, PageHeader } from "../../components/ui";
 
 // Rule-based clinical decision support for presumptive TB screening.
 // Rules derived from Philippine NTP MOP 5th ed. (2020) §4.2 and WHO
 // Consolidated Guidelines on TB Module 2: Screening (2021).
 // This tool is DECISION SUPPORT ONLY — final triage rests with the clinician.
+
+const MICRO_LABEL =
+  "font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500";
 
 interface Symptom {
   key: string;
@@ -126,93 +129,104 @@ export function Cds() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         {/* ── Left: Symptom input ── */}
-        <Card className="p-5">
-          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <Stethoscope className="h-4 w-4 text-brand-600" />
-            Symptom screen
+        <Card className="overflow-hidden p-0">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+            <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+              <Stethoscope className="h-3.5 w-3.5 text-brand-600" />
+              Symptom screen
+            </div>
+            {anyChecked && (
+              <button
+                type="button"
+                onClick={() => {
+                  setChecked({});
+                  setAge("");
+                }}
+                className="text-xs font-medium text-slate-400 transition hover:text-red-500 hover:underline"
+              >
+                Clear all
+              </button>
+            )}
           </div>
 
-          {/* Age */}
-          <div className="mb-5">
-            <label
-              htmlFor="cds-age"
-              className="mb-1.5 block text-xs font-semibold text-slate-700"
-            >
-              Patient age <span className="font-normal text-slate-400">(years, optional)</span>
-            </label>
-            <input
-              id="cds-age"
-              type="number"
-              min={0}
-              max={120}
-              placeholder="e.g. 34"
-              value={age}
-              onChange={(e) => setAge(e.target.value)}
-              className="h-10 w-36 rounded-lg border border-slate-300 px-3 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+          <div className="p-5">
+            {/* Age */}
+            <div className="mb-5 space-y-1.5">
+              <Label htmlFor="cds-age">
+                Patient age{" "}
+                <span className="font-normal text-slate-400">
+                  (years, optional)
+                </span>
+              </Label>
+              <Input
+                id="cds-age"
+                type="number"
+                min={0}
+                max={120}
+                placeholder="e.g. 34"
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                className="w-36"
+              />
+            </div>
+
+            <SymptomSection
+              title="Cardinal symptoms"
+              items={SYMPTOMS}
+              state={checked}
+              onToggle={toggle}
+            />
+            <SymptomSection
+              title="Comorbidities and risk factors"
+              items={COMORBID}
+              state={checked}
+              onToggle={toggle}
+              last
             />
           </div>
-
-          <SymptomSection
-            title="Cardinal symptoms"
-            items={SYMPTOMS}
-            state={checked}
-            onToggle={toggle}
-          />
-          <SymptomSection
-            title="Comorbidities and risk factors"
-            items={COMORBID}
-            state={checked}
-            onToggle={toggle}
-          />
-
-          {anyChecked && (
-            <button
-              type="button"
-              onClick={() => { setChecked({}); setAge(""); }}
-              className="mt-2 text-xs text-slate-400 hover:text-red-500 hover:underline"
-            >
-              Clear all
-            </button>
-          )}
         </Card>
 
         {/* ── Right: Recommendation + References ── */}
         <div className="flex flex-col gap-4">
-          <Card className="p-5">
-            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              Recommendation
+          <Card className="overflow-hidden p-0">
+            <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+              <AlertTriangle className="h-3.5 w-3.5 text-vigil-500" />
+              <span className={MICRO_LABEL}>Recommendation</span>
             </div>
-            <Recommendation result={result} />
+            <div className="p-5">
+              <Recommendation result={result} />
+            </div>
           </Card>
 
-          <Card className="p-5">
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <BookOpen className="h-4 w-4 text-brand-600" />
-              References
+          <Card className="overflow-hidden p-0">
+            <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+              <BookOpen className="h-3.5 w-3.5 text-brand-600" />
+              <span className={MICRO_LABEL}>References</span>
             </div>
-            <p className="mb-3 text-xs text-slate-500">
-              This tool applies rule-based logic derived from the following
-              clinical guidelines. Recommendations are indicative only.
-            </p>
-            <ol className="space-y-3">
-              {REFERENCES.map((r) => (
-                <li key={r.num} className="flex gap-2.5 text-xs text-slate-600">
-                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-bold text-brand-700">
-                    {r.num}
-                  </span>
-                  <span>
-                    <span className="font-semibold text-slate-800">{r.short}</span>
-                    <span className="block mt-0.5 leading-relaxed text-slate-500">
-                      {r.full}
+            <div className="p-5">
+              <p className="mb-3 text-xs text-slate-500">
+                This tool applies rule-based logic derived from the following
+                clinical guidelines. Recommendations are indicative only.
+              </p>
+              <ol className="space-y-3">
+                {REFERENCES.map((r) => (
+                  <li key={r.num} className="flex gap-2.5 text-xs text-slate-600">
+                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-bold text-brand-700">
+                      {r.num}
                     </span>
-                  </span>
-                </li>
-              ))}
-            </ol>
-            <div className="mt-4 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-              <ExternalLink className="h-3 w-3 shrink-0" />
-              This tool does not record, store, or transmit any patient data.
+                    <span>
+                      <span className="font-semibold text-slate-800">{r.short}</span>
+                      <span className="block mt-0.5 leading-relaxed text-slate-500">
+                        {r.full}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-4 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+                <ExternalLink className="h-3 w-3 shrink-0" />
+                This tool does not record, store, or transmit any patient data.
+              </div>
             </div>
           </Card>
         </div>
@@ -226,17 +240,17 @@ function SymptomSection({
   items,
   state,
   onToggle,
+  last = false,
 }: {
   title: string;
   items: Symptom[];
   state: Record<string, boolean>;
   onToggle: (key: string) => void;
+  last?: boolean;
 }) {
   return (
-    <div className="mb-5">
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-        {title}
-      </div>
+    <div className={last ? "" : "mb-5"}>
+      <div className={"mb-2 " + MICRO_LABEL}>{title}</div>
       <ul className="space-y-1">
         {items.map((s) => {
           const active = !!state[s.key];
@@ -375,6 +389,7 @@ function Recommendation({ result }: { result: CdsResult }) {
           bg: "bg-red-50 border-red-200",
           text: "text-red-800",
           iconColor: "text-red-600",
+          barClass: "bg-red-500",
           icon: AlertTriangle,
           label: "HIGH presumption — urgent referral",
         }
@@ -383,6 +398,7 @@ function Recommendation({ result }: { result: CdsResult }) {
             bg: "bg-amber-50 border-amber-200",
             text: "text-amber-800",
             iconColor: "text-amber-600",
+            barClass: "bg-amber-500",
             icon: AlertTriangle,
             label: "MODERATE presumption — refer for workup",
           }
@@ -391,13 +407,15 @@ function Recommendation({ result }: { result: CdsResult }) {
               bg: "bg-sky-50 border-sky-200",
               text: "text-sky-800",
               iconColor: "text-sky-600",
+              barClass: "bg-sky-500",
               icon: Stethoscope,
               label: "LOW presumption — observe",
             }
           : {
-              bg: "bg-emerald-50 border-emerald-200",
-              text: "text-emerald-800",
-              iconColor: "text-emerald-600",
+              bg: "bg-accent-50 border-accent-200",
+              text: "text-accent-800",
+              iconColor: "text-accent-600",
+              barClass: "bg-accent-500",
               icon: CheckCircle2,
               label: "No symptoms selected",
             };
@@ -408,13 +426,30 @@ function Recommendation({ result }: { result: CdsResult }) {
     <div className="space-y-4">
       {/* Level banner */}
       <div
-        className={`flex items-center gap-2 rounded-lg border px-4 py-3 ${config.bg} ${config.text}`}
+        className={`relative overflow-hidden rounded-xl border p-4 ${config.bg}`}
       >
-        <Icon className={`h-5 w-5 shrink-0 ${config.iconColor}`} />
-        <span className="font-semibold">{config.label}</span>
-        <span className="ml-auto rounded-full bg-white/60 px-2 py-0.5 text-xs font-bold tabular-nums">
-          score {result.score}
-        </span>
+        <span
+          aria-hidden
+          className={`absolute inset-y-0 left-0 w-1 ${config.barClass}`}
+        />
+        <div className="flex items-center gap-3 pl-2">
+          <span
+            className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/70 ${config.iconColor}`}
+          >
+            <Icon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className={`font-display text-base font-bold leading-tight tracking-tight ${config.text}`}>
+              {config.label}
+            </div>
+            <div className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-slate-500">
+              Composite score
+            </div>
+          </div>
+          <span className={`font-display text-2xl font-extrabold tabular-nums ${config.text}`}>
+            {result.score}
+          </span>
+        </div>
       </div>
 
       {/* Red flags */}
@@ -438,7 +473,7 @@ function Recommendation({ result }: { result: CdsResult }) {
       {/* Triggered symptoms (summary) */}
       {result.triggered.length > 0 && (
         <div>
-          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <div className={"mb-1.5 " + MICRO_LABEL}>
             Symptoms / factors reported ({result.triggered.length})
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -453,9 +488,7 @@ function Recommendation({ result }: { result: CdsResult }) {
 
       {/* Next steps */}
       <div>
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Recommended next steps
-        </div>
+        <div className={"mb-2 " + MICRO_LABEL}>Recommended next steps</div>
         <ul className="space-y-2">
           {result.next.map((n) => (
             <li

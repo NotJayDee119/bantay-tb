@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { MapPin, Plus } from "lucide-react";
+import {
+  ClipboardList,
+  MapPin,
+  Plus,
+  SearchX,
+  SlidersHorizontal,
+} from "lucide-react";
 import {
   Badge,
   Card,
-  EmptyState,
   Input,
   PageHeader,
   Select,
@@ -36,6 +41,18 @@ const TONE: Record<string, "success" | "warning" | "danger" | "info" | "default"
   lost_to_followup: "warning",
   not_evaluated: "default",
 };
+
+// Dot colors matching the Badge tones so the outcome reads without color alone.
+const TONE_DOT: Record<string, string> = {
+  success: "bg-emerald-500",
+  warning: "bg-amber-500",
+  danger: "bg-red-500",
+  info: "bg-sky-500",
+  default: "bg-slate-400",
+};
+
+const MICRO_LABEL =
+  "font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500";
 
 export function Cases() {
   const { profile } = useAuth();
@@ -93,29 +110,19 @@ export function Cases() {
     );
   });
 
-  const filterAreaName = filter.barangay
-    ? barangays.find((b) => b.psgc === Number(filter.barangay))?.name
-    : null;
-  const subtitle = (() => {
-    const parts = [`${filtered.length} cases`];
-    if (filtered.length !== rows.length) {
-      parts[0] += ` of ${rows.length}`;
-    }
-    if (filterAreaName) parts.push(`area: ${filterAreaName}`);
-    if (filter.disease !== "all") parts.push(`disease: ${filter.disease}`);
-    return `Encode and review TB and respiratory disease cases at the barangay level · ${parts.join(" · ")}.`;
-  })();
+  const hasActiveFilter =
+    Boolean(filter.barangay) || filter.disease !== "all" || Boolean(filter.search);
 
   return (
     <>
       <PageHeader
         title="Active Case Finding"
-        subtitle={subtitle}
+        subtitle="Encode and review TB and respiratory disease cases at the barangay level."
         actions={
           canCreateCase ? (
             <Link
               to="/app/cases/new"
-              className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white shadow-soft transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:ring-offset-2"
             >
               <Plus className="h-4 w-4" /> New case
             </Link>
@@ -123,11 +130,37 @@ export function Cases() {
         }
       />
 
-      <Card className="mb-4 p-4">
-        <div className="grid gap-3 sm:grid-cols-3">
+      {/* ── Filters ──────────────────────────────────────────────────── */}
+      <Card className="mb-4 overflow-hidden p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+          <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+            <SlidersHorizontal className="h-3.5 w-3.5 text-brand-600" />
+            Filters
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-[10px] tabular-nums text-slate-500">
+              {filtered.length}
+              {filtered.length !== rows.length && ` / ${rows.length}`}{" "}
+              {filtered.length === 1 ? "case" : "cases"}
+            </span>
+            {hasActiveFilter && (
+              <button
+                type="button"
+                className="font-mono text-[10px] font-semibold uppercase tracking-wider text-brand-700 transition hover:text-brand-900 hover:underline"
+                onClick={() =>
+                  setFilter({ barangay: "", disease: "all", search: "" })
+                }
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-3">
           <Select
             value={filter.barangay}
             onChange={(e) => setFilter({ ...filter, barangay: e.target.value })}
+            aria-label="Filter by barangay"
           >
             <option value="">All barangays</option>
             {barangays.map((b) => (
@@ -139,6 +172,7 @@ export function Cases() {
           <Select
             value={filter.disease}
             onChange={(e) => setFilter({ ...filter, disease: e.target.value })}
+            aria-label="Filter by disease"
           >
             <option value="all">All diseases</option>
             <option value="tb">Tuberculosis</option>
@@ -150,121 +184,137 @@ export function Cases() {
             placeholder="Search classification, outcome…"
             value={filter.search}
             onChange={(e) => setFilter({ ...filter, search: e.target.value })}
+            aria-label="Search cases"
           />
-        </div>
-        <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-          <span>
-            <span className="font-semibold text-slate-900">
-              {filtered.length}
-            </span>{" "}
-            {filtered.length === 1 ? "case" : "cases"} match
-            {filtered.length !== rows.length && (
-              <>
-                {" "}
-                <span className="text-slate-400">
-                  ({rows.length} loaded)
-                </span>
-              </>
-            )}
-          </span>
-          {(filter.barangay ||
-            filter.disease !== "all" ||
-            filter.search) && (
-            <button
-              type="button"
-              className="text-brand-700 hover:underline"
-              onClick={() =>
-                setFilter({ barangay: "", disease: "all", search: "" })
-              }
-            >
-              Clear filters
-            </button>
-          )}
         </div>
       </Card>
 
-      {loading ? (
-        <div className="flex h-32 items-center justify-center">
-          <Spinner />
+      {/* ── Case register ────────────────────────────────────────────── */}
+      <Card className="overflow-hidden p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+          <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+            <ClipboardList className="h-3.5 w-3.5 text-accent-600" />
+            Case register
+          </div>
+          {!loading && filtered.length > 0 && (
+            <span className="font-mono text-[10px] tabular-nums text-slate-500">
+              latest 500 · newest first
+            </span>
+          )}
         </div>
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title="No cases match your filters"
-          description={
-            canCreateCase
-              ? "Try changing the filters above, or encode a new case."
-              : "Try changing the filters above."
-          }
-          action={
-            canCreateCase ? (
+
+        {loading ? (
+          <div className="flex h-32 items-center justify-center">
+            <Spinner />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="px-4 py-14 text-center">
+            <SearchX className="mx-auto h-6 w-6 text-slate-300" />
+            <p className="mt-3 text-sm text-slate-500">
+              No cases match your filters.
+              {canCreateCase && " Try changing the filters, or encode a new case."}
+            </p>
+            {canCreateCase && (
               <Link
                 to="/app/cases/new"
-                className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+                className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white shadow-soft transition hover:bg-brand-700"
               >
                 <Plus className="h-4 w-4" /> New case
               </Link>
-            ) : null
-          }
-        />
-      ) : (
-        <Card className="overflow-x-auto p-0">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-3">Reported</th>
-                <th className="px-4 py-3">Barangay</th>
-                <th className="px-4 py-3">Disease</th>
-                <th className="px-4 py-3">Class.</th>
-                <th className="px-4 py-3">Age</th>
-                <th className="px-4 py-3">Sex</th>
-                <th className="px-4 py-3">Outcome</th>
-                <th className="px-4 py-3">Source</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {filtered.map((r) => {
-                const isAssigned = assignedPsgc !== null && r.barangay_psgc === assignedPsgc;
-                return (
-                <tr
-                  key={r.id}
-                  className={
-                    isAssigned
-                      ? "bg-brand-50/60 ring-1 ring-inset ring-brand-100 hover:bg-brand-50"
-                      : "hover:bg-slate-50"
-                  }
-                >
-                  <td className="px-4 py-2 text-slate-600">
-                    {formatDate(r.reported_at)}
-                  </td>
-                  <td className="px-4 py-2 font-medium text-slate-900">
-                    <span className="inline-flex items-center gap-1.5">
-                      {barangays.find((b) => b.psgc === r.barangay_psgc)?.name ?? "—"}
-                      {isAssigned && (
-                        <span className="inline-flex items-center gap-0.5 rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
-                          <MapPin className="h-2.5 w-2.5" /> Your area
-                        </span>
-                      )}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 uppercase">{r.disease}</td>
-                  <td className="px-4 py-2 text-slate-600">
-                    {r.tb_classification ?? "—"}
-                  </td>
-                  <td className="px-4 py-2 text-slate-600">{r.age ?? "—"}</td>
-                  <td className="px-4 py-2 text-slate-600 capitalize">{r.sex}</td>
-                  <td className="px-4 py-2">
-                    <Badge tone={TONE[r.treatment_outcome] ?? "default"}>
-                      {r.treatment_outcome.replace(/_/g, " ")}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-2 text-xs text-slate-500">{r.source}</td>
+            )}
+          </div>
+        ) : (
+          <div className="max-h-[38rem] overflow-x-auto overflow-y-auto overscroll-contain">
+            <table className="min-w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
+                <tr className="font-mono text-[10px] uppercase tracking-wider text-slate-500">
+                  <th className="py-2.5 pl-5 pr-3 text-left font-semibold">
+                    Reported
+                  </th>
+                  <th className="px-3 py-2.5 text-left font-semibold">
+                    Barangay
+                  </th>
+                  <th className="px-3 py-2.5 text-left font-semibold">
+                    Disease
+                  </th>
+                  <th className="px-3 py-2.5 text-left font-semibold">
+                    Class.
+                  </th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Age</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">Sex</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">
+                    Outcome
+                  </th>
+                  <th className="py-2.5 pl-3 pr-5 text-left font-semibold">
+                    Source
+                  </th>
                 </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </Card>
-      )}
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {filtered.map((r) => {
+                  const isAssigned =
+                    assignedPsgc !== null && r.barangay_psgc === assignedPsgc;
+                  const tone = TONE[r.treatment_outcome] ?? "default";
+                  return (
+                    <tr
+                      key={r.id}
+                      className={
+                        "transition-colors " +
+                        (isAssigned
+                          ? "bg-brand-50/60 hover:bg-brand-50"
+                          : "hover:bg-slate-50/70")
+                      }
+                    >
+                      <td className="whitespace-nowrap py-3 pl-5 pr-3 tabular-nums text-slate-600">
+                        {formatDate(r.reported_at)}
+                      </td>
+                      <td className="px-3 py-3 font-medium text-slate-900">
+                        <span className="inline-flex items-center gap-1.5">
+                          {barangays.find((b) => b.psgc === r.barangay_psgc)
+                            ?.name ?? "—"}
+                          {isAssigned && (
+                            <span className="inline-flex items-center gap-0.5 rounded-full border border-brand-200 bg-brand-100 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-brand-700">
+                              <MapPin className="h-2.5 w-2.5" /> Your area
+                            </span>
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                          {r.disease}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-slate-600">
+                        {r.tb_classification ?? "—"}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums text-slate-600">
+                        {r.age ?? "—"}
+                      </td>
+                      <td className="px-3 py-3 capitalize text-slate-600">
+                        {r.sex}
+                      </td>
+                      <td className="px-3 py-3">
+                        <Badge tone={tone}>
+                          <span
+                            aria-hidden
+                            className={
+                              "mr-1.5 h-1.5 w-1.5 rounded-full " + TONE_DOT[tone]
+                            }
+                          />
+                          {r.treatment_outcome.replace(/_/g, " ")}
+                        </Badge>
+                      </td>
+                      <td className="py-3 pl-3 pr-5 text-xs text-slate-500">
+                        {r.source}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </>
   );
 }

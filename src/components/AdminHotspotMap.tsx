@@ -2,19 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Circle,
   CircleMarker,
-  LayersControl,
   MapContainer,
   Pane,
   Popup,
-  TileLayer,
   Tooltip,
+  ZoomControl,
   useMap,
 } from "react-leaflet";
 import type { Map as LeafletMap } from "leaflet";
 import {
   AlertTriangle,
   Activity,
-  CalendarClock,
   ChevronDown,
   ChevronUp,
   Flame,
@@ -23,12 +21,20 @@ import {
 } from "lucide-react";
 import { HeatmapLayer } from "./HeatmapLayer";
 import { BarangayBoundaries } from "./BarangayBoundaries";
+import { OpenFreeMapLayer } from "./OpenFreeMapLayer";
+import type { OfmStyleName } from "../lib/openFreeMap";
 import type {
   BarangayStat,
   HotspotCluster,
   HotspotInsights,
   HotspotSeverity,
 } from "../lib/hotspotUtils";
+
+const BASE_STYLES: { name: OfmStyleName; label: string }[] = [
+  { name: "positron", label: "Clean" },
+  { name: "liberty", label: "Detail" },
+  { name: "dark", label: "Dark" },
+];
 
 interface AdminHotspotMapProps {
   hotspotInsights: HotspotInsights | null;
@@ -59,14 +65,27 @@ const SEVERITY_LABEL: Record<HotspotSeverity, string> = {
   medium: "Moderate (monitor)",
 };
 
+// Canonical severities for the legend — the extra "low"/"medium" keys above
+// are DB aliases and would render as duplicate rows.
+const SEVERITY_ORDER: HotspotSeverity[] = ["watch", "moderate", "high", "urgent"];
+
+const DENSITY_RAMP = ["#bae6fd", "#7dd3fc", "#0ea5e9", "#f97316", "#dc2626"];
+
+// Shared chrome for every floating panel — the dark glass console language
+// established by the public hero map (PublicCaseMap).
+const GLASS =
+  "rounded-xl border border-white/10 bg-brand-950/90 shadow-lift backdrop-blur";
+const MICRO_LABEL =
+  "font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-400";
+
 function barangayFill(count: number, max: number): string {
   if (max <= 0 || count <= 0) return "#cbd5e1";
   const ratio = count / max;
-  if (ratio < 0.2) return "#bae6fd";
-  if (ratio < 0.4) return "#7dd3fc";
-  if (ratio < 0.6) return "#0ea5e9";
-  if (ratio < 0.8) return "#f97316";
-  return "#dc2626";
+  if (ratio < 0.2) return DENSITY_RAMP[0];
+  if (ratio < 0.4) return DENSITY_RAMP[1];
+  if (ratio < 0.6) return DENSITY_RAMP[2];
+  if (ratio < 0.8) return DENSITY_RAMP[3];
+  return DENSITY_RAMP[4];
 }
 
 function barangayRadius(count: number, max: number): number {
@@ -88,6 +107,90 @@ function FocusController({
   return null;
 }
 
+/** Hover card shared by barangay markers — name, big count, mono caption. */
+function MarkerTooltip({
+  stat,
+  fill,
+  assigned = false,
+}: {
+  stat: BarangayStat;
+  fill: string;
+  assigned?: boolean;
+}) {
+  return (
+    <Tooltip direction="top" offset={[0, -6]} opacity={1} className="pcm-tooltip">
+      <div className="pcm-tooltip-inner text-center">
+        <div className="flex items-center justify-center gap-1.5">
+          <span
+            className="inline-block h-2 w-2 shrink-0 rounded-full"
+            style={{ background: fill }}
+          />
+          <span className="text-xs font-semibold text-white">{stat.name}</span>
+        </div>
+        <div className="mt-1 font-display text-2xl font-extrabold leading-none tracking-tight text-white">
+          {stat.caseCount}
+        </div>
+        <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-slate-400">
+          case{stat.caseCount === 1 ? "" : "s"}
+        </div>
+        {assigned && (
+          <div className="mt-1 border-t border-white/10 pt-1 font-mono text-[9px] uppercase tracking-wider text-vigil-300">
+            Your assigned area
+          </div>
+        )}
+      </div>
+    </Tooltip>
+  );
+}
+
+/** Click-through popup shared by barangay markers — dark glass card. */
+function MarkerPopup({
+  stat,
+  assigned = false,
+}: {
+  stat: BarangayStat;
+  assigned?: boolean;
+}) {
+  return (
+    <Popup className="ghm-popup">
+      <div className="min-w-[190px]">
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-white">
+          <MapPin
+            className={"h-4 w-4 " + (assigned ? "text-vigil-400" : "text-accent-400")}
+          />
+          <span className="truncate">{stat.name}</span>
+          {assigned && (
+            <span className="ml-auto rounded-full border border-vigil-400/40 bg-vigil-400/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-vigil-300">
+              Your area
+            </span>
+          )}
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-3">
+          <div>
+            <div className="font-mono text-[9px] uppercase tracking-wider text-slate-400">
+              Total cases
+            </div>
+            <div className="font-display text-xl font-extrabold tracking-tight text-white">
+              {stat.caseCount}
+            </div>
+          </div>
+          <div>
+            <div className="font-mono text-[9px] uppercase tracking-wider text-slate-400">
+              Last 30 days
+            </div>
+            <div className="font-display text-xl font-extrabold tracking-tight text-white">
+              {stat.recentCases}
+            </div>
+          </div>
+        </div>
+        <div className="mt-2 border-t border-white/10 pt-1.5 font-mono text-[9px] uppercase tracking-wider text-slate-500">
+          PSGC {stat.psgc}
+        </div>
+      </div>
+    </Popup>
+  );
+}
+
 export function AdminHotspotMap({
   hotspotInsights,
   focusBarangay,
@@ -97,8 +200,17 @@ export function AdminHotspotMap({
   const mapRef = useRef<LeafletMap | null>(null);
   const [showHeat, setShowHeat] = useState(false);
   const [showMarkers, setShowMarkers] = useState(true);
-  const [showBoundaries, setShowBoundaries] = useState(true);
+  // Boundaries start off — the choropleth polygons are opt-in so the map
+  // opens clean, with markers carrying the story by default.
+  const [showBoundaries, setShowBoundaries] = useState(false);
   const [legendCollapsed, setLegendCollapsed] = useState(false);
+  const [baseStyle, setBaseStyle] = useState<OfmStyleName>("positron");
+
+  // Dark basemap auto-activates with the heatmap for contrast; Clean is
+  // restored when the heatmap is off. Mirrors the old LayersControl behavior.
+  useEffect(() => {
+    setBaseStyle(showHeat ? "dark" : "positron");
+  }, [showHeat]);
 
   const barangayStats: BarangayStat[] = useMemo(
     () => hotspotInsights?.barangayStats ?? [],
@@ -129,46 +241,46 @@ export function AdminHotspotMap({
 
   const summary = hotspotInsights;
 
+  const layerToggles = [
+    {
+      key: "boundaries",
+      label: "Boundaries",
+      icon: Layers,
+      on: showBoundaries,
+      dot: "#2dd4bf",
+      toggle: () => setShowBoundaries((v) => !v),
+    },
+    {
+      key: "heat",
+      label: "Heat map",
+      icon: Flame,
+      on: showHeat,
+      dot: "#fbbf24",
+      toggle: () => setShowHeat((v) => !v),
+    },
+    {
+      key: "markers",
+      label: "Markers",
+      icon: MapPin,
+      on: showMarkers,
+      dot: "#38bdf8",
+      toggle: () => setShowMarkers((v) => !v),
+    },
+  ];
+
   return (
     <div className="relative h-full w-full">
       <MapContainer
         center={DAVAO_CENTER}
         zoom={DAVAO_ZOOM}
-        zoomControl
-        style={{ height: "100%", width: "100%" }}
+        zoomControl={false}
+        style={{ height: "100%", width: "100%", background: "#061020" }}
         ref={(m: LeafletMap | null) => {
           mapRef.current = m;
         }}
       >
-        {/* LayersControl re-mounts when showHeat changes so the checked base
-            layer prop is picked up fresh — Dark Matter auto-activates with the
-            heatmap, Light is restored when heatmap is off. */}
-        <LayersControl key={showHeat ? "lc-dark" : "lc-light"} position="topright">
-          <LayersControl.BaseLayer checked={!showHeat} name="Clean (Carto Light)">
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-              subdomains={["a", "b", "c", "d"]}
-              maxZoom={19}
-            />
-          </LayersControl.BaseLayer>
-          <LayersControl.BaseLayer name="Detail (Carto Voyager)">
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-              subdomains={["a", "b", "c", "d"]}
-              maxZoom={19}
-            />
-          </LayersControl.BaseLayer>
-          <LayersControl.BaseLayer checked={showHeat} name="Dark (Carto Dark Matter)">
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              subdomains={["a", "b", "c", "d"]}
-              maxZoom={19}
-            />
-          </LayersControl.BaseLayer>
-        </LayersControl>
+        <OpenFreeMapLayer styleName={baseStyle} />
+        <ZoomControl position="bottomright" />
 
         {showBoundaries && (
           <BarangayBoundaries
@@ -219,37 +331,49 @@ export function AdminHotspotMap({
               weight: 2,
             }}
           >
-            <Popup>
-              <div className="min-w-[200px] text-sm">
-                <div className="flex items-center gap-1.5 font-semibold text-slate-900">
+            <Popup className="ghm-popup">
+              <div className="min-w-[210px]">
+                <div className="flex items-center gap-1.5 text-sm font-semibold text-white">
                   <AlertTriangle
                     className="h-4 w-4"
                     style={{ color: SEVERITY_COLOR[cluster.severity] }}
                   />
                   Hotspot #{cluster.id + 1}
+                  <span
+                    className="ml-auto rounded-full border px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider"
+                    style={{
+                      color: SEVERITY_COLOR[cluster.severity],
+                      borderColor: `${SEVERITY_COLOR[cluster.severity]}66`,
+                      background: `${SEVERITY_COLOR[cluster.severity]}1a`,
+                    }}
+                  >
+                    {SEVERITY_LABEL[cluster.severity].split(" ")[0]}
+                  </span>
                 </div>
-                <div className="mt-1 text-slate-700">
-                  <span className="font-semibold">{cluster.caseCount}</span>{" "}
-                  case(s) · {SEVERITY_LABEL[cluster.severity]}
+                <div className="mt-2">
+                  <span className="font-display text-xl font-extrabold tracking-tight text-white">
+                    {cluster.caseCount}
+                  </span>
+                  <span className="ml-1.5 font-mono text-[9px] uppercase tracking-wider text-slate-400">
+                    case{cluster.caseCount === 1 ? "" : "s"} · {SEVERITY_LABEL[cluster.severity]}
+                  </span>
                 </div>
-                <div className="text-xs text-slate-500">
-                  Radius ~{cluster.radiusKm.toFixed(2)} km · centroid{" "}
-                  {cluster.centroid.lat.toFixed(4)},{" "}
-                  {cluster.centroid.lon.toFixed(4)}
+                <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-slate-500">
+                  Radius ~{cluster.radiusKm.toFixed(2)} km ·{" "}
+                  {cluster.centroid.lat.toFixed(4)}, {cluster.centroid.lon.toFixed(4)}
                 </div>
                 {cluster.barangays.length > 0 && (
-                  <div className="mt-2">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <div className="mt-2 border-t border-white/10 pt-2">
+                    <div className="font-mono text-[9px] font-semibold uppercase tracking-wider text-slate-400">
                       Top barangays
                     </div>
-                    <ul className="mt-1 space-y-0.5 text-xs text-slate-700">
+                    <ul className="mt-1 space-y-0.5 text-xs">
                       {cluster.barangays.slice(0, 5).map((b) => (
-                        <li
-                          key={b.psgc}
-                          className="flex justify-between gap-2"
-                        >
-                          <span>{b.name}</span>
-                          <span className="font-semibold">{b.count}</span>
+                        <li key={b.psgc} className="flex justify-between gap-2">
+                          <span className="truncate text-slate-300">{b.name}</span>
+                          <span className="font-semibold tabular-nums text-white">
+                            {b.count}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -275,36 +399,11 @@ export function AdminHotspotMap({
                 fillOpacity: 0.85,
               }}
             >
-              <Tooltip direction="top" offset={[0, -4]} opacity={0.95}>
-                <span className="text-xs">
-                  <strong>{stat.name}</strong> — {stat.caseCount}
-                </span>
-              </Tooltip>
-              <Popup>
-                <div className="min-w-[180px] text-sm">
-                  <div className="flex items-center gap-1.5 font-semibold text-slate-900">
-                    <MapPin className="h-4 w-4 text-brand-600" />
-                    {stat.name}
-                  </div>
-                  <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <div className="text-slate-500">Total cases</div>
-                      <div className="text-base font-semibold text-slate-900">
-                        {stat.caseCount}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500">Last 30 days</div>
-                      <div className="text-base font-semibold text-slate-900">
-                        {stat.recentCases}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-[11px] text-slate-500">
-                    PSGC {stat.psgc}
-                  </div>
-                </div>
-              </Popup>
+              <MarkerTooltip
+                stat={stat}
+                fill={barangayFill(stat.caseCount, maxCount)}
+              />
+              <MarkerPopup stat={stat} />
             </CircleMarker>
           ))}
 
@@ -325,119 +424,108 @@ export function AdminHotspotMap({
                 fillOpacity: 0.92,
               }}
             >
-              <Tooltip
-                direction="top"
-                offset={[0, -6]}
-                opacity={0.97}
-                permanent={false}
-              >
-                <span className="text-xs">
-                  <strong>{stat.name}</strong> — {stat.caseCount} cases · Your assigned area
-                </span>
-              </Tooltip>
-              <Popup>
-                <div className="min-w-[180px] text-sm">
-                  <div className="flex items-center gap-1.5 font-semibold text-brand-700">
-                    <MapPin className="h-4 w-4 text-amber-500" />
-                    {stat.name}
-                    <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                      Your area
-                    </span>
-                  </div>
-                  <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <div className="text-slate-500">Total cases</div>
-                      <div className="text-base font-semibold text-slate-900">
-                        {stat.caseCount}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500">Last 30 days</div>
-                      <div className="text-base font-semibold text-slate-900">
-                        {stat.recentCases}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-[11px] text-slate-500">
-                    PSGC {stat.psgc}
-                  </div>
-                </div>
-              </Popup>
+              <MarkerTooltip
+                stat={stat}
+                fill={barangayFill(stat.caseCount, maxCount)}
+                assigned
+              />
+              <MarkerPopup stat={stat} assigned />
             </CircleMarker>
           ))}
 
         <FocusController target={focusTarget} />
       </MapContainer>
 
-      {/* Stats overlay. Offset to the right so it sits past the zoom control. */}
-      {summary && (
-        <div className="pointer-events-none absolute left-12 top-3 z-[500] flex flex-col gap-2 sm:left-14 sm:top-4">
-          <div
+      {/* ── Basemap switcher — segmented control, top-right ─────────── */}
+      <div
+        className={
+          "pointer-events-auto absolute right-3 top-3 z-[500] flex overflow-hidden sm:right-4 sm:top-4 " +
+          GLASS
+        }
+        role="group"
+        aria-label="Basemap style"
+      >
+        {BASE_STYLES.map((s) => (
+          <button
+            key={s.name}
+            type="button"
+            onClick={() => setBaseStyle(s.name)}
+            aria-pressed={baseStyle === s.name}
             className={
-              "pointer-events-auto rounded-xl border px-3 py-2 shadow-md backdrop-blur " +
-              (showHeat
-                ? "border-slate-700 bg-slate-900/90 text-white"
-                : "border-slate-200 bg-white/95 text-slate-900")
+              "px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-wider transition " +
+              (baseStyle === s.name
+                ? "bg-white/15 text-white"
+                : "text-slate-400 hover:bg-white/5 hover:text-white")
             }
           >
-            <div
-              className={
-                "flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide " +
-                (showHeat ? "text-slate-400" : "text-slate-500")
-              }
-            >
-              <Activity className="h-3.5 w-3.5 text-brand-400" />
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Overview + most affected — top-left console column ──────── */}
+      {summary && (
+        <div className="absolute left-3 top-3 z-[500] flex w-48 flex-col gap-2 sm:left-4 sm:top-4 sm:w-56">
+          <div className={"px-3 py-2.5 " + GLASS}>
+            <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+              <Activity className="h-3.5 w-3.5 text-accent-400" />
               TB hotspot overview
             </div>
-            <div className="mt-1 grid grid-cols-3 gap-3 text-center">
+            <div className="mt-2 grid grid-cols-3 gap-2">
               <div>
-                <div className="text-lg font-bold">
+                <div className="font-display text-xl font-extrabold leading-none tracking-tight text-white">
                   {summary.totalCases.toLocaleString()}
                 </div>
-                <div className={showHeat ? "text-[10px] text-slate-400" : "text-[10px] text-slate-500"}>Total cases</div>
+                <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-slate-400">
+                  Cases
+                </div>
               </div>
               <div>
-                <div className="text-lg font-bold">
+                <div className="font-display text-xl font-extrabold leading-none tracking-tight text-white">
                   {summary.recentCases.toLocaleString()}
                 </div>
-                <div className={showHeat ? "text-[10px] text-slate-400" : "text-[10px] text-slate-500"}>
-                  Last {summary.recentWindowDays}d
+                <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-slate-400">
+                  {summary.recentWindowDays}-day
                 </div>
               </div>
               <div>
-                <div className="text-lg font-bold">
+                <div className="font-display text-xl font-extrabold leading-none tracking-tight text-white">
                   {summary.clusters.length}
                 </div>
-                <div className={showHeat ? "text-[10px] text-slate-400" : "text-[10px] text-slate-500"}>Hotspots</div>
+                <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-slate-400">
+                  Hotspots
+                </div>
               </div>
             </div>
           </div>
 
           {summary.topBarangays.length > 0 && (
-            <div
-              className={
-                "pointer-events-auto max-w-[15rem] rounded-xl border p-3 shadow-md backdrop-blur " +
-                (showHeat
-                  ? "border-slate-700 bg-slate-900/90"
-                  : "border-slate-200 bg-white/95")
-              }
-            >
-              <div
-                className={
-                  "flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide " +
-                  (showHeat ? "text-slate-400" : "text-slate-500")
-                }
-              >
-                <CalendarClock className="h-3.5 w-3.5 text-brand-400" />
-                Top barangays
+            <div className={"hidden p-3 md:block " + GLASS}>
+              <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+                <MapPin className="h-3.5 w-3.5 text-accent-400" />
+                Most affected
               </div>
-              <ul className="mt-1.5 space-y-0.5 text-xs">
+              <ul className="mt-1.5 space-y-0.5">
                 {summary.topBarangays.slice(0, 5).map((b) => (
-                  <li key={b.psgc} className="flex justify-between gap-2">
-                    <span className={showHeat ? "truncate text-slate-300" : "truncate text-slate-700"}>{b.name}</span>
-                    <span className={showHeat ? "font-semibold tabular-nums text-white" : "font-semibold tabular-nums text-slate-900"}>
-                      {b.caseCount}
-                    </span>
+                  <li key={b.psgc}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        mapRef.current?.flyTo([b.lat, b.lon], FOCUS_ZOOM, {
+                          duration: 0.8,
+                        })
+                      }
+                      className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-xs transition hover:bg-white/10"
+                    >
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: barangayFill(b.caseCount, maxCount) }}
+                      />
+                      <span className="truncate text-slate-300">{b.name}</span>
+                      <span className="ml-auto font-semibold tabular-nums text-white">
+                        {b.caseCount}
+                      </span>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -446,85 +534,100 @@ export function AdminHotspotMap({
         </div>
       )}
 
-      {/* Layer toggles — bottom-right, clear of the zoom control and legend */}
-      <div className="pointer-events-auto absolute bottom-3 right-3 z-[500] flex flex-col gap-1.5 sm:bottom-4 sm:right-4">
-        <button
-          type="button"
-          onClick={() => setShowBoundaries((v) => !v)}
-          className={
-            "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold shadow-md backdrop-blur transition " +
-            (showBoundaries
-              ? "border-teal-400 bg-teal-500 text-white hover:bg-teal-600"
-              : "border-slate-200 bg-white/95 text-slate-600 hover:text-slate-800")
-          }
-        >
-          <Layers className="h-3.5 w-3.5" />
-          {showBoundaries ? "Boundaries ON" : "Boundaries"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowHeat((v) => !v)}
-          className={
-            "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold shadow-md backdrop-blur transition " +
-            (showHeat
-              ? "border-amber-400 bg-amber-500 text-white hover:bg-amber-600"
-              : "border-slate-200 bg-white/95 text-slate-600 hover:text-slate-800")
-          }
-        >
-          <Flame className="h-3.5 w-3.5" />
-          {showHeat ? "Heat map ON" : "Heat map"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowMarkers((v) => !v)}
-          className={
-            "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold shadow-md backdrop-blur transition " +
-            (showMarkers
-              ? "border-brand-400 bg-brand-600 text-white hover:bg-brand-700"
-              : "border-slate-200 bg-white/95 text-slate-600 hover:text-slate-800")
-          }
-        >
-          <MapPin className="h-3.5 w-3.5" />
-          {showMarkers ? "Markers ON" : "Markers"}
-        </button>
-      </div>
-
-      {/* Legend — collapsible */}
+      {/* ── Layer toggles — bottom-right, clear of the zoom control ─── */}
       <div
         className={
-          "pointer-events-auto absolute bottom-3 left-3 z-[500] rounded-xl border text-[11px] shadow-md backdrop-blur sm:bottom-4 sm:left-4 " +
-          (showHeat
-            ? "border-slate-700 bg-slate-900/90 text-slate-300"
-            : "border-slate-200 bg-white/95 text-slate-600")
+          "pointer-events-auto absolute bottom-3 right-14 z-[500] flex flex-col p-1 sm:bottom-4 sm:right-16 " +
+          GLASS
+        }
+        role="group"
+        aria-label="Map layers"
+      >
+        {layerToggles.map(({ key, label, icon: Icon, on, dot, toggle }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={toggle}
+            aria-pressed={on}
+            className={
+              "flex items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-semibold transition " +
+              (on
+                ? "bg-white/10 text-white"
+                : "text-slate-400 hover:bg-white/5 hover:text-white")
+            }
+          >
+            <Icon
+              className="h-3.5 w-3.5"
+              style={on ? { color: dot } : undefined}
+            />
+            {label}
+            <span
+              aria-hidden
+              className="ml-auto h-1.5 w-1.5 rounded-full transition"
+              style={{
+                background: on ? dot : "rgba(148, 163, 184, 0.35)",
+                boxShadow: on ? `0 0 6px ${dot}` : "none",
+              }}
+            />
+          </button>
+        ))}
+      </div>
+
+      {/* ── Legend — collapsible, bottom-left ───────────────────────── */}
+      <div
+        className={
+          "pointer-events-auto absolute bottom-3 left-3 z-[500] w-48 sm:bottom-4 sm:left-4 " +
+          GLASS
         }
       >
         <button
           type="button"
           onClick={() => setLegendCollapsed((v) => !v)}
+          aria-expanded={!legendCollapsed}
           className={
-            "flex w-full items-center justify-between gap-2 px-3 py-2 " +
-            (showHeat ? "font-semibold uppercase tracking-wide text-slate-400" : "font-semibold uppercase tracking-wide text-slate-500")
+            "flex w-full items-center justify-between gap-2 px-3 py-2 transition hover:text-white " +
+            MICRO_LABEL
           }
         >
-          Hotspot density
+          Legend
           {legendCollapsed
             ? <ChevronUp className="h-3.5 w-3.5" />
             : <ChevronDown className="h-3.5 w-3.5" />}
         </button>
         {!legendCollapsed && (
-          <div className="px-3 pb-2">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              {(Object.keys(SEVERITY_COLOR) as HotspotSeverity[]).map((sev) => (
-                <span key={sev} className="inline-flex items-center gap-1">
+          <div className="px-3 pb-2.5">
+            <ul className="space-y-1">
+              {SEVERITY_ORDER.map((sev) => (
+                <li key={sev} className="flex items-center gap-1.5 text-[10px] text-slate-300">
                   <span
-                    className="inline-block h-2.5 w-2.5 rounded-full"
+                    className="inline-block h-2 w-2 shrink-0 rounded-full"
                     style={{ background: SEVERITY_COLOR[sev] }}
                   />
-                  <span>{SEVERITY_LABEL[sev]}</span>
-                </span>
+                  {SEVERITY_LABEL[sev]}
+                </li>
               ))}
+            </ul>
+            <div className="mt-2 border-t border-white/10 pt-2">
+              <div className="font-mono text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                Case density
+              </div>
+              <div className="mt-1 flex items-center gap-1">
+                {DENSITY_RAMP.map((color) => (
+                  <span
+                    key={color}
+                    className="h-2 flex-1 first:rounded-l-full last:rounded-r-full"
+                    style={{ background: color }}
+                  />
+                ))}
+              </div>
+              <div className="mt-1 flex justify-between font-mono text-[9px] uppercase tracking-wider text-slate-500">
+                <span>Low</span>
+                <span>High</span>
+              </div>
+              <div className="mt-1.5 text-[10px] text-slate-500">
+                Markers sized by case count.
+              </div>
             </div>
-            <div className="mt-1">Markers sized by case count.</div>
           </div>
         )}
       </div>

@@ -74,15 +74,18 @@ export function BarangayBoundaries({
     const count = stat?.caseCount ?? 0;
     const recent = stat?.recentCases ?? 0;
 
+    const microLabel =
+      "font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8";
     layer.bindPopup(
-      `<div style="min-width:180px;font-size:13px">` +
-        `<div style="font-weight:600;color:#0f172a">${name}</div>` +
-        `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;font-size:12px">` +
-        `<div><div style="color:#64748b">Total cases</div><div style="font-size:16px;font-weight:600">${count}</div></div>` +
-        `<div><div style="color:#64748b">Last 30 days</div><div style="font-size:16px;font-weight:600">${recent}</div></div>` +
+      `<div style="min-width:190px;font-size:13px">` +
+        `<div style="font-weight:600;color:#f8fafc">${name}</div>` +
+        `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">` +
+        `<div><div style="${microLabel}">Total cases</div><div style="font-family:'Archivo',sans-serif;font-size:20px;font-weight:800;letter-spacing:-0.02em;color:#fff">${count}</div></div>` +
+        `<div><div style="${microLabel}">Last 30 days</div><div style="font-family:'Archivo',sans-serif;font-size:20px;font-weight:800;letter-spacing:-0.02em;color:#fff">${recent}</div></div>` +
         `</div>` +
-        `<div style="margin-top:6px;font-size:10px;color:#94a3b8">PSGC ${psgc}</div>` +
+        `<div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.1);${microLabel};color:#64748b">PSGC ${psgc}</div>` +
         `</div>`,
+      { className: "ghm-popup" },
     );
 
     const path = layer as L.Path;
