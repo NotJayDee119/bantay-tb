@@ -861,7 +861,7 @@ function PatientDashboard({ name }: { name: string | null }) {
   return (
     <div className="space-y-6">
       {/* ── Hero — warm welcome ──────────────────────────────────────── */}
-      <section className="relative overflow-hidden rounded-3xl border-2 border-sky-200 bg-gradient-to-br from-sky-100 via-emerald-50 to-amber-100 p-6 sm:p-8">
+      <section className="relative overflow-hidden rounded-3xl border-2 border-sky-200 bg-gradient-to-br from-sky-100 via-emerald-50 to-amber-100 p-5 sm:p-8">
         <div
           aria-hidden
           className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-amber-200/50 blur-2xl"
@@ -875,7 +875,7 @@ function PatientDashboard({ name }: { name: string | null }) {
             <Sun className="h-3.5 w-3.5 text-amber-500" />
             Your health home
           </span>
-          <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+          <h1 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
             Hi, {firstName}!
           </h1>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-700 sm:text-base">
@@ -885,7 +885,7 @@ function PatientDashboard({ name }: { name: string | null }) {
         </div>
       </section>
 
-      {/* ── Big friendly tiles ───────────────────────────────────────── */}
+      {/* ── Big friendly tiles — tap to open each area ───────────────── */}
       <div className="grid gap-4 sm:grid-cols-3">
         {tiles.map((t) => (
           <Link
@@ -905,12 +905,14 @@ function PatientDashboard({ name }: { name: string | null }) {
               >
                 <t.icon className="h-6 w-6" />
               </span>
-              <ArrowRight
+              <span
                 className={
-                  "h-5 w-5 -translate-x-1 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100 " +
+                  "grid h-8 w-8 place-items-center rounded-full bg-white/70 transition-transform group-hover:translate-x-0.5 " +
                   t.arrow
                 }
-              />
+              >
+                <ArrowRight className="h-4 w-4" />
+              </span>
             </div>
             <div className="mt-4 font-display text-lg font-extrabold tracking-tight text-slate-900">
               {t.label}

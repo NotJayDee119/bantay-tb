@@ -1,7 +1,60 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Activity, ArrowRight, Heart, Menu, X } from "lucide-react";
-import { Link, NavLink, useLocation, useOutlet } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import gsap from "gsap";
+import { ReactLenis, useLenis } from "lenis/react";
+import { usePageTransition } from "../hooks/usePageTransition";
+import { preloadRoute } from "../lib/lazyPages";
+import { LazyFallback } from "./LazyFallback";
 import { PublicChatbotFab } from "./PublicChatbotFab";
+
+// Apple-glass-style momentum scroll for the public site — a longer, cubic
+// ease-out glide instead of the browser's stock instant wheel steps.
+// autoRaf is off because gsap.ticker drives the frame loop below, keeping
+// Lenis and GSAP's own tweens on the same clock. `anchors` makes any
+// in-page #hash link glide to its target through Lenis instead of jumping.
+const LENIS_OPTIONS = {
+  duration: 1.1,
+  easing: (t: number) => 1 - Math.pow(1 - t, 3),
+  autoRaf: false,
+  anchors: true,
+};
+
+// Header glass surface — barely-there at the top of the page, deeper and
+// more frosted once content scrolls beneath it. Animated as one GSAP tween
+// (not competing CSS transitions) so blur/tint/shadow settle in lockstep.
+const HEADER_AT_TOP = {
+  backgroundColor: "rgba(255, 255, 255, 0.7)",
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)",
+  borderBottomColor: "rgba(226, 232, 240, 0)",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06)",
+};
+const HEADER_SCROLLED = {
+  backgroundColor: "rgba(255, 255, 255, 0.92)",
+  backdropFilter: "blur(28px)",
+  WebkitBackdropFilter: "blur(28px)",
+  borderBottomColor: "rgba(226, 232, 240, 0.7)",
+  boxShadow: "0 12px 30px rgba(15, 23, 42, 0.08), 0 2px 10px rgba(15, 23, 42, 0.05)",
+};
+// Auth pages (the Sign in flow) pin a flat, shadowless header — same glass
+// tint as the top-of-page state but with the drop shadow and border removed,
+// and the scroll-driven condense is suppressed so it never picks the shadow
+// back up.
+const HEADER_FLAT = {
+  backgroundColor: "rgba(255, 255, 255, 0.7)",
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)",
+  borderBottomColor: "rgba(226, 232, 240, 0)",
+  boxShadow: "0 0 0 rgba(15, 23, 42, 0)",
+};
+const AUTH_PATHS = [
+  "/login",
+  "/register",
+  "/register/staff",
+  "/forgot-password",
+  "/reset-password",
+];
 
 const NAV = [
   { to: "/", label: "Home" },
@@ -23,31 +76,159 @@ const FOOTER_WORKER_LINKS = [
 
 export function PublicLayout() {
   const location = useLocation();
-  const outlet = useOutlet();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { containerRef: pageRef, pathname: pageKey, element: pageElement } = usePageTransition();
 
-  // Close drawer and jump back to the top on navigation — public pages
-  // scroll the document itself, and the browser keeps the old scroll
-  // position across client-side route changes.
+  const headerRef = useRef<HTMLElement>(null);
+  const pillTrackRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLSpanElement>(null);
+  const pillReady = useRef(false);
+  const headerScrolled = useRef(false);
+
+  // On the Sign in flow the header stays flat and shadowless; keep a ref the
+  // scroll callback can read so it skips the condense on those pages.
+  const isAuthPage = AUTH_PATHS.includes(location.pathname);
+  const isAuthPageRef = useRef(isAuthPage);
+  isAuthPageRef.current = isAuthPage;
+
+  // The Lenis scroll callback drives the header's glass/shadow condense.
+  // Reading the smooth Lenis value (instead of a native scroll listener)
+  // keeps the shadow easing in and out with the momentum scroll — and
+  // because navigation scrolls the next page back to the top through
+  // Lenis too, that same callback fires and fades the shadow away smoothly
+  // on every page change instead of leaving it stuck from the old page.
+  const lenis = useLenis((instance) => {
+    const header = headerRef.current;
+    if (!header || isAuthPageRef.current) return;
+    const next = instance.scroll > 8;
+    if (next === headerScrolled.current) return;
+    headerScrolled.current = next;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    gsap.to(header, {
+      ...(next ? HEADER_SCROLLED : HEADER_AT_TOP),
+      duration: reduced ? 0.01 : 0.55,
+      ease: "power3.out",
+      overwrite: "auto",
+    });
+  });
+
+  // Baseline glass state, re-evaluated whenever the route changes: auth pages
+  // snap to the flat/shadowless state, every other page starts at the subtle
+  // top-of-page state and lets the Lenis callback tween away from there once
+  // the page scrolls.
+  useLayoutEffect(() => {
+    if (!headerRef.current) return;
+    headerScrolled.current = false;
+    gsap.set(headerRef.current, isAuthPage ? HEADER_FLAT : HEADER_AT_TOP);
+  }, [isAuthPage]);
+
+  useEffect(() => {
+    if (!lenis) return;
+    const onTick = (time: number) => lenis.raf(time * 1000);
+    gsap.ticker.add(onTick);
+    gsap.ticker.lagSmoothing(0);
+    return () => gsap.ticker.remove(onTick);
+  }, [lenis]);
+
+  // Sliding glass pill behind the active nav item — measured off the
+  // NavLink React Router already marks with aria-current, then eased into
+  // place with GSAP so it glides between tabs instead of jumping.
+  useLayoutEffect(() => {
+    const track = pillTrackRef.current;
+    const pill = pillRef.current;
+    const active = track?.querySelector<HTMLElement>('a[aria-current="page"]');
+    if (!track || !pill) return;
+
+    // No nav item is active (e.g. the /login page isn't in NAV) — fade the
+    // pill out instead of leaving it parked behind whatever tab was last
+    // active, which otherwise lingers as a dark blob in the navbar.
+    if (!active) {
+      gsap.to(pill, {
+        opacity: 0,
+        duration: 0.3,
+        ease: "power3.out",
+        overwrite: "auto",
+      });
+      pillReady.current = false;
+      return;
+    }
+
+    const rect = {
+      x: active.offsetLeft,
+      y: active.offsetTop,
+      width: active.offsetWidth,
+      height: active.offsetHeight,
+    };
+
+    if (!pillReady.current) {
+      gsap.set(pill, { ...rect, opacity: 1 });
+      pillReady.current = true;
+      return;
+    }
+
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    gsap.to(pill, {
+      ...rect,
+      opacity: 1,
+      duration: reduced ? 0.01 : 0.5,
+      ease: "power3.out",
+      overwrite: "auto",
+    });
+  }, [location.pathname]);
+
+  // Re-snap the pill (no easing) if the layout reflows underneath it —
+  // window resizes, font loads, etc.
+  useEffect(() => {
+    const onResize = () => {
+      const track = pillTrackRef.current;
+      const pill = pillRef.current;
+      const active = track?.querySelector<HTMLElement>('a[aria-current="page"]');
+      if (!track || !pill) return;
+      if (!active) {
+        gsap.set(pill, { opacity: 0 });
+        return;
+      }
+      gsap.set(pill, {
+        x: active.offsetLeft,
+        y: active.offsetTop,
+        width: active.offsetWidth,
+        height: active.offsetHeight,
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Close the drawer the instant navigation starts, but hold the scroll
+  // reset until the new page actually lands — public pages scroll the
+  // document itself, and jumping to top mid-exit-fade would yank the old
+  // page's content out from under the user before it's finished leaving.
   useEffect(() => {
     setMobileOpen(false);
-    window.scrollTo(0, 0);
   }, [location.pathname]);
+  useEffect(() => {
+    // Lenis tracks its own target scroll position — a raw window.scrollTo
+    // would desync it, causing the next wheel/touch input to jump back.
+    if (lenis) lenis.scrollTo(0, { immediate: true });
+    else window.scrollTo(0, 0);
+  }, [pageKey, lenis]);
 
   // While the mobile menu is open: lock the page scroll behind it and let
   // Escape close it, like any modal surface.
   useEffect(() => {
     if (!mobileOpen) return;
     document.body.style.overflow = "hidden";
+    lenis?.stop();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setMobileOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = "";
+      lenis?.start();
       window.removeEventListener("keydown", onKey);
     };
-  }, [mobileOpen]);
+  }, [mobileOpen, lenis]);
 
   // Check if current page should hide footer
   const hideFooter = [
@@ -62,11 +243,31 @@ export function PublicLayout() {
   // would overlap them.
   const hideChatbot = location.pathname === "/dots-locator";
 
+  // Clicking a nav link for the page you're already on re-navigates
+  // nowhere — instead, glide back to the top with the Lenis easing.
+  // `force` matters for the mobile drawer: Lenis is stopped while it's
+  // open, and a stopped Lenis silently ignores un-forced scrollTo calls.
+  const glideTopIfCurrent = (to: string) => {
+    if (location.pathname === to) lenis?.scrollTo(0, { force: true });
+  };
+
+  // Warm a link's route chunk on hover/focus so, by click time, the page is
+  // usually already cached and the transition runs without a fallback flash.
+  const preloadProps = (to: string) => ({
+    onMouseEnter: () => preloadRoute(to),
+    onFocus: () => preloadRoute(to),
+  });
+
   return (
+    <ReactLenis root options={LENIS_OPTIONS}>
     <div className="flex min-h-screen flex-col bg-white">
-      <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
+      <header ref={headerRef} className="sticky top-0 z-40 border-b">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-          <Link to="/" className="flex min-w-0 items-center gap-3">
+          <Link
+            to="/"
+            className="flex min-w-0 items-center gap-3"
+            onClick={() => glideTopIfCurrent("/")}
+          >
             <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-950 text-white shadow-soft">
               <Activity className="h-5 w-5" />
               <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-vigil-400" />
@@ -83,16 +284,27 @@ export function PublicLayout() {
 
           {/* Segmented pill nav */}
           <nav className="hidden items-center lg:flex">
-            <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100/70 p-1">
+            <div
+              ref={pillTrackRef}
+              className="relative flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100/70 p-1"
+            >
+              <span
+                ref={pillRef}
+                aria-hidden
+                className="absolute left-0 top-0 z-0 rounded-full bg-brand-950 shadow-soft"
+                style={{ width: 0, height: 0, opacity: 0 }}
+              />
               {NAV.map((l) => (
                 <NavLink
                   key={l.to}
                   to={l.to}
                   end={l.to === "/"}
+                  onClick={() => glideTopIfCurrent(l.to)}
+                  {...preloadProps(l.to)}
                   className={({ isActive }) =>
-                    "rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 " +
+                    "relative z-10 rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-200 " +
                     (isActive
-                      ? "bg-brand-950 text-white shadow-soft"
+                      ? "text-white"
                       : "text-slate-600 hover:bg-white hover:text-slate-900")
                   }
                 >
@@ -102,6 +314,7 @@ export function PublicLayout() {
             </div>
             <Link
               to="/login"
+              {...preloadProps("/login")}
               className="ml-4 inline-flex h-10 items-center gap-2 rounded-full bg-brand-950 px-5 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-900"
             >
               Sign in
@@ -160,6 +373,13 @@ export function PublicLayout() {
                 key={l.to}
                 to={l.to}
                 end={l.to === "/"}
+                {...preloadProps(l.to)}
+                onClick={() => {
+                  // Same-page tap: the pathname doesn't change, so the
+                  // route-change effect won't close the drawer — do both here.
+                  setMobileOpen(false);
+                  glideTopIfCurrent(l.to);
+                }}
                 className={({ isActive }) =>
                   "flex items-center justify-between rounded-xl px-4 py-3 font-medium transition " +
                   (isActive
@@ -178,6 +398,7 @@ export function PublicLayout() {
             <div className="mt-2 flex flex-col gap-2 border-t border-slate-200/70 pt-4">
               <Link
                 to="/login"
+                {...preloadProps("/login")}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-950 px-4 font-semibold text-white shadow-soft transition hover:bg-brand-900"
               >
                 Sign in
@@ -185,6 +406,7 @@ export function PublicLayout() {
               </Link>
               <Link
                 to="/register"
+                {...preloadProps("/register")}
                 className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 font-medium text-slate-700 shadow-soft transition hover:bg-slate-50"
               >
                 Request an account
@@ -205,8 +427,12 @@ export function PublicLayout() {
         aria-hidden="true"
       />
       <main className="flex-1 overflow-x-hidden">
-        <div key={location.pathname} className="page-in">
-          {outlet}
+        {/* Suspense lives *inside* the keyed transition container: a cold
+            page chunk falls back to the route-progress bar while the header,
+            nav and footer stay mounted, and pageRef stays stable so the GSAP
+            enter/exit tweens keep owning the whole transition. */}
+        <div key={pageKey} ref={pageRef}>
+          <Suspense fallback={<LazyFallback />}>{pageElement}</Suspense>
         </div>
       </main>
       {!hideFooter && (
@@ -303,5 +529,6 @@ export function PublicLayout() {
       )}
       {!hideChatbot && <PublicChatbotFab />}
     </div>
+    </ReactLenis>
   );
 }

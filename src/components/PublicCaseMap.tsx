@@ -93,6 +93,35 @@ function CtrlScrollZoom({ onPlainWheel }: { onPlainWheel: () => void }) {
   return null;
 }
 
+/** Keeps Leaflet's internal size in sync with its container. Leaflet only
+ *  measures its container once on init — it never notices the hero card
+ *  being resized by a breakpoint change, a GSAP entrance tween, or the
+ *  browser's own resize/orientation events, which otherwise leaves stale
+ *  gray tile gaps until the next manual pan/zoom. */
+function MapResizeSync() {
+  const map = useMap();
+  useEffect(() => {
+    const container = map.getContainer();
+    let frame: number | null = null;
+    const sync = () => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        map.invalidateSize({ animate: false });
+      });
+    };
+    const observer = new ResizeObserver(sync);
+    observer.observe(container);
+    window.addEventListener("orientationchange", sync);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("orientationchange", sync);
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [map]);
+  return null;
+}
+
 /** Flies the camera to the selected barangay; resets when cleared. */
 function FocusController({ target }: { target: BarangayPoint | null }) {
   const map = useMap();
@@ -232,6 +261,7 @@ export function PublicCaseMap({ className = "" }: { className?: string }) {
       >
         <OpenFreeMapLayer styleName="dark" />
         <ZoomControl position="bottomright" />
+        <MapResizeSync />
         <FocusController target={selected} />
         <CtrlScrollZoom onPlainWheel={showZoomHint} />
 

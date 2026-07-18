@@ -1,5 +1,6 @@
 @import "leaflet/dist/leaflet.css";
 @import "maplibre-gl/dist/maplibre-gl.css";
+@import "lenis/dist/lenis.css";
 @import url("https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap");
 
 @tailwind base;
@@ -46,12 +47,21 @@ body {
 }
 
 /* Public hero map — soft-edged case bubbles. The halo melts into the
-   basemap; the core keeps just enough blur to lose its hard SVG edge. */
+   basemap; the core keeps just enough blur to lose its hard SVG edge.
+   Leaflet mutates fill-opacity/opacity/stroke as SVG presentation
+   attributes on filter/select — transitioning them here is what keeps
+   dimming and re-highlighting from snapping instantly. */
 .pcm-glow {
   filter: blur(6px);
+  transition: fill-opacity 260ms ease, opacity 260ms ease;
 }
 .pcm-core {
   filter: blur(1.25px);
+  transition:
+    fill-opacity 220ms ease,
+    opacity 220ms ease,
+    stroke-opacity 220ms ease,
+    stroke 220ms ease;
 }
 
 /* Public hero map — hover tooltip. The Leaflet root is stripped bare
@@ -148,9 +158,40 @@ body {
   animation: step-in-right 0.25s ease-out;
 }
 
-/* Route transitions — page content fades up gently on navigation. Kept
-   short and subtle so frequent page switches never feel heavy; the
-   prefers-reduced-motion block below disables it entirely. */
+/* Route-chunk loading — thin progress bar pinned above everything.
+   Invisible for the first ~150ms (fast loads never flash it), then
+   sweeps out quickly and slows as it approaches ~90%, where it parks
+   until the loaded page replaces it. */
+.route-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  height: 3px;
+  width: 0;
+  border-radius: 0 9999px 9999px 0;
+  background: linear-gradient(90deg, #059669, #34d399);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.55);
+  animation: route-progress 1.6s cubic-bezier(0.16, 1, 0.3, 1) 0.15s forwards;
+  opacity: 0;
+}
+@keyframes route-progress {
+  0% {
+    opacity: 1;
+    width: 0;
+  }
+  55% {
+    width: 65%;
+  }
+  100% {
+    opacity: 1;
+    width: 90%;
+  }
+}
+
+/* Fade-up used by panels and chat messages that appear in place. Route
+   transitions now animate via GSAP (usePageTransition) instead of this
+   keyframe, so cross-fading the exit and entrance can be sequenced in JS. */
 @keyframes page-in {
   from {
     opacity: 0;
@@ -161,13 +202,49 @@ body {
     transform: translateY(0);
   }
 }
-.page-in {
+.panel-in {
   animation: page-in 0.2s ease-out;
 }
 
-/* Same fade-up, for panels and chat messages that appear in place. */
-.panel-in {
-  animation: page-in 0.2s ease-out;
+/* Health Education — modal backdrop fade + sheet slide-up (mobile) / pop (desktop). */
+@keyframes he-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.he-backdrop-in {
+  animation: he-backdrop-in 0.2s ease-out;
+}
+@keyframes he-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes he-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.he-sheet-in {
+  animation: he-sheet-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (min-width: 640px) {
+  .he-sheet-in {
+    animation: he-pop-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  }
 }
 
 /* DOTS Locator — floating cards slide up into view. */

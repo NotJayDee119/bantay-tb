@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Lenis from "lenis";
 import {
   CircleMarker,
   MapContainer,
@@ -96,6 +97,39 @@ export function DotsLocator() {
   const [route, setRoute] = useState<RouteInfo | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // The page itself is a fixed-height, non-scrolling map, so the site-wide
+  // <ReactLenis root> in PublicLayout has nothing to smooth here. The nearby-
+  // centers list is the only scroll surface — give it its own nested Lenis
+  // instance so the wheel/trackpad glides with the same easing as the rest of
+  // the site instead of stepping. `wrapper` is the overflow container, `content`
+  // its inner <ul>; Lenis watches the content's size on its own as items load.
+  useEffect(() => {
+    const wrapper = listRef.current;
+    const content = wrapper?.firstElementChild as HTMLElement | null;
+    if (!wrapper || !content) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const lenis = new Lenis({
+      wrapper,
+      content,
+      duration: 1.1,
+      easing: (t: number) => 1 - Math.pow(1 - t, 3),
+    });
+
+    let raf = 0;
+    const loop = (time: number) => {
+      lenis.raf(time);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      lenis.destroy();
+    };
+  }, []);
 
   useEffect(() => {
     supabase
@@ -376,7 +410,8 @@ export function DotsLocator() {
               <Badge tone="accent">Tap a pin to route</Badge>
             </div>
 
-            <ul className="flex-1 space-y-1.5 overflow-y-auto p-2">
+            <div ref={listRef} className="flex-1 overflow-y-auto">
+            <ul className="space-y-1.5 p-2">
               {loading && (
                 <li className="px-4 py-8 text-center text-sm text-slate-500">
                   Fetching DOTS centers…
@@ -452,6 +487,7 @@ export function DotsLocator() {
                 );
               })}
             </ul>
+            </div>
         </div>
       </div>
 

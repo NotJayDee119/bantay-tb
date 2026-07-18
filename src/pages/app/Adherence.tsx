@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
   CalendarClock,
   Check,
+  ChevronRight,
   Clock,
   Frown,
   ListChecks,
@@ -26,6 +27,7 @@ import {
   PageHeader,
   Select,
 } from "../../components/ui";
+import { PatientSheet } from "../../components/PatientSheet";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { formatDate, formatDateTime } from "../../lib/utils";
@@ -638,9 +640,22 @@ function StatTile({
   );
 }
 
+// Dose confirmability, derived against a live clock: patients may only confirm
+// a dose once it is actually due, and only on its own day.
+function doseState(l: Log, now: Date) {
+  const sched = new Date(l.scheduled_at);
+  const isToday = sched.toDateString() === now.toDateString();
+  const isDue = sched.getTime() <= now.getTime();
+  const canTake = l.status !== "taken" && isToday && isDue;
+  const isLocked = l.status !== "taken" && !isDue;
+  return { isToday, isDue, canTake, isLocked };
+}
+
 /**
- * Patient view — a friendly, nursery-style "medicine buddy" experience:
- * pastel cards, stars for progress, and one big cheerful action per dose.
+ * Patient view — a friendly, mobile-first "medicine buddy" experience: pastel
+ * cards, stars for progress, and tap-to-open detail sheets. Tapping a dose or a
+ * medicine opens a bottom-sheet modal (on phones) / centered dialog (on desktop)
+ * with the full details and the big cheerful "I took it!" action.
  */
 function PatientAdherence({
   name,
@@ -660,18 +675,47 @@ function PatientAdherence({
   const done = logs.filter((l) => l.status !== "scheduled").length;
   const stars = done === 0 ? 0 : Math.round((taken / done) * 5);
 
-  // Real-time clock so "I took it!" unlocks the moment a dose becomes due —
-  // patients can only confirm today's doses, never in advance.
+  // Real-time clock so "I took it!" unlocks the moment a dose becomes due.
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(t);
   }, []);
 
+  const scheduleById = useMemo(
+    () => new Map(schedules.map((s) => [s.id, s])),
+    [schedules]
+  );
+
+  // Which detail sheet is open (by id) — dose or medicine.
+  const [openDoseId, setOpenDoseId] = useState<string | null>(null);
+  const [openMedId, setOpenMedId] = useState<string | null>(null);
+  const openDose = logs.find((l) => l.id === openDoseId) ?? null;
+  const openMed = schedules.find((s) => s.id === openMedId) ?? null;
+
+  // The next dose the patient can confirm right now — surfaced as a big
+  // one-tap card at the top so the main action is never buried in a list.
+  const nextDue = useMemo(
+    () =>
+      [...logs]
+        .filter((l) => doseState(l, now).canTake)
+        .sort(
+          (a, b) =>
+            new Date(a.scheduled_at).getTime() -
+            new Date(b.scheduled_at).getTime()
+        )[0] ?? null,
+    [logs, now]
+  );
+
+  function confirmDose(id: string) {
+    onMarkTaken(id);
+    setOpenDoseId(null);
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* ── Hero — big, warm welcome ─────────────────────────────────── */}
-      <section className="relative overflow-hidden rounded-3xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-100 via-sky-50 to-amber-100 p-6 sm:p-8">
+      <section className="relative overflow-hidden rounded-3xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-100 via-sky-50 to-amber-100 p-5 sm:p-8">
         <div
           aria-hidden
           className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-amber-200/50 blur-2xl"
@@ -680,13 +724,13 @@ function PatientAdherence({
           aria-hidden
           className="pointer-events-none absolute -bottom-12 left-1/3 h-36 w-36 rounded-full bg-sky-200/50 blur-2xl"
         />
-        <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-xs font-bold text-emerald-700 shadow-soft">
               <Sun className="h-3.5 w-3.5 text-amber-500" />
               Your medicine buddy
             </span>
-            <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+            <h1 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
               Hi, {firstName}!
             </h1>
             <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-700 sm:text-base">
@@ -694,7 +738,7 @@ function PatientAdherence({
               You can do it!
             </p>
           </div>
-          <div className="flex items-center gap-4 rounded-2xl border-2 border-white/70 bg-white/70 p-4 shadow-soft backdrop-blur-sm">
+          <div className="flex items-center gap-4 self-start rounded-2xl border-2 border-white/70 bg-white/70 p-4 shadow-soft backdrop-blur-sm">
             <span className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-500 text-white">
               <Sparkles className="h-6 w-6" />
             </span>
@@ -728,7 +772,33 @@ function PatientAdherence({
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* ── Time-for-your-medicine card — the one big action on mobile ── */}
+      {nextDue && (
+        <button
+          type="button"
+          onClick={() => setOpenDoseId(nextDue.id)}
+          className="flex w-full items-center gap-4 rounded-3xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-500 to-emerald-600 p-5 text-left text-white shadow-lift transition-transform duration-200 active:scale-[0.99]"
+        >
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/20">
+            <Pill className="h-7 w-7" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-bold uppercase tracking-wide text-emerald-100">
+              It&apos;s medicine time!
+            </div>
+            <div className="mt-0.5 font-display text-lg font-extrabold leading-tight">
+              {scheduleById.get(nextDue.schedule_id)?.medication ??
+                "Your dose is ready"}
+            </div>
+            <div className="mt-0.5 text-sm font-semibold text-emerald-50">
+              Tap to confirm you took it
+            </div>
+          </div>
+          <ChevronRight className="h-6 w-6 shrink-0 text-white/80" />
+        </button>
+      )}
+
+      <div className="grid gap-5 lg:grid-cols-2">
         {/* ── My medicines ───────────────────────────────────────────── */}
         <section className="overflow-hidden rounded-3xl border-2 border-sky-200 bg-white shadow-soft">
           <div className="flex items-center gap-2.5 border-b-2 border-sky-100 bg-sky-50/70 px-5 py-4">
@@ -748,22 +818,26 @@ function PatientAdherence({
           ) : (
             <ul className="divide-y-2 divide-sky-50">
               {schedules.map((s) => (
-                <li key={s.id} className="flex items-start gap-3 px-5 py-4">
-                  <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-sky-100 text-sky-600">
-                    <Pill className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0">
-                    <div className="font-bold text-slate-900">
-                      {s.medication}
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenMedId(s.id)}
+                    className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-sky-50/60 active:bg-sky-50"
+                  >
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-sky-100 text-sky-600">
+                      <Pill className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-bold text-slate-900">
+                        {s.medication}
+                      </div>
+                      <div className="mt-0.5 text-xs font-semibold text-slate-500">
+                        {s.dose} · {s.times_per_day}{" "}
+                        {s.times_per_day === 1 ? "time" : "times"} a day
+                      </div>
                     </div>
-                    <div className="mt-0.5 text-xs font-semibold text-slate-500">
-                      {s.dose} · {s.times_per_day}{" "}
-                      {s.times_per_day === 1 ? "time" : "times"} a day
-                    </div>
-                    <div className="mt-1 text-xs text-slate-400">
-                      {formatDate(s.start_date)} → {formatDate(s.end_date)}
-                    </div>
-                  </div>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-slate-300" />
+                  </button>
                 </li>
               ))}
             </ul>
@@ -791,66 +865,214 @@ function PatientAdherence({
               {logs.map((l) => {
                 const k = KID_STATUS[l.status];
                 const StatusIcon = k.icon;
-                const sched = new Date(l.scheduled_at);
-                const isToday = sched.toDateString() === now.toDateString();
-                const isDue = sched.getTime() <= now.getTime();
-                // Confirmable only once the dose is due, and only on its
-                // actual day — no confirming in advance, no back-filling.
-                const canTake = l.status !== "taken" && isToday && isDue;
-                const isLocked = l.status !== "taken" && !isDue;
+                const { canTake } = doseState(l, now);
                 return (
-                  <li
-                    key={l.id}
-                    className="flex items-center gap-3 px-5 py-4"
-                  >
-                    <span
-                      className={
-                        "grid h-10 w-10 shrink-0 place-items-center rounded-full border-2 " +
-                        k.bubble
-                      }
+                  <li key={l.id}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenDoseId(l.id)}
+                      className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-pink-50/60 active:bg-pink-50"
                     >
-                      <StatusIcon className="h-5 w-5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-bold text-slate-900">
-                        {formatDateTime(l.scheduled_at)}
-                      </div>
                       <span
                         className={
-                          "mt-1 inline-flex items-center rounded-full border-2 px-2 py-0.5 text-[11px] font-bold " +
-                          k.chip
+                          "grid h-10 w-10 shrink-0 place-items-center rounded-full border-2 " +
+                          k.bubble
                         }
                       >
-                        {k.label}
+                        <StatusIcon className="h-5 w-5" />
                       </span>
-                    </div>
-                    {canTake && (
-                      <button
-                        type="button"
-                        onClick={() => onMarkTaken(l.id)}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500 px-4 py-2 text-sm font-bold text-white shadow-soft transition hover:bg-emerald-600 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
-                      >
-                        <Check className="h-4 w-4" />
-                        I took it!
-                      </button>
-                    )}
-                    {isLocked && (
-                      <button
-                        type="button"
-                        disabled
-                        title={`You can tap this on ${formatDateTime(l.scheduled_at)}`}
-                        className="inline-flex shrink-0 cursor-not-allowed items-center gap-1.5 rounded-full border-2 border-slate-200 bg-slate-100 px-4 py-2 text-sm font-bold text-slate-400"
-                      >
-                        <Lock className="h-4 w-4" />
-                        {isToday ? "Not yet!" : "Not today"}
-                      </button>
-                    )}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-bold text-slate-900">
+                          {formatDateTime(l.scheduled_at)}
+                        </div>
+                        <span
+                          className={
+                            "mt-1 inline-flex items-center rounded-full border-2 px-2 py-0.5 text-[11px] font-bold " +
+                            k.chip
+                          }
+                        >
+                          {k.label}
+                        </span>
+                      </div>
+                      {canTake ? (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-soft">
+                          <Check className="h-3.5 w-3.5" />
+                          Take
+                        </span>
+                      ) : (
+                        <ChevronRight className="h-5 w-5 shrink-0 text-slate-300" />
+                      )}
+                    </button>
                   </li>
                 );
               })}
             </ul>
           )}
         </section>
+      </div>
+
+      {/* ── Dose detail sheet ────────────────────────────────────────── */}
+      <PatientSheet
+        open={openDose !== null}
+        onClose={() => setOpenDoseId(null)}
+        accentClass="border-pink-200"
+        icon={
+          openDose ? (
+            (() => {
+              const StatusIcon = KID_STATUS[openDose.status].icon;
+              return <StatusIcon className="h-6 w-6" />;
+            })()
+          ) : null
+        }
+        iconClass={openDose ? KID_STATUS[openDose.status].bubble : undefined}
+        title={openDose ? KID_STATUS[openDose.status].label : ""}
+        subtitle={
+          openDose
+            ? scheduleById.get(openDose.schedule_id)?.medication ?? "Your dose"
+            : undefined
+        }
+        footer={
+          openDose &&
+          (() => {
+            const { canTake, isLocked, isToday } = doseState(openDose, now);
+            if (canTake) {
+              return (
+                <button
+                  type="button"
+                  onClick={() => confirmDose(openDose.id)}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3.5 text-base font-extrabold text-white shadow-soft transition hover:bg-emerald-600 active:scale-[0.98]"
+                >
+                  <Check className="h-5 w-5" />
+                  I took it!
+                </button>
+              );
+            }
+            if (isLocked) {
+              return (
+                <div className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 bg-slate-100 px-4 py-3.5 text-sm font-bold text-slate-400">
+                  <Lock className="h-4 w-4" />
+                  {isToday ? "You can take this later today" : "Not for today"}
+                </div>
+              );
+            }
+            return (
+              <div className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-emerald-200 bg-emerald-50 px-4 py-3.5 text-sm font-bold text-emerald-700">
+                <Smile className="h-4 w-4" />
+                All done — great job!
+              </div>
+            );
+          })()
+        }
+      >
+        {openDose && (
+          <div className="space-y-3">
+            <DetailRow
+              icon={<CalendarClock className="h-4 w-4" />}
+              label="Scheduled for"
+              value={formatDateTime(openDose.scheduled_at)}
+            />
+            {openDose.taken_at && (
+              <DetailRow
+                icon={<Check className="h-4 w-4" />}
+                label="Taken at"
+                value={formatDateTime(openDose.taken_at)}
+              />
+            )}
+            {(() => {
+              const s = scheduleById.get(openDose.schedule_id);
+              if (!s) return null;
+              return (
+                <DetailRow
+                  icon={<Pill className="h-4 w-4" />}
+                  label="Medicine"
+                  value={`${s.medication} · ${s.dose}`}
+                />
+              );
+            })()}
+            <p className="rounded-2xl bg-pink-50 px-4 py-3 text-sm font-medium leading-relaxed text-slate-600">
+              {doseState(openDose, now).canTake
+                ? "It's time! Tap the button below once you've taken this dose."
+                : openDose.status === "taken"
+                  ? "You already took this one. Keep up the great work!"
+                  : doseState(openDose, now).isToday
+                    ? "This dose isn't ready yet — come back when it's time."
+                    : "This dose is for another day. Check your medicines list to plan ahead."}
+            </p>
+          </div>
+        )}
+      </PatientSheet>
+
+      {/* ── Medicine detail sheet ────────────────────────────────────── */}
+      <PatientSheet
+        open={openMed !== null}
+        onClose={() => setOpenMedId(null)}
+        accentClass="border-sky-200"
+        icon={<Pill className="h-6 w-6" />}
+        iconClass="bg-sky-100 text-sky-700"
+        title={openMed?.medication ?? ""}
+        subtitle={
+          openMed
+            ? `${openMed.dose} · ${openMed.times_per_day} ${
+                openMed.times_per_day === 1 ? "time" : "times"
+              } a day`
+            : undefined
+        }
+      >
+        {openMed && (
+          <div className="space-y-3">
+            <DetailRow
+              icon={<Pill className="h-4 w-4" />}
+              label="Dose"
+              value={openMed.dose}
+            />
+            <DetailRow
+              icon={<Clock className="h-4 w-4" />}
+              label="How often"
+              value={`${openMed.times_per_day} ${
+                openMed.times_per_day === 1 ? "time" : "times"
+              } a day`}
+            />
+            <DetailRow
+              icon={<CalendarClock className="h-4 w-4" />}
+              label="Start date"
+              value={formatDate(openMed.start_date)}
+            />
+            <DetailRow
+              icon={<CalendarClock className="h-4 w-4" />}
+              label="Until"
+              value={formatDate(openMed.end_date)}
+            />
+            <p className="rounded-2xl bg-sky-50 px-4 py-3 text-sm font-medium leading-relaxed text-slate-600">
+              Take this medicine exactly as your health worker told you. Finishing
+              every dose is the best way to get fully better!
+            </p>
+          </div>
+        )}
+      </PatientSheet>
+    </div>
+  );
+}
+
+// A simple label/value row used inside the patient detail sheets.
+function DetailRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border-2 border-slate-100 bg-white px-4 py-3">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-500">
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          {label}
+        </div>
+        <div className="truncate text-sm font-bold text-slate-900">{value}</div>
       </div>
     </div>
   );

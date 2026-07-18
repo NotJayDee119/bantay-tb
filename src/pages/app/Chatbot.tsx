@@ -17,6 +17,7 @@ import {
   Spinner,
   Textarea,
 } from "../../components/ui";
+import { PatientSheet } from "../../components/PatientSheet";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { detectLocale, LOCALE_LABEL, type Locale } from "../../lib/i18n";
@@ -543,18 +544,19 @@ export function Chatbot() {
       <div
         className={
           "grid min-h-0 flex-1 gap-4 " +
-          (showHistory
+          (showHistory && !isPatient
             ? "grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] lg:grid-rows-1"
             : "grid-cols-1 grid-rows-[minmax(0,1fr)]")
         }
       >
-        {/* History panel — toggleable so the chat can go full-width. */}
-        {showHistory && (
+        {/* History panel — staff keep a docked side panel; patients open it as
+            a bottom sheet (rendered after the grid) so chat stays full-width. */}
+        {showHistory && !isPatient && (
         <Card className="panel-in flex min-h-0 flex-col overflow-hidden p-0">
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
             <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
               <History className="h-3.5 w-3.5 text-brand-600" />
-              {isPatient ? "Your chats" : "History"}
+              History
             </div>
             {history.length > 0 && (
               <span className="font-mono text-[10px] tabular-nums text-slate-500">
@@ -562,60 +564,13 @@ export function Chatbot() {
               </span>
             )}
           </div>
-          {history.length === 0 ? (
-            <div className="px-4 py-10 text-center">
-              <MessagesSquare className="mx-auto h-6 w-6 text-slate-300" />
-              <p className="mt-3 text-sm text-slate-500">
-                No previous chats yet.
-              </p>
-            </div>
-          ) : (
-            <ul className="max-h-36 flex-1 divide-y divide-slate-100 overflow-y-auto lg:max-h-none">
-              {history.map((s) => {
-                const active = s.id === sessionId;
-                return (
-                  <li key={s.id} className="group relative">
-                    <button
-                      onClick={() => loadSession(s.id)}
-                      className={
-                        "block w-full border-l-2 px-4 py-2.5 pr-9 text-left text-sm transition " +
-                        (active
-                          ? "border-brand-600 bg-brand-50 text-brand-800"
-                          : "border-transparent text-slate-700 hover:bg-slate-50")
-                      }
-                    >
-                      <div className="line-clamp-1 font-medium">{s.preview}</div>
-                      <div className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-slate-400">
-                        {new Date(s.created_at).toLocaleString()}
-                      </div>
-                    </button>
-                    {/* Delete button — appears on hover */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteSession(s.id);
-                      }}
-                      disabled={deletingId === s.id}
-                      title="Delete this conversation"
-                      aria-label="Delete this conversation"
-                      className={
-                        "absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 transition " +
-                        "text-slate-300 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 " +
-                        "hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
-                      }
-                    >
-                      {deletingId === s.id ? (
-                        <Spinner className="h-3.5 w-3.5" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          <HistoryList
+            history={history}
+            sessionId={sessionId}
+            deletingId={deletingId}
+            onSelect={loadSession}
+            onDelete={deleteSession}
+          />
         </Card>
         )}
 
@@ -793,7 +748,110 @@ export function Chatbot() {
           </div>
         </Card>
       </div>
+
+      {/* Patient chat history — bottom sheet (mobile) / centered dialog. */}
+      {isPatient && (
+        <PatientSheet
+          open={showHistory}
+          onClose={() => setShowHistory(false)}
+          accentClass="border-sky-200"
+          iconClass="bg-sky-100 text-sky-700"
+          icon={<History className="h-6 w-6" />}
+          title="Your chats"
+          subtitle={
+            history.length > 0
+              ? `${history.length} saved conversation${history.length === 1 ? "" : "s"}`
+              : "Your past questions live here"
+          }
+        >
+          <HistoryList
+            history={history}
+            sessionId={sessionId}
+            deletingId={deletingId}
+            alwaysShowDelete
+            onSelect={(id) => {
+              loadSession(id);
+              setShowHistory(false);
+            }}
+            onDelete={deleteSession}
+          />
+        </PatientSheet>
+      )}
     </div>
+  );
+}
+
+/** Chat history list — shared by the staff side panel and the patient sheet. */
+function HistoryList({
+  history,
+  sessionId,
+  deletingId,
+  onSelect,
+  onDelete,
+  alwaysShowDelete = false,
+}: {
+  history: Session[];
+  sessionId: string;
+  deletingId: string | null;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  alwaysShowDelete?: boolean;
+}) {
+  if (history.length === 0) {
+    return (
+      <div className="px-4 py-10 text-center">
+        <MessagesSquare className="mx-auto h-6 w-6 text-slate-300" />
+        <p className="mt-3 text-sm text-slate-500">No previous chats yet.</p>
+      </div>
+    );
+  }
+  return (
+    <ul className="max-h-56 flex-1 divide-y divide-slate-100 overflow-y-auto lg:max-h-none">
+      {history.map((s) => {
+        const active = s.id === sessionId;
+        return (
+          <li key={s.id} className="group relative">
+            <button
+              onClick={() => onSelect(s.id)}
+              className={
+                "block w-full border-l-2 px-4 py-3 pr-11 text-left text-sm transition " +
+                (active
+                  ? "border-brand-600 bg-brand-50 text-brand-800"
+                  : "border-transparent text-slate-700 hover:bg-slate-50")
+              }
+            >
+              <div className="line-clamp-1 font-medium">{s.preview}</div>
+              <div className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-slate-400">
+                {new Date(s.created_at).toLocaleString()}
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(s.id);
+              }}
+              disabled={deletingId === s.id}
+              title="Delete this conversation"
+              aria-label="Delete this conversation"
+              className={
+                "absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 transition " +
+                (alwaysShowDelete
+                  ? "text-slate-400 "
+                  : "text-slate-300 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 ") +
+                "hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+              }
+            >
+              {deletingId === s.id ? (
+                <Spinner className="h-3.5 w-3.5" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

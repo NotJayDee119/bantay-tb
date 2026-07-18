@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -12,6 +13,7 @@ import {
   MessageSquare,
   CheckCircle2,
 } from "lucide-react";
+import gsap from "gsap";
 import { Button } from "../../components/ui";
 import { PublicCaseMap } from "../../components/PublicCaseMap";
 import heroImage from "../../assets/davao_city_midnight_blue_20260528_090346.png";
@@ -77,24 +79,67 @@ const WHY_IT_MATTERS = [
 ];
 
 export function Landing() {
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const ctx = gsap.context(() => {
+      const mm = gsap.matchMedia();
+
+      mm.add(
+        {
+          reduced: "(prefers-reduced-motion: reduce)",
+          full: "(prefers-reduced-motion: no-preference)",
+        },
+        (context) => {
+          const { reduced } = context.conditions as { reduced: boolean };
+
+          // Hero entrance — background settles, glow blooms, map rises in,
+          // caption trails behind it. clearProps hands inline styles back
+          // to Tailwind once each tween finishes, so nothing lingers to
+          // fight hover states later.
+          gsap
+            .timeline({ defaults: { ease: "power3.out", clearProps: "opacity,transform" } })
+            .from(".reveal-hero-bg", { opacity: 0, scale: 1.08, duration: reduced ? 0.01 : 1.2 })
+            .from(
+              ".reveal-hero-glow",
+              { opacity: 0, scale: 0.7, duration: reduced ? 0.01 : 1 },
+              "<0.15"
+            )
+            .from(
+              ".reveal-hero-map",
+              { opacity: 0, y: 32, duration: reduced ? 0.01 : 0.85 },
+              "-=0.65"
+            )
+            .from(
+              ".reveal-hero-caption",
+              { opacity: 0, y: 10, duration: reduced ? 0.01 : 0.5 },
+              "-=0.25"
+            );
+        }
+      );
+    }, rootRef);
+
+    return () => ctx.revert();
+  }, []);
+
   return (
-    <>
+    <div ref={rootRef}>
       {/* ─── Hero — full-width live case map with barangay filter ──── */}
       <section className="relative overflow-hidden bg-brand-950 text-white">
         {/* midnight-blue city photo + monitoring grid + emerald glow */}
-        <div aria-hidden className="pointer-events-none absolute inset-0">
+        <div aria-hidden className="reveal-hero-bg pointer-events-none absolute inset-0">
           <img src={heroImage} alt="" className="h-full w-full object-cover opacity-30" />
           <div className="absolute inset-0 bg-gradient-to-b from-brand-950/70 via-brand-950/40 to-brand-950" />
         </div>
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-vigil-grid" />
         <div
           aria-hidden
-          className="pointer-events-none absolute -left-40 top-[-10%] h-[36rem] w-[36rem] rounded-full bg-accent-500/15 blur-[120px]"
+          className="reveal-hero-glow pointer-events-none absolute -left-40 top-[-10%] h-[36rem] w-[36rem] rounded-full bg-accent-500/15 blur-[120px]"
         />
 
         <div className="relative mx-auto max-w-screen-2xl px-3 py-6 sm:px-5 sm:py-8">
-          <PublicCaseMap className="h-[26rem] min-h-[24rem] sm:h-[32rem] md:h-[70vh] lg:h-[78vh] lg:min-h-[30rem]" />
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 px-1">
+          <PublicCaseMap className="reveal-hero-map h-[26rem] min-h-[24rem] sm:h-[32rem] md:h-[70vh] lg:h-[78vh] lg:min-h-[30rem]" />
+          <div className="reveal-hero-caption mt-3 flex flex-wrap items-center justify-between gap-3 px-1">
             <p className="flex items-center gap-2 text-xs text-slate-400">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-400" />
               Live TB case map of Davao City — counts are grouped per barangay, so no
@@ -298,9 +343,7 @@ export function Landing() {
       {/* ─── Capabilities — bento, GIS mapping as the flagship tile ── */}
       <section className="border-b border-slate-200 bg-white py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div
-            className="max-w-2xl"
-          >
+          <div className="max-w-2xl">
             <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600">
               What the platform does
             </p>
@@ -383,8 +426,7 @@ export function Landing() {
       <section className="border-b border-slate-200 bg-white py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-12 lg:grid-cols-2 lg:gap-16 lg:items-center">
-            <div
-            >
+            <div>
               <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600">
                 Why this matters
               </p>
@@ -456,8 +498,7 @@ export function Landing() {
           className="pointer-events-none absolute -left-32 top-[-30%] h-[26rem] w-[26rem] rounded-full bg-brand-500/10 blur-[100px]"
         />
         <div className="relative mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 sm:py-24 lg:px-8">
-          <div
-          >
+          <div>
             <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-200 backdrop-blur-sm">
               <span className="h-1.5 w-1.5 rounded-full bg-accent-400" />
               Free diagnostics &middot; free medication
@@ -488,6 +529,6 @@ export function Landing() {
           </div>
         </div>
       </section>
-    </>
+    </div>
   );
 }

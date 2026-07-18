@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -26,11 +26,13 @@ import {
   useLocation,
   useNavigate,
   Navigate,
-  useOutlet,
 } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { usePageTransition } from "../hooks/usePageTransition";
+import { preloadRoute } from "../lib/lazyPages";
 import { ROLE_LABELS, type AppRole } from "../lib/supabase";
 import { supabase } from "../lib/supabase";
+import { LazyFallback } from "./LazyFallback";
 import { Spinner } from "./ui";
 
 interface NavItem {
@@ -165,7 +167,7 @@ export function AppLayout() {
 
   const role = profile?.role;
   const userId = profile?.id;
-  const outlet = useOutlet();
+  const { containerRef: pageRef, pathname: pageKey, element: pageElement } = usePageTransition();
   useEffect(() => {
     if (
       role !== "tb_coordinator" &&
@@ -201,14 +203,18 @@ export function AppLayout() {
     };
   }, [role, userId]);
 
-  // Close mobile drawer and reset the content scroll on route change —
-  // the scrollable <main> persists across navigations, so without this a
-  // deep scroll on one page carries over to the next.
+  // Close the mobile drawer the instant navigation starts. The content
+  // scroll reset waits for `pageKey` (the page transition's committed
+  // route) instead — the scrollable <main> persists across navigations, so
+  // resetting it immediately would yank the outgoing page to the top
+  // mid-exit-fade instead of after the incoming page has landed.
   const mainRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     setMobileOpen(false);
-    mainRef.current?.scrollTo(0, 0);
   }, [location.pathname]);
+  useEffect(() => {
+    mainRef.current?.scrollTo(0, 0);
+  }, [pageKey]);
 
   // Escape closes the mobile drawer, like any modal surface.
   useEffect(() => {
@@ -282,6 +288,8 @@ export function AppLayout() {
                     <NavLink
                       to={item.to}
                       end={item.to === "/app"}
+                      onMouseEnter={() => preloadRoute(item.to)}
+                      onFocus={() => preloadRoute(item.to)}
                       className={({ isActive }) =>
                         "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition " +
                         (isActive
@@ -427,18 +435,24 @@ export function AppLayout() {
 
       {/* Immersive full-bleed views — they fill the content area
           edge-to-edge instead of sitting inside the padded page shell
-          (maps go edge-to-edge; the chatbot fills the full height). */}
-      {["/app/map", "/app/hotspots", "/app/chatbot"].includes(location.pathname) ? (
+          (maps go edge-to-edge; the chatbot fills the full height).
+          Branches on `pageKey` (the transition's committed route) rather
+          than the live location, so a nav crossing into/out of this set
+          doesn't swap the shell out from under the page mid-exit-fade. */}
+      {["/app/map", "/app/hotspots", "/app/chatbot"].includes(pageKey) ? (
         <main className="flex-1 overflow-hidden pt-14 md:pt-0">
-          <div key={location.pathname} className="page-in h-full">
-            {outlet}
+          {/* Suspense inside the keyed transition container: a cold page
+              chunk falls back to the route-progress bar while the sidebar
+              stays mounted, and pageRef stays stable for the GSAP tweens. */}
+          <div key={pageKey} ref={pageRef} className="h-full">
+            <Suspense fallback={<LazyFallback />}>{pageElement}</Suspense>
           </div>
         </main>
       ) : (
         <main ref={mainRef} className="flex-1 overflow-y-auto pt-14 md:pt-0">
           <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-            <div key={location.pathname} className="page-in">
-              {outlet}
+            <div key={pageKey} ref={pageRef}>
+              <Suspense fallback={<LazyFallback />}>{pageElement}</Suspense>
             </div>
           </div>
         </main>

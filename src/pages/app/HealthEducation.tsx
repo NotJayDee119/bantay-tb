@@ -1,21 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Activity,
   BookOpen,
   Check,
   ChevronLeft,
   ChevronRight,
-  Heart,
   HeartPulse,
   Languages,
   PartyPopper,
+  Pill,
+  Salad,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   Star,
   Stethoscope,
   Thermometer,
   Waves,
   Wind,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
@@ -90,43 +94,90 @@ const DISEASE_STYLE: Record<Disease, { idle: string; active: string }> = {
   },
 };
 
-// Rotating step colors for the section list.
-const STEP_ACTIVE = [
-  "bg-sky-500",
-  "bg-amber-500",
-  "bg-pink-500",
-  "bg-emerald-500",
-  "bg-violet-500",
-];
+// Each learning step gets its own icon + soft color so the card grid reads
+// like a friendly set of chapters rather than a plain list.
+const CATEGORY_ICON: Record<Category, LucideIcon> = {
+  overview: BookOpen,
+  symptoms: Thermometer,
+  treatment: Pill,
+  prevention: ShieldCheck,
+  lifestyle: Salad,
+};
+
+const CATEGORY_STYLE: Record<
+  Category,
+  { tint: string; ring: string; badge: string; dot: string }
+> = {
+  overview: {
+    tint: "bg-sky-50",
+    ring: "border-sky-200 hover:border-sky-400",
+    badge: "bg-sky-100 text-sky-700",
+    dot: "bg-sky-500",
+  },
+  symptoms: {
+    tint: "bg-amber-50",
+    ring: "border-amber-200 hover:border-amber-400",
+    badge: "bg-amber-100 text-amber-800",
+    dot: "bg-amber-500",
+  },
+  treatment: {
+    tint: "bg-pink-50",
+    ring: "border-pink-200 hover:border-pink-400",
+    badge: "bg-pink-100 text-pink-700",
+    dot: "bg-pink-500",
+  },
+  prevention: {
+    tint: "bg-emerald-50",
+    ring: "border-emerald-200 hover:border-emerald-400",
+    badge: "bg-emerald-100 text-emerald-700",
+    dot: "bg-emerald-500",
+  },
+  lifestyle: {
+    tint: "bg-violet-50",
+    ring: "border-violet-200 hover:border-violet-400",
+    badge: "bg-violet-100 text-violet-700",
+    dot: "bg-violet-500",
+  },
+};
+
+const CATEGORY_HINT: Record<Category, Record<Locale, string>> = {
+  overview: { en: "What it is", tl: "Ano ito", ceb: "Unsa kini" },
+  symptoms: { en: "How it feels", tl: "Mga pakiramdam", ceb: "Mga bati" },
+  treatment: { en: "Getting better", tl: "Paggaling", ceb: "Pag-ayo" },
+  prevention: { en: "Stay safe", tl: "Manatiling ligtas", ceb: "Magpabilin luwas" },
+  lifestyle: { en: "Live healthy", tl: "Mabuhay nang malusog", ceb: "Himsog nga kinabuhi" },
+};
+
+const TAP_HINT: Record<Locale, string> = {
+  en: "Tap to read",
+  tl: "Pindutin para basahin",
+  ceb: "I-tap aron basahon",
+};
 
 /**
- * Patient-facing education — a friendly, nursery-style reading experience
- * over the same reviewed health content as the public Learn page.
+ * Patient-facing education — a mobile-first, tap-to-open reading experience.
+ * Each disease shows five friendly "chapter" cards; tapping one opens a
+ * bottom-sheet modal (on phones) / centered dialog (on wider screens) with the
+ * full reviewed article, references, and step-to-step navigation.
  */
 export function HealthEducation() {
   const [locale, setLocale] = useState<Locale>("en");
   const [disease, setDisease] = useState<Disease>("tb");
-  const [category, setCategory] = useState<Category>("overview");
+  // The step whose detail modal is open — null means the card grid is showing.
+  const [openCategory, setOpenCategory] = useState<Category | null>(null);
   // Sections the patient has opened, per disease — powers the star progress.
   const [visited, setVisited] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
+  const openStep = (c: Category) => {
+    setOpenCategory(c);
     setVisited((v) => {
-      const key = `${disease}:${category}`;
+      const key = `${disease}:${c}`;
       if (v.has(key)) return v;
       const next = new Set(v);
       next.add(key);
       return next;
     });
-  }, [disease, category]);
-
-  const article = HEALTH_ARTICLES.find(
-    (a) => a.disease === disease && a.locale === locale && a.category === category
-  );
-
-  const catIndex = CATEGORIES.indexOf(category);
-  const prevCat = catIndex > 0 ? CATEGORIES[catIndex - 1] : null;
-  const nextCat = catIndex < CATEGORIES.length - 1 ? CATEGORIES[catIndex + 1] : null;
+  };
 
   const visitedCount = useMemo(
     () => CATEGORIES.filter((c) => visited.has(`${disease}:${c}`)).length,
@@ -137,7 +188,7 @@ export function HealthEducation() {
   return (
     <div className="space-y-6">
       {/* ── Hero — warm and welcoming ────────────────────────────────── */}
-      <section className="relative overflow-hidden rounded-3xl border-2 border-sky-200 bg-gradient-to-br from-sky-100 via-amber-50 to-pink-100 p-6 sm:p-8">
+      <section className="relative overflow-hidden rounded-3xl border-2 border-sky-200 bg-gradient-to-br from-sky-100 via-amber-50 to-pink-100 p-5 sm:p-8">
         <div
           aria-hidden
           className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-pink-200/60 blur-2xl"
@@ -146,18 +197,18 @@ export function HealthEducation() {
           aria-hidden
           className="pointer-events-none absolute -bottom-14 left-1/4 h-40 w-40 rounded-full bg-sky-200/60 blur-2xl"
         />
-        <div className="relative flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+        <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-xs font-bold text-sky-700 shadow-soft">
               <Sparkles className="h-3.5 w-3.5 text-amber-500" />
               Learn &amp; grow strong
             </span>
-            <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+            <h1 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
               Health Education
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-700 sm:text-base">
-              Easy, friendly guides about TB and other sicknesses — read them in
-              English, Filipino, or Bisaya.
+              Easy, friendly guides about TB and other sicknesses — tap a card to
+              read in English, Filipino, or Bisaya.
             </p>
           </div>
 
@@ -185,7 +236,7 @@ export function HealthEducation() {
       {/* ── Topic picker — colorful chips ────────────────────────────── */}
       <section>
         <p className="mb-2.5 flex items-center gap-1.5 text-sm font-bold text-slate-700">
-          <Heart className="h-4 w-4 text-pink-500" />
+          <Sparkles className="h-4 w-4 text-pink-500" />
           Pick a topic
         </p>
         <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible">
@@ -210,223 +261,372 @@ export function HealthEducation() {
         </div>
       </section>
 
-      <div className="grid gap-6 md:grid-cols-[240px_1fr]">
-        {/* ── Steps sidebar — numbered like a storybook ──────────────── */}
-        <div className="h-fit overflow-hidden rounded-3xl border-2 border-amber-200 bg-white shadow-soft md:sticky md:top-20">
-          <div className="border-b-2 border-amber-100 bg-amber-50/70 px-4 py-3">
-            <p className="text-sm font-extrabold text-slate-800">My steps</p>
-            <div
-              className="mt-1.5 flex gap-0.5"
-              role="img"
-              aria-label={`${visitedCount} of ${CATEGORIES.length} steps read`}
-            >
-              {CATEGORIES.map((c) => (
-                <Star
-                  key={c}
-                  aria-hidden
-                  className={cn(
-                    "h-4 w-4",
-                    visited.has(`${disease}:${c}`)
-                      ? "fill-amber-400 text-amber-400"
-                      : "text-slate-300"
-                  )}
-                />
-              ))}
-            </div>
+      {/* ── Progress banner — stars per disease ──────────────────────── */}
+      <section
+        className={cn(
+          "flex items-center gap-3 rounded-3xl border-2 p-4 transition-colors",
+          allDone
+            ? "border-emerald-200 bg-emerald-50"
+            : "border-amber-200 bg-amber-50/70"
+        )}
+      >
+        <span
+          className={cn(
+            "grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-white",
+            allDone ? "bg-emerald-500" : "bg-amber-400"
+          )}
+        >
+          {allDone ? (
+            <PartyPopper className="h-5 w-5" />
+          ) : (
+            <Star className="h-5 w-5 fill-white" />
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-extrabold text-slate-800">
+            {allDone
+              ? `You read all ${CATEGORIES.length} steps — amazing!`
+              : `${visitedCount} of ${CATEGORIES.length} steps read`}
+          </p>
+          <div
+            className="mt-1.5 flex gap-0.5"
+            role="img"
+            aria-label={`${visitedCount} of ${CATEGORIES.length} steps read`}
+          >
+            {CATEGORIES.map((c) => (
+              <Star
+                key={c}
+                aria-hidden
+                className={cn(
+                  "h-4 w-4",
+                  visited.has(`${disease}:${c}`)
+                    ? "fill-amber-400 text-amber-400"
+                    : "text-slate-300"
+                )}
+              />
+            ))}
           </div>
-          <nav className="space-y-1 p-2.5">
-            {CATEGORIES.map((c, i) => {
-              const active = category === c;
-              const seen = visited.has(`${disease}:${c}`);
-              return (
-                <button
-                  key={c}
-                  onClick={() => setCategory(c)}
+        </div>
+      </section>
+
+      {/* ── Chapter cards — tap to open the detail modal ─────────────── */}
+      <section>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {CATEGORIES.map((c, i) => {
+            const Icon = CATEGORY_ICON[c];
+            const style = CATEGORY_STYLE[c];
+            const seen = visited.has(`${disease}:${c}`);
+            const hasArticle = HEALTH_ARTICLES.some(
+              (a) => a.disease === disease && a.locale === locale && a.category === c
+            );
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => openStep(c)}
+                className={cn(
+                  "group relative flex h-full flex-col items-start gap-3 rounded-3xl border-2 bg-white p-4 text-left shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift active:scale-[0.98]",
+                  style.ring
+                )}
+              >
+                {seen && (
+                  <span className="absolute right-3 top-3 grid h-6 w-6 place-items-center rounded-full bg-emerald-100 text-emerald-600">
+                    <Check className="h-4 w-4" />
+                  </span>
+                )}
+                <span
                   className={cn(
-                    "flex w-full items-center gap-2.5 rounded-2xl border-2 px-3 py-2.5 text-left text-sm font-bold transition active:scale-[0.98]",
-                    active
-                      ? "border-transparent text-white shadow-soft " + STEP_ACTIVE[i]
-                      : "border-transparent text-slate-700 hover:border-amber-200 hover:bg-amber-50"
+                    "grid h-12 w-12 place-items-center rounded-2xl transition-transform duration-200 group-hover:scale-105",
+                    style.tint
                   )}
                 >
+                  <Icon
+                    className={cn(
+                      "h-6 w-6",
+                      seen ? "text-slate-500" : "text-slate-700"
+                    )}
+                  />
+                </span>
+                <div className="min-w-0">
                   <span
                     className={cn(
-                      "grid h-7 w-7 shrink-0 place-items-center rounded-full font-display text-xs font-extrabold",
-                      active
-                        ? "bg-white/25 text-white"
-                        : seen
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-slate-100 text-slate-500"
+                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide",
+                      style.badge
                     )}
                   >
-                    {seen && !active ? <Check className="h-4 w-4" /> : i + 1}
+                    <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-white/70 text-[9px] text-slate-700">
+                      {i + 1}
+                    </span>
+                    {CATEGORY_HINT[c][locale]}
                   </span>
-                  <span className="min-w-0 flex-1 truncate">
+                  <p className="mt-2 font-display text-sm font-extrabold leading-snug text-slate-900">
                     {CATEGORY_LABEL[c][locale]}
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
+                  </p>
+                  <p className="mt-1 flex items-center gap-1 text-[11px] font-bold text-slate-400">
+                    {hasArticle ? (
+                      <>
+                        {TAP_HINT[locale]}
+                        <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                      </>
+                    ) : (
+                      "Coming soon"
+                    )}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── Detail modal ─────────────────────────────────────────────── */}
+      {openCategory && (
+        <ArticleModal
+          disease={disease}
+          category={openCategory}
+          locale={locale}
+          onClose={() => setOpenCategory(null)}
+          onNavigate={openStep}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── Detail modal: bottom sheet on phones, centered dialog on desktop ─── */
+function ArticleModal({
+  disease,
+  category,
+  locale,
+  onClose,
+  onNavigate,
+}: {
+  disease: Disease;
+  category: Category;
+  locale: Locale;
+  onClose: () => void;
+  onNavigate: (c: Category) => void;
+}) {
+  const article = HEALTH_ARTICLES.find(
+    (a) => a.disease === disease && a.locale === locale && a.category === category
+  );
+  const style = CATEGORY_STYLE[category];
+  const Icon = CATEGORY_ICON[category];
+
+  const catIndex = CATEGORIES.indexOf(category);
+  const prevCat = catIndex > 0 ? CATEGORIES[catIndex - 1] : null;
+  const nextCat =
+    catIndex < CATEGORIES.length - 1 ? CATEGORIES[catIndex + 1] : null;
+
+  // Lock body scroll + wire Escape while the sheet is open.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1000] flex items-end justify-center sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="he-modal-title"
+    >
+      <div
+        aria-hidden
+        className="he-backdrop-in absolute inset-0 bg-slate-900/50 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+
+      <div className="he-sheet-in relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border-2 border-b-0 border-sky-200 bg-white shadow-lift sm:max-h-[88vh] sm:max-w-lg sm:rounded-3xl sm:border-b-2">
+        {/* Grab handle (mobile affordance) */}
+        <div className="flex justify-center pt-2.5 sm:hidden">
+          <span aria-hidden className="h-1.5 w-10 rounded-full bg-slate-200" />
         </div>
 
-        {/* ── Article ────────────────────────────────────────────────── */}
-        <div key={`${disease}-${category}-${locale}`}>
-          <div className="overflow-hidden rounded-3xl border-2 border-sky-200 bg-white shadow-soft">
-            {article ? (
-              <article>
-                <div className="p-6 sm:p-8">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1 text-xs font-bold",
-                        DISEASE_STYLE[disease].idle
-                      )}
-                    >
-                      {DISEASE_LABEL[disease][locale]}
-                    </span>
-                    <span className="inline-flex items-center rounded-full border-2 border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600">
-                      {CATEGORY_LABEL[category][locale]}
-                    </span>
-                  </div>
-
-                  <h2 className="mt-4 font-display text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-                    {article.title}
-                  </h2>
-
-                  {/* Key takeaway — "Remember this!" */}
-                  <div className="mt-5 flex gap-3 rounded-2xl border-2 border-amber-200 bg-amber-50 p-4">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-amber-400 text-white">
-                      <Star className="h-5 w-5 fill-white" />
-                    </span>
-                    <div>
-                      <p className="text-xs font-extrabold uppercase tracking-wide text-amber-700">
-                        Remember this!
-                      </p>
-                      <p className="mt-1 text-sm font-medium leading-relaxed text-slate-700">
-                        {article.summary}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 max-w-none whitespace-pre-line text-[15px] leading-[1.9] text-slate-800 sm:text-base">
-                    {article.body_md}
-                  </div>
-
-                  {allDone && (
-                    <div className="mt-6 flex items-center gap-3 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
-                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-emerald-500 text-white">
-                        <PartyPopper className="h-5 w-5" />
-                      </span>
-                      <div>
-                        <p className="font-display text-sm font-extrabold text-emerald-800">
-                          You read all {CATEGORIES.length} steps — amazing!
-                        </p>
-                        <p className="text-xs font-medium text-emerald-700">
-                          Pick another topic above to keep learning.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Step navigation — big friendly buttons */}
-                <div className="grid gap-3 border-t-2 border-sky-100 bg-sky-50/50 p-4 sm:grid-cols-2 sm:p-5">
-                  {prevCat ? (
-                    <button
-                      type="button"
-                      onClick={() => setCategory(prevCat)}
-                      className="group flex items-center gap-3 rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-left shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-lift active:scale-[0.98]"
-                    >
-                      <ChevronLeft className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-hover:-translate-x-0.5" />
-                      <span className="min-w-0">
-                        <span className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                          Go back
-                        </span>
-                        <span className="block truncate text-sm font-extrabold text-slate-900">
-                          {CATEGORY_LABEL[prevCat][locale]}
-                        </span>
-                      </span>
-                    </button>
-                  ) : (
-                    <span aria-hidden className="hidden sm:block" />
-                  )}
-                  {nextCat && (
-                    <button
-                      type="button"
-                      onClick={() => setCategory(nextCat)}
-                      className="group flex items-center justify-end gap-3 rounded-2xl border-2 border-emerald-500 bg-emerald-500 px-4 py-3 text-right shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:bg-emerald-600 hover:shadow-lift active:scale-[0.98]"
-                    >
-                      <span className="min-w-0">
-                        <span className="block text-[11px] font-bold uppercase tracking-wide text-emerald-100">
-                          Next step
-                        </span>
-                        <span className="block truncate text-sm font-extrabold text-white">
-                          {CATEGORY_LABEL[nextCat][locale]}
-                        </span>
-                      </span>
-                      <ChevronRight className="h-5 w-5 shrink-0 text-white transition-transform group-hover:translate-x-0.5" />
-                    </button>
-                  )}
-                </div>
-
-                {/* References — for parents & guardians */}
-                <section
-                  aria-labelledby="sources-heading"
-                  className="border-t-2 border-sky-100 p-6 sm:p-8"
-                >
-                  <h3
-                    id="sources-heading"
-                    className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wide text-slate-500"
-                  >
-                    <BookOpen className="h-3.5 w-3.5 text-sky-600" />
-                    {SOURCES_HEADING[locale]}
-                  </h3>
-                  <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                    {SOURCES_NOTE[locale]}
-                  </p>
-                  <ol className="mt-4 grid gap-2 sm:grid-cols-2">
-                    {DISEASE_SOURCES[disease].map((s, idx) => (
-                      <li key={s.url}>
-                        <a
-                          href={s.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group flex h-full items-start gap-3 rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-lift"
-                        >
-                          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-slate-100 text-[10px] font-extrabold text-slate-500 transition-colors group-hover:bg-sky-100 group-hover:text-sky-700">
-                            {idx + 1}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-bold leading-snug text-slate-900">
-                              {s.title}
-                            </span>
-                            <span className="mt-0.5 block text-xs text-slate-500">
-                              {s.publisher} ({s.year})
-                            </span>
-                          </span>
-                        </a>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              </article>
-            ) : (
-              <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-                <span className="grid h-14 w-14 place-items-center rounded-3xl bg-sky-100">
-                  <BookOpen className="h-7 w-7 text-sky-500" />
-                </span>
-                <p className="mt-4 text-sm font-extrabold text-slate-700">
-                  This page isn't ready yet
-                </p>
-                <p className="mt-1 max-w-sm text-sm text-slate-500">
-                  Try another step or another language while we finish it.
-                </p>
-              </div>
+        {/* Sticky header */}
+        <div className="flex items-start gap-3 border-b-2 border-sky-100 px-5 py-4">
+          <span
+            className={cn(
+              "grid h-11 w-11 shrink-0 place-items-center rounded-2xl",
+              style.tint
             )}
+          >
+            <Icon className="h-6 w-6 text-slate-700" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border-2 px-2.5 py-0.5 text-[11px] font-bold",
+                  DISEASE_STYLE[disease].idle
+                )}
+              >
+                {DISEASE_LABEL[disease][locale]}
+              </span>
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide",
+                  style.badge
+                )}
+              >
+                {CATEGORY_LABEL[category][locale]}
+              </span>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-slate-200 bg-white text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 active:scale-95"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
+          {article ? (
+            <>
+              <h2
+                id="he-modal-title"
+                className="font-display text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl"
+              >
+                {article.title}
+              </h2>
+
+              {/* Key takeaway */}
+              <div className="mt-4 flex gap-3 rounded-2xl border-2 border-amber-200 bg-amber-50 p-4">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-amber-400 text-white">
+                  <Star className="h-5 w-5 fill-white" />
+                </span>
+                <div>
+                  <p className="text-xs font-extrabold uppercase tracking-wide text-amber-700">
+                    Remember this!
+                  </p>
+                  <p className="mt-1 text-sm font-medium leading-relaxed text-slate-700">
+                    {article.summary}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 whitespace-pre-line text-[15px] leading-[1.9] text-slate-800">
+                {article.body_md}
+              </div>
+
+              {/* References — for parents & guardians */}
+              <section
+                aria-labelledby="he-sources-heading"
+                className="mt-6 border-t-2 border-sky-100 pt-5"
+              >
+                <h3
+                  id="he-sources-heading"
+                  className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wide text-slate-500"
+                >
+                  <BookOpen className="h-3.5 w-3.5 text-sky-600" />
+                  {SOURCES_HEADING[locale]}
+                </h3>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                  {SOURCES_NOTE[locale]}
+                </p>
+                <ol className="mt-4 grid gap-2">
+                  {DISEASE_SOURCES[disease].map((s, idx) => (
+                    <li key={s.url}>
+                      <a
+                        href={s.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex items-start gap-3 rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-lift"
+                      >
+                        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-slate-100 text-[10px] font-extrabold text-slate-500 transition-colors group-hover:bg-sky-100 group-hover:text-sky-700">
+                          {idx + 1}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold leading-snug text-slate-900">
+                            {s.title}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-slate-500">
+                            {s.publisher} ({s.year})
+                          </span>
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+              <span className="grid h-14 w-14 place-items-center rounded-3xl bg-sky-100">
+                <BookOpen className="h-7 w-7 text-sky-500" />
+              </span>
+              <p className="mt-4 text-sm font-extrabold text-slate-700">
+                This page isn't ready yet
+              </p>
+              <p className="mt-1 max-w-sm text-sm text-slate-500">
+                Try another step or another language while we finish it.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Sticky footer — step navigation */}
+        <div className="grid grid-cols-2 gap-2.5 border-t-2 border-sky-100 bg-sky-50/60 p-3.5">
+          {prevCat ? (
+            <button
+              type="button"
+              onClick={() => onNavigate(prevCat)}
+              className="group flex items-center gap-2.5 rounded-2xl border-2 border-slate-200 bg-white px-3.5 py-2.5 text-left transition-all duration-200 hover:border-sky-300 active:scale-[0.98]"
+            >
+              <ChevronLeft className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-hover:-translate-x-0.5" />
+              <span className="min-w-0">
+                <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                  Back
+                </span>
+                <span className="block truncate text-xs font-extrabold text-slate-900">
+                  {CATEGORY_LABEL[prevCat][locale]}
+                </span>
+              </span>
+            </button>
+          ) : (
+            <span aria-hidden />
+          )}
+          {nextCat ? (
+            <button
+              type="button"
+              onClick={() => onNavigate(nextCat)}
+              className="group flex items-center justify-end gap-2.5 rounded-2xl border-2 border-emerald-500 bg-emerald-500 px-3.5 py-2.5 text-right transition-all duration-200 hover:bg-emerald-600 active:scale-[0.98]"
+            >
+              <span className="min-w-0">
+                <span className="block text-[10px] font-bold uppercase tracking-wide text-emerald-100">
+                  Next
+                </span>
+                <span className="block truncate text-xs font-extrabold text-white">
+                  {CATEGORY_LABEL[nextCat][locale]}
+                </span>
+              </span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-white transition-transform group-hover:translate-x-0.5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex items-center justify-center gap-2 rounded-2xl border-2 border-emerald-500 bg-emerald-500 px-3.5 py-2.5 text-xs font-extrabold text-white transition-all duration-200 hover:bg-emerald-600 active:scale-[0.98]"
+            >
+              <Check className="h-4 w-4" />
+              Done
+            </button>
+          )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
