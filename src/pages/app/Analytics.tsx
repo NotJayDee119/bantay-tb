@@ -4,13 +4,23 @@ import {
   BarChart3,
   HeartPulse,
   Lightbulb,
+  MapPin,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Card, PageHeader, Skeleton } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
+import { useAreaScope } from "../../hooks/useAreaScope";
+import { areaSuffix, type AreaScope } from "../../lib/areaScope";
+import barangays from "../../data/barangays.json";
+
+const BARANGAY_NAME = new Map(
+  (barangays as { psgc: number; name: string }[]).map((b) => [b.psgc, b.name])
+);
 
 interface RawCase {
+  /** Residence, not the registering facility — see byBarangay below. */
+  barangay_psgc: number;
   age: number | null;
   sex: "male" | "female" | null;
   tb_classification: string | null;
@@ -18,9 +28,22 @@ interface RawCase {
   reported_at: string;
 }
 
+interface AreaRow {
+  psgc: number;
+  name: string;
+  count: number;
+}
+
 interface AnalyticsData {
   total: number;
   byMonth: { month: string; count: number }[];
+  /**
+   * Cases per barangay of RESIDENCE, densest first. Residence is the axis this
+   * page is for: screening drives and contact tracing happen where people
+   * live, not where their case was filed. Grouping by registering facility
+   * would point campaigns at whichever barangay happens to hold a clinic.
+   */
+  byBarangay: AreaRow[];
   byAgeBand: { band: string; count: number }[];
   bySex: { label: string; count: number }[];
   byClassification: { label: string; count: number }[];
@@ -38,40 +61,54 @@ const MICRO_LABEL =
   "font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500";
 
 export function Analytics() {
+  const scope = useAreaScope();
   const [data, setData] = useState<AnalyticsData | null>(null);
+  // RLS limits area-scoped staff to their barangay, so these figures describe
+  // that area rather than the city — say which one in the subtitle.
+  const subtitle =
+    "TB cases only · Last 12 months · Where to focus screening and contact-tracing campaigns." +
+    areaSuffix(scope);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const since = new Date();
       since.setMonth(since.getMonth() - 12);
-      const { data: rows } = await supabase
+      // Scoping is left to RLS, which since 20261007000000 returns the union
+      // of "lives in my barangay" and "registered at a facility in my
+      // barangay". Re-filtering on barangay_psgc here would drop the cases
+      // the local facility registered from these figures.
+      const query = supabase
         .from("cases")
-        .select("age, sex, tb_classification, treatment_outcome, reported_at")
+        .select(
+          "barangay_psgc, age, sex, tb_classification, treatment_outcome, reported_at"
+        )
         .eq("disease", "tb")
         .gte("reported_at", since.toISOString())
         .limit(20000);
+      const { data: rows } = await query;
       if (cancelled) return;
       setData(summarize((rows ?? []) as RawCase[]));
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scope.scoped, scope.psgc]);
 
   if (!data) {
     return (
       <>
         <PageHeader
           title="AI Analytics for Outreach"
-          subtitle="TB cases only · Last 12 months · Where to focus screening and contact-tracing campaigns."
+          subtitle={subtitle}
         />
         <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-28 rounded-xl" />
             ))}
           </div>
+          <Skeleton className="h-80 rounded-xl" />
           <div className="grid gap-4 lg:grid-cols-2">
             <Skeleton className="h-72 rounded-xl" />
             <Skeleton className="h-72 rounded-xl" />
@@ -105,17 +142,29 @@ export function Analytics() {
     <>
       <PageHeader
         title="AI Analytics for Outreach"
-        subtitle="TB cases only · Last 12 months · Where to focus screening and contact-tracing campaigns."
+        subtitle={subtitle}
       />
 
       {/* ── Headline stats ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
           icon={Activity}
           iconClass="bg-brand-50 text-brand-700"
           accentClass="bg-brand-500"
           label="Cases · 12 months"
           value={data.total.toLocaleString()}
+        />
+        <StatTile
+          icon={MapPin}
+          iconClass="bg-vigil-300/20 text-vigil-600"
+          accentClass="bg-vigil-400"
+          label="Barangays affected"
+          value={data.byBarangay.length.toLocaleString()}
+          footer={
+            data.byBarangay.length > 0
+              ? `Most affected: ${data.byBarangay[0].name}`
+              : undefined
+          }
         />
         <StatTile
           icon={Users}
@@ -173,6 +222,9 @@ export function Analytics() {
         </p>
       </Card>
 
+      {/* ── Per-area breakdown ───────────────────────────────────────── */}
+      <AreaBreakdown rows={data.byBarangay} total={data.total} scope={scope} />
+
       {/* ── Distribution charts ──────────────────────────────────────── */}
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <ChartCard
@@ -213,12 +265,18 @@ export function Analytics() {
 
 function summarize(rows: RawCase[]): AnalyticsData {
   const byMonthMap = new Map<string, number>();
+  const byBarangayMap = new Map<number, number>();
   const byAgeBand = AGE_BANDS.map((b) => ({ band: b.label, count: 0 }));
   const bySexMap = new Map<string, number>();
   const byClassMap = new Map<string, number>();
   const byOutcomeMap = new Map<string, number>();
 
   for (const c of rows) {
+    byBarangayMap.set(
+      c.barangay_psgc,
+      (byBarangayMap.get(c.barangay_psgc) ?? 0) + 1
+    );
+
     const dt = new Date(c.reported_at);
     const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
     byMonthMap.set(key, (byMonthMap.get(key) ?? 0) + 1);
@@ -244,9 +302,21 @@ function summarize(rows: RawCase[]): AnalyticsData {
     .sort()
     .map(([month, count]) => ({ month, count }));
 
+  // Densest first — the list is a work queue, so the barangay needing a
+  // screening drive most should not be something you scroll to find. Ties fall
+  // back to name so the order is stable between refreshes.
+  const byBarangay = [...byBarangayMap.entries()]
+    .map(([psgc, count]) => ({
+      psgc,
+      name: BARANGAY_NAME.get(psgc) ?? `PSGC ${psgc}`,
+      count,
+    }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
   return {
     total: rows.length,
     byMonth,
+    byBarangay,
     byAgeBand,
     bySex: toSorted(bySexMap),
     byClassification: toSorted(byClassMap),
@@ -263,6 +333,23 @@ function toSorted(m: Map<string, number>) {
 function buildInsights(d: AnalyticsData): string[] {
   if (d.total === 0) return [];
   const out: string[] = [];
+
+  // Where the burden sits. A citywide percentage is a different job depending
+  // on whether it is concentrated in three barangays or spread over forty, and
+  // that is the difference between a targeted drive and a general campaign.
+  if (d.byBarangay.length >= 4) {
+    const top3 = d.byBarangay.slice(0, 3);
+    const topShare = Math.round(
+      (top3.reduce((s, r) => s + r.count, 0) / d.total) * 100
+    );
+    if (topShare >= 50) {
+      out.push(
+        `${topShare}% of cases live in just 3 of ${d.byBarangay.length} affected barangays (${top3
+          .map((r) => r.name)
+          .join(", ")}) — concentrate screening there before widening the campaign.`
+      );
+    }
+  }
 
   // Working-age burden
   const workingAge =
@@ -321,6 +408,115 @@ function buildInsights(d: AnalyticsData): string[] {
   }
 
   return out;
+}
+
+const AREAS_COLLAPSED = 8;
+
+/**
+ * Cases per barangay of residence.
+ *
+ * Every other panel on this page answers "who" — this one answers "where", and
+ * without it the citywide totals give a campaign planner nothing to act on: a
+ * 12% lost-to-follow-up rate is a different job in one barangay than spread
+ * evenly over forty.
+ *
+ * The list is whatever `cases` RLS returned, so it is also a scope readout. A
+ * health centre sees its own residents plus the cases its facility registered,
+ * and those patients live elsewhere — so rows for other barangays are expected
+ * there and the user's own area is tagged to keep the two apart.
+ */
+function AreaBreakdown({
+  rows,
+  total,
+  scope,
+}: {
+  rows: AreaRow[];
+  total: number;
+  scope: AreaScope;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? rows : rows.slice(0, AREAS_COLLAPSED);
+  const max = Math.max(1, ...rows.map((r) => r.count));
+
+  return (
+    <Card className="mt-4 overflow-hidden p-0">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+        <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+          <MapPin className="h-3.5 w-3.5 text-vigil-500" />
+          Cases by barangay · where patients live
+        </div>
+        {rows.length > 0 && (
+          <span className="font-mono text-[10px] tabular-nums text-slate-500">
+            {rows.length} {rows.length === 1 ? "area" : "areas"}
+          </span>
+        )}
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="px-4 py-8 text-center text-sm text-slate-500">
+          No cases in the last 12 months, so there is no area to rank.
+        </p>
+      ) : (
+        <>
+          <ul className="divide-y divide-slate-100">
+            {shown.map((r, i) => {
+              const share = total === 0 ? 0 : (r.count / total) * 100;
+              const mine = scope.scoped && r.psgc === scope.psgc;
+              return (
+                <li key={r.psgc} className="px-4 py-3">
+                  <div className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="flex min-w-0 items-baseline gap-2">
+                      <span className="font-mono text-[11px] tabular-nums text-slate-400">
+                        {i + 1}
+                      </span>
+                      <span className="truncate font-medium text-slate-800">
+                        {r.name}
+                      </span>
+                      {mine && (
+                        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-brand-200 bg-brand-100 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-brand-700">
+                          Your area
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex shrink-0 items-baseline gap-2">
+                      <span className="font-mono text-[11px] tabular-nums text-slate-500">
+                        {share.toFixed(share < 10 ? 1 : 0)}%
+                      </span>
+                      <span className="font-display font-bold tabular-nums text-slate-900">
+                        {r.count.toLocaleString()}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className={
+                        "h-full rounded-full " +
+                        (mine ? "bg-brand-500" : "bg-vigil-400")
+                      }
+                      style={{ width: `${Math.max(2, (r.count / max) * 100)}%` }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          {rows.length > AREAS_COLLAPSED && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              aria-expanded={expanded}
+              className="w-full border-t border-slate-100 bg-slate-50/40 px-4 py-2.5 text-xs font-semibold text-brand-700 transition hover:bg-slate-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/60"
+            >
+              {expanded
+                ? "Show top 8 only"
+                : `Show all ${rows.length} barangays`}
+            </button>
+          )}
+        </>
+      )}
+    </Card>
+  );
 }
 
 function StatTile({

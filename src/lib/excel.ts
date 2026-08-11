@@ -23,6 +23,17 @@ const FIELD_MAP: Record<string, keyof MappedRow> = {
   classification: "tb_classification",
   type: "tb_classification",
   diagnosis: "tb_classification",
+  // site of disease
+  site: "tb_site",
+  "tb site": "tb_site",
+  "site of disease": "tb_site",
+  "anatomical site": "tb_site",
+  // diagnosis status
+  "diagnosis status": "diagnosis_status",
+  "diagnostic status": "diagnosis_status",
+  "bacteriological status": "diagnosis_status",
+  "case type": "diagnosis_status",
+  "registration group": "diagnosis_status",
   // outcome
   "treatment outcome": "treatment_outcome",
   outcome: "treatment_outcome",
@@ -65,6 +76,8 @@ interface MappedRow {
   age?: number | string;
   sex?: string;
   tb_classification?: string;
+  tb_site?: string;
+  diagnosis_status?: string;
   treatment_outcome?: string;
   disease?: string;
   patient_code?: string;
@@ -120,6 +133,35 @@ const CLASS_NORMALIZE: Record<string, string> = {
   eptb: "extra_pulmonary",
   presumptive: "presumptive",
   suspected: "presumptive",
+};
+
+const SITE_NORMALIZE: Record<string, string> = {
+  pulmonary: "pulmonary",
+  "pulmonary tb": "pulmonary",
+  ptb: "pulmonary",
+  p: "pulmonary",
+  "extra-pulmonary": "extra_pulmonary",
+  "extra pulmonary": "extra_pulmonary",
+  extrapulmonary: "extra_pulmonary",
+  eptb: "extra_pulmonary",
+  ep: "extra_pulmonary",
+};
+
+const DX_STATUS_NORMALIZE: Record<string, string> = {
+  presumptive: "presumptive",
+  suspected: "presumptive",
+  "presumptive tb": "presumptive",
+  clinical: "clinically_diagnosed",
+  "clinically diagnosed": "clinically_diagnosed",
+  "clinically-diagnosed": "clinically_diagnosed",
+  cd: "clinically_diagnosed",
+  bacteriological: "bacteriologically_confirmed",
+  "bacteriologically confirmed": "bacteriologically_confirmed",
+  "bacteriologically-confirmed": "bacteriologically_confirmed",
+  confirmed: "bacteriologically_confirmed",
+  bc: "bacteriologically_confirmed",
+  "smear positive": "bacteriologically_confirmed",
+  "xpert positive": "bacteriologically_confirmed",
 };
 
 const OUTCOME_NORMALIZE: Record<string, string> = {
@@ -254,6 +296,12 @@ export async function parseImportFile(file: File): Promise<ImportPreview> {
 
     const classNorm =
       normalise(CLASS_NORMALIZE, mapped.tb_classification) ?? null;
+    // Left null when the sheet has no such column — the cases_sync_tb_fields
+    // trigger then derives both from tb_classification, so older CHO report
+    // formats keep importing unchanged.
+    const siteNorm = normalise(SITE_NORMALIZE, mapped.tb_site) ?? null;
+    const dxStatusNorm =
+      normalise(DX_STATUS_NORMALIZE, mapped.diagnosis_status) ?? null;
     const outcomeNorm =
       normalise(OUTCOME_NORMALIZE, mapped.treatment_outcome) ?? "ongoing";
     const diseaseNorm =
@@ -290,6 +338,9 @@ export async function parseImportFile(file: File): Promise<ImportPreview> {
       barangay_psgc: bgy.psgc,
       disease: diseaseNorm,
       tb_classification: (classNorm as CaseInsert["tb_classification"]) ?? null,
+      tb_site: (siteNorm as CaseInsert["tb_site"]) ?? null,
+      diagnosis_status:
+        (dxStatusNorm as CaseInsert["diagnosis_status"]) ?? null,
       age: age ?? null,
       sex: sexNorm,
       treatment_outcome: outcomeNorm as CaseInsert["treatment_outcome"],

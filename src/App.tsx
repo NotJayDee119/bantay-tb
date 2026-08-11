@@ -11,7 +11,7 @@ import {
   DotsLocator,
   LearnPublic,
   Login,
-  Register,
+  ClaimAccount,
   StaffRegister,
   ForgotPassword,
   ResetPassword,
@@ -30,6 +30,8 @@ import {
   SettingsPage,
   Analytics,
   Users,
+  InviteCodes,
+  PatientCodes,
   AdminDashboard,
 } from "./lib/lazyPages";
 
@@ -70,7 +72,9 @@ export default function App() {
         <Route path="dots-locator" element={<DotsLocator />} />
         <Route path="learn" element={<LearnPublic />} />
         <Route path="login" element={<Login />} />
-        <Route path="register" element={<Register />} />
+        {/* Patients never self-register — they claim an account the nurse
+            generated when they were enrolled in treatment. */}
+        <Route path="claim" element={<ClaimAccount />} />
         <Route path="register/staff" element={<StaffRegister />} />
         <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="reset-password" element={<ResetPassword />} />
@@ -137,7 +141,17 @@ export default function App() {
         <Route
           path="cases/new"
           element={
-            <RequireRole roles={["tb_coordinator", "barangay_admin"]}>
+            /* health_worker records the patients who walk into their clinic —
+               that intake is where every case starts, and enrollment reads
+               from the record they create. */
+            <RequireRole
+              roles={[
+                "tb_coordinator",
+                "barangay_admin",
+                "health_worker",
+                "system_admin",
+              ]}
+            >
               <CaseFormPage />
             </RequireRole>
           }
@@ -153,7 +167,7 @@ export default function App() {
         <Route
           path="dots-admin"
           element={
-            <RequireRole roles={["tb_coordinator", "system_admin"]}>
+            <RequireRole roles={["system_admin"]}>
               <DotsCentersAdmin />
             </RequireRole>
           }
@@ -169,7 +183,17 @@ export default function App() {
         <Route
           path="import"
           element={
-            <RequireRole roles={["tb_coordinator"]}>
+            /* Field staff upload their own area's register; the page appends
+               and stamps their assignment (importScope.ts). Replace-all stays
+               a coordinator action, gated inside the page, not by this route. */
+            <RequireRole
+              roles={[
+                "tb_coordinator",
+                "barangay_admin",
+                "health_worker",
+                "system_admin",
+              ]}
+            >
               <BulkImport />
             </RequireRole>
           }
@@ -203,7 +227,7 @@ export default function App() {
         <Route
           path="settings"
           element={
-            <RequireRole roles={["tb_coordinator", "system_admin"]}>
+            <RequireRole roles={["system_admin"]}>
               <SettingsPage />
             </RequireRole>
           }
@@ -211,8 +235,26 @@ export default function App() {
         <Route
           path="users"
           element={
-            <RequireRole roles={["tb_coordinator", "system_admin"]}>
+            <RequireRole roles={["system_admin"]}>
               <Users />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="invites"
+          element={
+            <RequireRole roles={["tb_coordinator", "system_admin"]}>
+              <InviteCodes />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="patient-codes"
+          element={
+            <RequireRole
+              roles={["health_worker", "tb_coordinator", "system_admin"]}
+            >
+              <PatientCodes />
             </RequireRole>
           }
         />

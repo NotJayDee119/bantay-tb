@@ -58,8 +58,9 @@ export function Login() {
               in one place.
             </h2>
             <p className="mt-5 max-w-sm text-[0.9375rem] leading-relaxed text-slate-300">
-              Case tracking, barangay-level hotspot mapping, and daily
-              operational tools — built for frontline health workers.
+              Case tracking and barangay-level hotspot mapping for frontline
+              health workers — and a daily medicine schedule for patients on
+              treatment.
             </p>
 
             <div className="mt-7 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 backdrop-blur-sm">
@@ -97,16 +98,20 @@ export function Login() {
             </Link>
           </div>
 
-          {/* Header */}
+          {/* Header. One form serves both audiences — a patient who has
+              claimed their account signs in with the same email and password a
+              nurse does, and lands on the patient home. The copy used to say
+              "Health worker access", which told returning patients, wrongly,
+              that this page was not for them. */}
           <div>
             <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600">
-              Health worker access
+              BANTAY-TB access
             </p>
             <h1 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-slate-900">
               Welcome back
             </h1>
             <p className="mt-2 text-sm text-slate-500">
-              Sign in to your BANTAY-TB dashboard.
+              Health workers and patients sign in here.
             </p>
           </div>
 
@@ -131,7 +136,7 @@ export function Login() {
               <Input
                 id="email"
                 type="email"
-                placeholder="you@davaocity.gov.ph"
+                placeholder="you@email.com"
                 autoComplete="email"
                 value={email}
                 required
@@ -181,17 +186,38 @@ export function Login() {
             </div>
             <div className="relative flex justify-center text-xs">
               <span className="bg-slate-50 px-3 text-slate-400 lg:bg-white">
-                New to BANTAY-TB?
+                Starting treatment?
               </span>
             </div>
           </div>
 
+          {/* Patients don't sign up — they claim the account their nurse
+              generated when they were enrolled. */}
           <Link
-            to="/register"
+            to="/claim"
             className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lift focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:ring-offset-2 lg:bg-slate-50 lg:hover:bg-white"
           >
-            Request an account
+            I have a claim code
           </Link>
+
+          {/* The claim code is a one-time thing. Without this line a patient
+              coming back for their second dose reads the button above as the
+              only door open to them and tries to claim an account twice. */}
+          <p className="mt-3 text-center text-xs text-slate-500">
+            Already claimed your account? Sign in with your email above.
+          </p>
+
+          {/* Staff onboarding is invite-gated, so it stays a quiet link rather
+              than a second button competing with the patient path. */}
+          <p className="mt-4 text-center text-xs text-slate-500">
+            Health worker with an invite code?{" "}
+            <Link
+              to="/register/staff"
+              className="font-semibold text-brand-700 underline-offset-2 hover:text-brand-800 hover:underline"
+            >
+              Register a staff account
+            </Link>
+          </p>
 
           {/* Legal */}
           <p className="mt-8 text-center text-[0.6875rem] leading-relaxed text-slate-400">

@@ -65,16 +65,23 @@ async function dbInsert(
 
 type Locale = "en" | "tl" | "ceb";
 
+// Mirrors src/lib/i18n.ts — this function deploys with `--no-remote` and
+// cannot import from src/, so the two copies must be changed together.
+//
+// Only STRICTLY Tagalog words belong here. Words shared with Cebuano
+// (mga, sintomas, impormasyon, anak, alak, mahawa) were removed: a Bisaya
+// sentence carrying one decisive marker lost to two shared ones, and the
+// tie-break below favours Tagalog. That cost 3 of 20 Cebuano test queries.
 const TL_ONLY = new Set([
-  "ng","mga","po","opo","naman","lang","lamang","kasi","bakit","kahit",
+  "ng","po","opo","naman","lang","lamang","kasi","bakit","kahit",
   "talaga","kailangan","huwag","hindi","ito","iyan","iyon","doon","dito",
   "saan","kailan","paano","ano","ikaw","kayo","tayo","magkano","marami",
-  "konti","pakisabi","hika","gamot","sintomas","tigdas","trangkaso","lagnat",
-  "pagod","ubo","dugo","dibdib","bahay","anak","mahawa","magpasuri","gumaling",
+  "konti","pakisabi","hika","gamot","tigdas","trangkaso","lagnat",
+  "pagod","ubo","dugo","dibdib","bahay","magpasuri","gumaling",
   "uminom","umuubo","umubo","kainin","kain","tulog","tungkol","tatlong",
-  "linggo","buwan","katagal","gaano","tatanong","tanong","alak","ginagawa",
+  "linggo","buwan","katagal","gaano","tatanong","tanong","ginagawa",
   "gagawin","pwede","kong","habang","gumagamot","ninyo","iyong","iyo",
-  "nagtatrabaho","trabaho","meron","nakakahawa","ibang","impormasyon",
+  "nagtatrabaho","trabaho","meron","nakakahawa","ibang",
 ]);
 
 const CEB_ONLY = new Set([
@@ -128,14 +135,14 @@ function detectLocale(text: string): Locale {
 const SYSTEM_PROMPTS: Record<Locale, string> = {
   en: "You are BANTAY-TB, a clinical health assistant for tuberculosis and respiratory diseases in Davao City. Reply concisely (under 120 words) in clear, plain English. Always recommend visiting the nearest DOTS center for diagnosis. Never give specific drug doses for individual patients.",
   tl: "Ikaw si BANTAY-TB, isang clinical health assistant para sa tuberkulosis at sakit sa baga sa Davao City. Sumagot nang maikli (mas kaunti sa 120 salita) sa simpleng Filipino/Tagalog. Laging irekomenda ang pagpunta sa pinakamalapit na DOTS Center para sa pagsusuri. Huwag magbigay ng partikular na dosage ng gamot.",
-  ceb: "Ikaw si BANTAY-TB, usa ka clinical health assistant alang sa tuberkulosis ug sakit sa baga sa Davao City. Tubaga sa mubo (ubos sa 120 ka pulong) sa yano nga Bisaya. Kanunay nga isugyot ang pag-adto sa pinaka-suod nga DOTS Center alang sa eksamen. Ayaw paghatag og piho nga dosage sa tambal.",
+  ceb: "Ikaw si BANTAY-TB, usa ka clinical health assistant alang sa tuberkulosis ug sakit sa baga sa Davao City. Tubaga sa mubo (ubos sa 120 ka pulong) sa yano nga Cebuano. Kanunay nga isugyot ang pag-adto sa pinaka-suod nga DOTS Center alang sa eksamen. Ayaw paghatag og piho nga dosage sa tambal.",
 };
 
 // Patient support prompts: no surveillance data, focus on care and adherence
 const PATIENT_PROMPTS: Record<Locale, string> = {
   en: "You are BANTAY-TB, a supportive health assistant for TB patients and their families in Davao City. Provide general health education, symptom guidance, treatment adherence encouragement, and emotional support. Reply concisely (under 120 words) in plain English. Always recommend consulting the nearest DOTS center for medical concerns. Do NOT provide case statistics, epidemiological data, or surveillance figures.",
   tl: "Ikaw si BANTAY-TB, isang health support assistant para sa mga pasyenteng may TB at kanilang pamilya sa Davao City. Magbigay ng pangkalahatang edukasyon sa kalusugan, gabay sa sintomas, at emosyonal na suporta. Sumagot nang maikli (wala pang 120 salita) sa Filipino. Irekomenda ang DOTS Center para sa medikal na alalahanin. HUWAG magbigay ng estadistika ng kaso o surveillance data.",
-  ceb: "Ikaw si BANTAY-TB, usa ka health support assistant para sa mga pasyente sa TB ug ilang pamilya sa Davao City. Maghatag og kinatibuk-ang edukasyon sa kahimsog, giya sa sintomas, ug emosyonal nga suporta. Tubaga sa mubo (ubos sa 120 ka pulong) sa Bisaya. Irekomenda ang DOTS Center para sa medikal nga mga kabalaka. AYAW paghatag og estadistika sa kaso o surveillance data.",
+  ceb: "Ikaw si BANTAY-TB, usa ka health support assistant para sa mga pasyente sa TB ug ilang pamilya sa Davao City. Maghatag og kinatibuk-ang edukasyon sa kahimsog, giya sa sintomas, ug emosyonal nga suporta. Tubaga sa mubo (ubos sa 120 ka pulong) sa Cebuano. Irekomenda ang DOTS Center para sa medikal nga mga kabalaka. AYAW paghatag og estadistika sa kaso o surveillance data.",
 };
 
 // Platform knowledge for public visitors — lets the homepage chatbot
@@ -144,9 +151,9 @@ const SYSTEM_INFO = `
 
 ABOUT THE BANTAY-TB PLATFORM (use this when visitors ask how the system, website, or app works):
 - BANTAY-TB is Davao City's tuberculosis surveillance and care platform.
-- Public visitors can: use the DOTS Center Locator (a map with directions to free TB treatment centers), read Health Education articles about TB symptoms/treatment/prevention, and chat with this assistant in English, Filipino, or Bisaya.
+- Public visitors can: use the DOTS Center Locator (a map with directions to free TB treatment centers), read Health Education articles about TB symptoms/treatment/prevention, and chat with this assistant in English, Filipino, or Cebuano.
 - Patients with accounts get: medication schedules, dose reminders (including SMS), dose tracking, health education, and a personal health assistant that can report their own treatment progress.
-- Health workers, barangay admins, and TB coordinators sign in to: encode and track TB cases, view the GIS surveillance map and heatmaps, detect hotspot clusters, receive alerts, and view outreach analytics.
+- Health workers, barangay admins, and TB coordinators sign in to: encode and track TB cases, view the GIS surveillance map and heatmaps, identify hotspots (areas with a high concentration of TB cases), receive alerts when a new high-severity hotspot is found, and view outreach analytics.
 - To get an account: patients use "Request an account" on the site; staff use the staff registration page.
 - TB screening and DOTS treatment are free at DOTS centers in Davao City.`;
 

@@ -86,11 +86,11 @@ export function SettingsPage() {
 
         <div className="p-5">
           <p className="mb-5 text-xs leading-relaxed text-slate-500">
-            The hotspot detection job groups recent TB cases into clusters using
-            DBSCAN. Tighter <ParamName>eps_km</ParamName> or higher{" "}
-            <ParamName>min_pts</ParamName> produce fewer / denser hotspots; a
-            longer <ParamName>window_days</ParamName> aggregates more historical
-            cases.
+            The hotspot job uses DBSCAN to find areas with a high concentration
+            of TB cases. Tighter <ParamName>eps_km</ParamName> or higher{" "}
+            <ParamName>min_pts</ParamName> require a tighter concentration, so
+            fewer areas qualify; a longer <ParamName>window_days</ParamName>{" "}
+            measures concentration over more historical cases.
           </p>
 
           <div className="space-y-5">

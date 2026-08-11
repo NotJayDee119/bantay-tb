@@ -17,9 +17,9 @@ const PLACEHOLDER: Record<Locale, string> = {
 };
 
 const GREETING: Record<Locale, string> = {
-  en: "Hi! I'm BANTAY-TB. Ask me anything about TB or other respiratory diseases — in English, Filipino, or Bisaya.",
-  tl: "Kumusta! Ako si BANTAY-TB. Maaari kang magtanong tungkol sa TB at iba pang sakit sa baga — sa English, Filipino, o Bisaya.",
-  ceb: "Kumusta! Ako si BANTAY-TB. Pwede ka mangutana bahin sa TB ug uban pang sakit sa baga — sa English, Filipino, o Bisaya.",
+  en: "Hi! I'm BANTAY-TB. Ask me anything about TB or other respiratory diseases — in English, Filipino, or Cebuano.",
+  tl: "Kumusta! Ako si BANTAY-TB. Maaari kang magtanong tungkol sa TB at iba pang sakit sa baga — sa English, Filipino, o Cebuano.",
+  ceb: "Kumusta! Ako si BANTAY-TB. Pwede ka mangutana bahin sa TB ug uban pang sakit sa baga — sa English, Filipino, o Cebuano.",
 };
 
 const SUGGESTIONS = [
@@ -38,33 +38,33 @@ const ABOUT_SYSTEM: Record<Locale, string> = {
     "",
     "🗺️ DOTS Locator — find the nearest free TB treatment center with directions.",
     "📚 Health Education — learn about TB symptoms, treatment, and prevention.",
-    "💬 This chatbot — ask health questions in English, Filipino, or Bisaya.",
+    "💬 This chatbot — ask health questions in English, Filipino, or Cebuano.",
     "",
     "Patients with an account also get medication schedules, dose reminders, and a personal health assistant. Health workers and TB coordinators sign in to report cases, view the GIS surveillance map, and receive hotspot alerts.",
     "",
-    "To get started, tap “Sign in” or “Request an account” in the menu. TB screening and DOTS treatment are free!",
+    "You don’t sign up yourself — when a nurse enrols you in treatment, they give you a claim code. Tap “I have a claim code” to set up your account. TB screening and DOTS treatment are free!",
   ].join("\n"),
   tl: [
     "Ang BANTAY-TB ay plataporma ng Davao City para sa pagbabantay at pangangalaga sa TB. Narito ang magagawa mo:",
     "",
     "🗺️ DOTS Locator — hanapin ang pinakamalapit na libreng TB treatment center na may direksyon.",
     "📚 Health Education — alamin ang sintomas, paggamot, at pag-iwas sa TB.",
-    "💬 Ang chatbot na ito — magtanong sa English, Filipino, o Bisaya.",
+    "💬 Ang chatbot na ito — magtanong sa English, Filipino, o Cebuano.",
     "",
     "Ang mga pasyenteng may account ay may iskedyul ng gamot, paalala sa dose, at personal na health assistant. Ang mga health worker at TB coordinator ay nag-sign in para mag-ulat ng kaso at makita ang surveillance map.",
     "",
-    "Para magsimula, pindutin ang “Sign in” o “Request an account”. Libre ang TB screening at DOTS treatment!",
+    "Hindi ka mag-si-sign up mag-isa — kapag ipinasok ka ng nars sa paggamot, bibigyan ka niya ng claim code. Pindutin ang “I have a claim code” para buksan ang iyong account. Libre ang TB screening at DOTS treatment!",
   ].join("\n"),
   ceb: [
     "Ang BANTAY-TB mao ang plataporma sa Davao City alang sa pagbantay ug pag-atiman sa TB. Ania ang imong mahimo:",
     "",
     "🗺️ DOTS Locator — pangitaa ang pinaka-duol nga libre nga TB treatment center nga adunay direksyon.",
     "📚 Health Education — hibaloi ang sintomas, tambal, ug paglikay sa TB.",
-    "💬 Kini nga chatbot — pangutana sa English, Filipino, o Bisaya.",
+    "💬 Kini nga chatbot — pangutana sa English, Filipino, o Cebuano.",
     "",
     "Ang mga pasyente nga adunay account makakuha og iskedyul sa tambal, pahinumdom sa dose, ug personal nga health assistant. Ang mga health worker ug TB coordinator mo-sign in aron mag-report og kaso ug makita ang surveillance map.",
     "",
-    "Aron magsugod, i-tap ang “Sign in” o “Request an account”. Libre ang TB screening ug DOTS treatment!",
+    "Dili ka mag-sign up sa imong kaugalingon — kung ipasulod ka sa nars sa pagtambal, hatagan ka niya og claim code. I-tap ang “I have a claim code” aron ablihan ang imong account. Libre ang TB screening ug DOTS treatment!",
   ].join("\n"),
 };
 

@@ -8,15 +8,20 @@
 @tailwind utilities;
 
 :root {
-  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    Roboto, sans-serif;
+  font-family:
+    "Inter",
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   color-scheme: light;
-  --grid-bg:
-    radial-gradient(
-      circle at 1px 1px,
-      rgba(15, 23, 42, 0.07) 1px,
-      transparent 0
-    );
+  --grid-bg: radial-gradient(
+    circle at 1px 1px,
+    rgba(15, 23, 42, 0.07) 1px,
+    transparent 0
+  );
 }
 
 html,
@@ -53,7 +58,9 @@ body {
    dimming and re-highlighting from snapping instantly. */
 .pcm-glow {
   filter: blur(6px);
-  transition: fill-opacity 260ms ease, opacity 260ms ease;
+  transition:
+    fill-opacity 260ms ease,
+    opacity 260ms ease;
 }
 .pcm-core {
   filter: blur(1.25px);
@@ -72,6 +79,14 @@ body {
   border: none !important;
   box-shadow: none !important;
   padding: 0;
+  /* Leaflet's stylesheet sets `white-space: nowrap` on every tooltip. That is
+     fine for "Agdao / 18", but a case dot's label is a street address —
+     "Purok 3, J. P. Cabaguio Avenue" — which then renders as one unbroken
+     line that runs straight out of the dark card. Let it wrap, and cap the
+     width so the card stays a readable block. */
+  white-space: normal !important;
+  width: max-content;
+  max-width: 15rem;
 }
 .leaflet-tooltip.pcm-tooltip::before,
 .leaflet-tooltip.pcm-tooltip::after,
@@ -127,6 +142,118 @@ body {
 }
 .ghm-popup .leaflet-popup-close-button:hover {
   color: #f8fafc;
+}
+
+/* GIS surveillance map — DOTS facility markers. A Leaflet divIcon: a teal
+   cross chip so treatment facilities read differently from the case-count
+   circles. Leaflet's default divIcon chrome is stripped on the outer class;
+   the inner chip carries the styling and the spread-mode states. */
+.ahm-facility-icon {
+  background: transparent;
+  border: none;
+}
+.ahm-facility {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: #0f766e;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  color: #fff;
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+.ahm-facility svg {
+  width: 12px;
+  height: 12px;
+}
+.ahm-facility:hover {
+  transform: scale(1.15);
+}
+.ahm-facility.is-active {
+  background: #14b8a6;
+  transform: scale(1.25);
+  box-shadow:
+    0 0 0 4px rgba(45, 212, 191, 0.25),
+    0 4px 14px rgba(0, 0, 0, 0.5);
+}
+.ahm-facility.is-dim {
+  opacity: 0.35;
+}
+
+/* GIS surveillance map — drill-down motion.
+   Clicking a barangay dims every other marker and fans its cases out. Without
+   easing, the whole map changes in one frame and reads as a redraw rather than
+   as "this one opened". Only paint properties are transitioned; Leaflet owns
+   geometry, and animating that would fight its own transforms. */
+.leaflet-barangay-markers-pane path,
+.leaflet-assigned-area-pane path,
+.leaflet-cluster-halo-pane path,
+.leaflet-cluster-core-pane path {
+  transition:
+    fill-opacity 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    stroke-opacity 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    stroke-width 200ms ease;
+}
+
+/* The spread itself: lines and case dots are created fresh on every
+   selection, so a plain animation replays each time one opens. */
+.leaflet-flow-lines-pane path {
+  animation: ahm-flow-in 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.leaflet-flow-origins-pane path {
+  animation: ahm-dot-in 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes ahm-flow-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ahm-dot-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* The breakdown panel slides in from the edge it is docked to. */
+.ahm-panel-in {
+  animation: ahm-panel-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes ahm-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leaflet-barangay-markers-pane path,
+  .leaflet-assigned-area-pane path,
+  .leaflet-cluster-halo-pane path,
+  .leaflet-cluster-core-pane path,
+  .leaflet-flow-lines-pane path,
+  .leaflet-flow-origins-pane path,
+  .ahm-panel-in {
+    transition: none;
+    animation: none;
+  }
 }
 
 /* Multi-step forms (Register / Staff Register) — steps slide in the
@@ -262,6 +389,26 @@ body {
   animation: dl-card-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Learn — the article settles in when the reader changes section, disease, or
+   language. It confirms the click landed on content that actually changed,
+   which matters here because the page frame around it stays put. Animating in
+   (rather than gating visibility on a class) means the final state is the
+   default: the global prefers-reduced-motion rule collapses the duration and
+   the article is simply there. */
+@keyframes learn-article-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.learn-article-in {
+  animation: learn-article-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .bg-grid {
   background-image: var(--grid-bg);
   background-size: 24px 24px;
@@ -363,5 +510,127 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Patient claim slip ────────────────────────────────────────────────
+   The slip a health worker prints and hands to the patient. On screen it
+   is never shown; on paper it is the ONLY thing shown, so printing gives a
+   slip rather than a screenshot of the dashboard. Visibility (not display)
+   is what collapses the app — it keeps the slip's own layout intact while
+   blanking every ancestor. */
+.claim-slip {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #claim-slip,
+  #claim-slip * {
+    visibility: visible;
+  }
+  #claim-slip {
+    display: block;
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    background: #fff;
+    color: #000;
+  }
+  .claim-slip__inner {
+    /* Roughly a half-sheet — two slips per A4 if the clinic batches them. */
+    width: 100%;
+    max-width: 148mm;
+    padding: 12mm 12mm 10mm;
+    border: 1px dashed #999;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.5;
+  }
+  .claim-slip__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8mm;
+    border-bottom: 1.5pt solid #000;
+    padding-bottom: 3mm;
+  }
+  .claim-slip__brand {
+    margin: 0;
+    font-size: 13pt;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  .claim-slip__sub {
+    margin: 1mm 0 0;
+    font-size: 7.5pt;
+    color: #333;
+  }
+  .claim-slip__facility {
+    margin: 0;
+    font-size: 8pt;
+    font-weight: 600;
+    text-align: right;
+    max-width: 45mm;
+  }
+  .claim-slip__for {
+    margin: 5mm 0 0;
+    font-size: 10pt;
+  }
+  .claim-slip__codebox {
+    margin-top: 4mm;
+    border: 1.5pt solid #000;
+    padding: 4mm 3mm;
+    text-align: center;
+  }
+  .claim-slip__label {
+    margin: 0;
+    font-size: 7.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+  .claim-slip__code {
+    margin: 2mm 0 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 26pt;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    /* The trailing letter-spacing would otherwise push it off-centre. */
+    text-indent: 0.22em;
+  }
+  .claim-slip__expiry {
+    margin: 2mm 0 0;
+    font-size: 7.5pt;
+    color: #333;
+  }
+  .claim-slip__steps {
+    margin: 5mm 0 0;
+    padding-left: 5mm;
+    font-size: 9pt;
+  }
+  .claim-slip__steps li {
+    margin-bottom: 1.5mm;
+  }
+  .claim-slip__lang {
+    margin-top: 4mm;
+    border-top: 0.5pt solid #bbb;
+    padding-top: 3mm;
+    font-size: 7.5pt;
+    color: #222;
+  }
+  .claim-slip__lang p {
+    margin: 0 0 1.5mm;
+  }
+  .claim-slip__foot {
+    margin: 4mm 0 0;
+    font-size: 7pt;
+    color: #444;
+  }
+  @page {
+    margin: 10mm;
   }
 }

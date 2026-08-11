@@ -8,6 +8,7 @@ import {
   Bot,
   ClipboardList,
   Home,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   MapPinned,
@@ -15,6 +16,7 @@ import {
   Pill,
   Settings,
   Stethoscope,
+  Ticket,
   Users,
   Upload,
   X,
@@ -111,7 +113,7 @@ const NAV: NavItem[] = [
     to: "/app/dots-admin",
     label: "DOTS Centers",
     icon: MapPinned,
-    roles: ["tb_coordinator", "system_admin"],
+    roles: ["system_admin"],
     group: "Care",
   },
   {
@@ -132,7 +134,7 @@ const NAV: NavItem[] = [
     to: "/app/import",
     label: "Bulk Import",
     icon: Upload,
-    roles: ["tb_coordinator"],
+    roles: ["tb_coordinator", "barangay_admin", "health_worker", "system_admin"],
     group: "Tools",
   },
   {
@@ -146,20 +148,36 @@ const NAV: NavItem[] = [
     to: "/app/settings",
     label: "Settings",
     icon: Settings,
+    roles: ["system_admin"],
+    group: "Admin",
+  },
+  {
+    to: "/app/invites",
+    label: "Invite Codes",
+    icon: Ticket,
     roles: ["tb_coordinator", "system_admin"],
     group: "Admin",
+  },
+  {
+    // Sits under Care, not Admin: this is a counter task a nurse does with a
+    // patient in front of them, not account administration.
+    to: "/app/patient-codes",
+    label: "Patient Codes",
+    icon: KeyRound,
+    roles: ["health_worker", "tb_coordinator", "system_admin"],
+    group: "Care",
   },
   {
     to: "/app/users",
     label: "Users",
     icon: Users,
-    roles: ["tb_coordinator", "system_admin"],
+    roles: ["system_admin"],
     group: "Admin",
   },
 ];
 
 export function AppLayout() {
-  const { profile, loading, signOut } = useAuth();
+  const { profile, profileError, reloadProfile, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [unreadAlerts, setUnreadAlerts] = useState(0);
@@ -230,6 +248,45 @@ export function AppLayout() {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
         <Spinner />
+      </div>
+    );
+  }
+
+  // A profile that failed to LOAD is not a signed-out user. Redirecting here
+  // would bounce a valid session to /login, where signing in again hits the
+  // same failure — the loop reads as "the app logs me straight back out" and
+  // hides the actual cause. Say what broke and offer a retry instead.
+  if (!profile && profileError) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50 px-5">
+        <div className="w-full max-w-md rounded-xl border border-red-200 bg-white p-6 shadow-soft">
+          <p className="text-base font-semibold text-slate-900">
+            Signed in, but your profile couldn&apos;t be loaded
+          </p>
+          <p className="mt-1.5 text-sm text-slate-600">
+            Your session is still valid — the app just can&apos;t read who you
+            are, so it doesn&apos;t know what to show you.
+          </p>
+          <p className="mt-3 rounded-lg bg-slate-100 p-3 font-mono text-xs text-slate-800">
+            {profileError}
+          </p>
+          <div className="mt-5 flex gap-2">
+            <button
+              type="button"
+              onClick={() => void reloadProfile()}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white shadow-soft transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:ring-offset-2"
+            >
+              Try again
+            </button>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:ring-offset-2"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

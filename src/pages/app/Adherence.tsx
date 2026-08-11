@@ -11,10 +11,14 @@ import {
   Lock,
   MessageSquareText,
   Pill,
+  Plus,
+  Search,
+  Send,
   Smile,
   Sparkles,
   Star,
   Sun,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -30,6 +34,16 @@ import {
 import { PatientSheet } from "../../components/PatientSheet";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import {
+  COOLDOWN_DAYS,
+  MONTHLY_CAP,
+  SILENCE_DAYS,
+  escalationMessage,
+  findSilentPatients,
+  planEscalations,
+  type DoseLog,
+  type SentMessage,
+} from "../../lib/reminders";
 import { formatDate, formatDateTime } from "../../lib/utils";
 
 interface SmsRow {
@@ -51,7 +65,7 @@ interface Schedule {
   times_per_day: number;
   start_date: string;
   end_date: string;
-  patient: { full_name: string | null; email: string };
+  patient: { full_name: string | null; email: string | null };
 }
 
 interface Log {
@@ -78,6 +92,14 @@ const STATUS_TONE = {
   late: "warning",
   missed: "danger",
 } as const;
+
+// Plain-language dose statuses for the staff console badges.
+const DOSE_STATUS_LABEL: Record<Log["status"], string> = {
+  scheduled: "Upcoming",
+  taken: "Taken",
+  late: "Late",
+  missed: "Missed",
+};
 
 const MICRO_LABEL =
   "font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500";
@@ -123,6 +145,9 @@ export function Adherence() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [sending, setSending] = useState(false);
+  // Shared patient-name filter for the schedules + dose-activity panels, so a
+  // health worker can focus both on one patient instead of scanning everyone.
+  const [patientQuery, setPatientQuery] = useState("");
 
   async function load() {
     setLoading(true);
@@ -190,72 +215,96 @@ export function Adherence() {
     setLoading(false);
   }
 
-  async function sendReminders() {
+  /**
+   * Follow up with patients we have not heard from in a week.
+   *
+   * This replaced a per-dose reminder that texted everyone with a dose due in
+   * the next hour. Medicines here are dispensed weekly or monthly, so that
+   * message told a patient nothing they didn't already know — they had the
+   * tablets in their hand — while generating one SMS per dose per patient.
+   *
+   * The trigger is silence, not schedule, and three guards in lib/reminders.ts
+   * bound the volume. A patient taking their medicine is never texted at all.
+   */
+  async function sendEscalations() {
     setSending(true);
     const now = new Date();
-    const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
+    const since = new Date(now.getTime() - SILENCE_DAYS * 2 * 86_400_000);
 
-    const { data: dueLogs } = await supabase
+    // Two windows' worth: enough to tell "silent since" from "never started".
+    const { data: recentLogs } = await supabase
       .from("adherence_logs")
-      .select("id, patient_id, schedule_id, scheduled_at")
-      .eq("status", "scheduled")
-      .gte("scheduled_at", now.toISOString())
-      .lte("scheduled_at", inOneHour.toISOString())
-      .limit(100);
+      .select("patient_id, scheduled_at, status")
+      .gte("scheduled_at", since.toISOString())
+      .limit(5000);
 
-    if (!dueLogs || dueLogs.length === 0) {
-      toast.info("No dose reminders due within the next hour.");
+    const candidates = findSilentPatients(
+      (recentLogs ?? []) as DoseLog[],
+      now
+    );
+
+    if (candidates.length === 0) {
+      toast.info("Everyone has checked in this week — no follow-ups needed.");
       setSending(false);
       return;
     }
 
-    const patientIds = [...new Set(dueLogs.map((d) => d.patient_id))];
-    const scheduleIds = [...new Set(dueLogs.map((d) => d.schedule_id))];
-
-    const [{ data: patients }, { data: scheds }] = await Promise.all([
+    const patientIds = candidates.map((c) => c.patientId);
+    const [{ data: patients }, { data: history }] = await Promise.all([
       supabase
         .from("profiles")
-        .select("id, phone, full_name")
+        .select("id, phone, full_name, facility_id")
         .in("id", patientIds),
+      // Cooldown and cap are both judged from what was actually sent, so a
+      // page reload or a second click can't double-message anyone.
       supabase
-        .from("adherence_schedules")
-        .select("id, medication, dose")
-        .in("id", scheduleIds),
+        .from("sms_outbox")
+        .select("patient_id, created_at")
+        .in("patient_id", patientIds),
     ]);
 
-    const patientMap = new Map(
-      (patients ?? []).map((p) => [p.id, p])
+    // The message names the clinic to go to, so the patient knows where to
+    // turn up rather than just being told to get in touch.
+    const { data: centers } = await supabase
+      .from("dots_centers")
+      .select("id, name");
+    const facilityNames = new Map(
+      (centers ?? []).map((c) => [c.id, c.name as string])
     );
-    const schedMap = new Map(
-      (scheds ?? []).map((s) => [s.id, s])
-    );
 
-    let sent = 0;
-    for (const row of dueLogs) {
-      const patient = patientMap.get(row.patient_id);
-      const sched = schedMap.get(row.schedule_id);
-      if (!patient?.phone || !sched) continue;
+    const patientMap = new Map((patients ?? []).map((p) => [p.id, p]));
+    const plan = planEscalations(candidates, {
+      phones: new Map(
+        (patients ?? []).map((p) => [p.id, p.phone as string | null])
+      ),
+      sent: (history ?? []) as SentMessage[],
+      now,
+    });
 
-      const body = `BANTAY-TB: ${
-        patient.full_name ? `Hi ${patient.full_name}, ` : ""
-      }reminder to take ${sched.dose} of ${sched.medication} now. Reply CONFIRM in the app once taken.`;
-
+    const toSend = plan.filter((p) => p.send);
+    for (const decision of toSend) {
+      const patient = patientMap.get(decision.patientId);
+      if (!patient?.phone) continue;
       await supabase.from("sms_outbox").insert({
         to_phone: patient.phone,
-        body,
+        body: escalationMessage(
+          patient.full_name,
+          facilityNames.get(patient.facility_id ?? "") ?? null
+        ),
         status: "mocked" as const,
         provider: "mock",
-        patient_id: row.patient_id,
-        schedule_id: row.schedule_id,
+        patient_id: decision.patientId,
         sent_at: new Date().toISOString(),
       });
-      sent++;
     }
 
+    const held = plan.length - toSend.length;
     toast.success(
-      sent > 0
-        ? `${sent} SMS reminder(s) queued (mock mode — no real SMS sent without a provider key).`
-        : "No patients with phone numbers have doses due. SMS skipped."
+      toSend.length > 0
+        ? `${toSend.length} follow-up message${toSend.length === 1 ? "" : "s"} queued` +
+            (held > 0 ? ` · ${held} held back by the sending limits` : "") +
+            " (mock mode — no real SMS without a provider key)."
+        : `${held} patient${held === 1 ? " needs" : "s need"} follow-up, but all were held back by the sending limits. Call them instead.`
     );
     setSending(false);
     load();
@@ -303,21 +352,61 @@ export function Adherence() {
   }
 
   // ── Staff console experience ───────────────────────────────────────
+  const takenCount = logs.filter((l) => l.status === "taken").length;
+
+  const monthStart = new Date(
+    new Date().getFullYear(),
+    new Date().getMonth(),
+    1
+  );
+  const smsThisMonth = smsRows.filter(
+    (s) => new Date(s.created_at) >= monthStart
+  ).length;
+
+  const query = patientQuery.trim().toLowerCase();
+  const filteredSchedules = query
+    ? schedules.filter((s) =>
+        (s.patient?.full_name ?? s.patient?.email ?? "")
+          .toLowerCase()
+          .includes(query)
+      )
+    : schedules;
+  const filteredLogs = query
+    ? logs.filter((l) =>
+        (l.patient?.full_name ?? "").toLowerCase().includes(query)
+      )
+    : logs;
+
   return (
     <>
       <PageHeader
+        eyebrow="Treatment support"
         title="Medication Adherence"
-        subtitle="Schedules, dose logs, and SMS notifications for TB patients."
+        subtitle={`Keep track of who's on treatment and spot who needs a check-in. Medicines are dispensed weekly or monthly, so there is no text per dose — only a follow-up when a patient has been out of contact for about ${SILENCE_DAYS} days.`}
         actions={
           <div className="flex gap-2">
             <Button
               variant="secondary"
               onClick={() => setShowForm((v) => !v)}
             >
-              {showForm ? "Close" : "Add schedule"}
+              {showForm ? (
+                "Close"
+              ) : (
+                <>
+                  <Plus className="h-4 w-4" />
+                  Add schedule
+                </>
+              )}
             </Button>
-            <Button onClick={sendReminders} loading={sending}>
-              {sending ? "Sending…" : "Send SMS reminders"}
+            <Button onClick={sendEscalations} loading={sending}>
+              {sending ? (
+                "Sending…"
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  Follow up by SMS
+                </>
+              )}
             </Button>
           </div>
         }
@@ -336,134 +425,57 @@ export function Adherence() {
       <AdherenceStatRow
         loading={loading}
         activeSchedules={schedules.length}
-        takenCount={logs.filter((l) => l.status === "taken").length}
+        takenCount={takenCount}
         loggedCount={logs.length}
         flaggedPatients={flags.length}
         smsCount={smsRows.length}
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="overflow-hidden p-0">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
-            <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
-              <CalendarClock className="h-3.5 w-3.5 text-brand-600" />
-              Active schedules
-            </div>
-            {!loading && schedules.length > 0 && (
-              <span className="font-mono text-[10px] tabular-nums text-slate-500">
-                {schedules.length}
-              </span>
-            )}
-          </div>
-          {loading ? (
-            <ListSkeleton rows={3} />
-          ) : schedules.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-slate-500">
-              No schedules yet.
-            </p>
-          ) : (
-            <ul className="divide-y divide-slate-100">
-              {schedules.map((s) => (
-                <li
-                  key={s.id}
-                  className="px-4 py-3 transition-colors hover:bg-slate-50/70"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium text-slate-900">
-                        {s.medication}
-                      </div>
-                      <div className="mt-0.5 text-xs text-slate-500">
-                        {s.patient?.full_name ?? s.patient?.email ?? "—"} ·{" "}
-                        {s.dose} × {s.times_per_day}/day
-                      </div>
-                    </div>
-                    <div className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-slate-500">
-                      {formatDate(s.start_date)} → {formatDate(s.end_date)}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="overflow-hidden p-0">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
-            <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
-              <ListChecks className="h-3.5 w-3.5 text-accent-600" />
-              Recent dose logs · all patients
-            </div>
-            {!loading && logs.length > 0 && (
-              <span className="font-mono text-[10px] tabular-nums text-slate-500">
-                {logs.length}
-              </span>
-            )}
-          </div>
-          {loading ? (
-            <ListSkeleton rows={3} />
-          ) : logs.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-slate-500">
-              No dose logs yet.
-            </p>
-          ) : (
-            <ul className="max-h-[480px] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
-              {logs.map((l) => (
-                <li
-                  key={l.id}
-                  className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-slate-900">
-                      {l.patient?.full_name ?? "—"} ·{" "}
-                      {formatDateTime(l.scheduled_at)}
-                    </div>
-                    <div className="mt-0.5 text-xs text-slate-500">
-                      {l.taken_at
-                        ? `Taken ${formatDateTime(l.taken_at)}`
-                        : "Awaiting confirmation"}
-                    </div>
-                  </div>
-                  <Badge tone={STATUS_TONE[l.status]}>{l.status}</Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
-
-      <Card className="mt-4 overflow-hidden p-0">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
-          <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
-            <AlertTriangle className="h-3.5 w-3.5 text-vigil-500" />
-            Non-adherence flags
-          </div>
-          <span className="inline-flex items-center rounded-full border border-vigil-400/50 bg-vigil-300/20 px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-vigil-600">
-            Last 14 days
-          </span>
-        </div>
+      {/* Most important first: patients who need a personal follow-up. */}
+      <SectionCard
+        icon={<AlertTriangle className="h-5 w-5" />}
+        iconClass="bg-vigil-300/25 text-vigil-600"
+        title="Patients who need a follow-up"
+        description="Missed or late doses in the last 14 days — reach out to check in on them."
+        meta={
+          !loading &&
+          flags.length > 0 && (
+            <Badge tone={flags.some((f) => f.missed > 0) ? "danger" : "warning"}>
+              {flags.length} to review
+            </Badge>
+          )
+        }
+      >
         {loading ? (
           <ListSkeleton rows={2} />
         ) : flags.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-slate-500">
-            No missed or late doses in the last 14 days.
-          </p>
+          <div className="px-5 py-8 text-center">
+            <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-emerald-50 text-emerald-600">
+              <Check className="h-5 w-5" />
+            </span>
+            <p className="mt-2 text-sm font-medium text-slate-700">
+              Everyone's on track
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              No missed or late doses in the last 14 days.
+            </p>
+          </div>
         ) : (
           <ul className="divide-y divide-slate-100">
             {flags.map((f) => (
               <li
                 key={f.patient_id}
-                className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70"
+                className="flex items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-slate-50/70"
               >
                 <div>
-                  <div className="text-sm font-medium text-slate-900">{f.patient_name}</div>
-                  <div className="mt-0.5 flex gap-3 font-mono text-[10px] uppercase tracking-wider">
+                  <div className="text-sm font-semibold text-slate-900">
+                    {f.patient_name}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
                     {f.missed > 0 && (
-                      <span className="font-semibold text-red-600">{f.missed} missed</span>
+                      <Badge tone="danger">{f.missed} missed</Badge>
                     )}
-                    {f.late > 0 && (
-                      <span className="font-semibold text-amber-600">{f.late} late</span>
-                    )}
+                    {f.late > 0 && <Badge tone="warning">{f.late} late</Badge>}
                   </div>
                 </div>
                 <Badge tone={f.missed > 0 ? "danger" : "warning"}>
@@ -473,37 +485,235 @@ export function Adherence() {
             ))}
           </ul>
         )}
-      </Card>
+      </SectionCard>
 
-      <Card className="mt-4 overflow-hidden p-0">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
-          <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
-            <MessageSquareText className="h-3.5 w-3.5 text-brand-600" />
-            SMS outbox
+      {/* Shared patient filter — narrows both panels below to one patient. */}
+      {!loading && (schedules.length > 0 || logs.length > 0) && (
+        <div className="mt-4">
+          <label htmlFor="patient-filter" className="sr-only">
+            Filter schedules and dose activity by patient name
+          </label>
+          <div className="relative max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              id="patient-filter"
+              value={patientQuery}
+              onChange={(e) => setPatientQuery(e.target.value)}
+              placeholder="Find a patient by name…"
+              className="pl-9 pr-9"
+            />
+            {patientQuery && (
+              <button
+                type="button"
+                onClick={() => setPatientQuery("")}
+                aria-label="Clear patient filter"
+                className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
-          {!loading && smsRows.length > 0 && (
-            <span className="font-mono text-[10px] tabular-nums text-slate-500">
-              {smsRows.length}
-            </span>
+          {patientQuery && (
+            <p className="mt-1.5 text-xs text-slate-500">
+              Showing schedules &amp; dose activity for{" "}
+              <span className="font-medium text-slate-700">
+                “{patientQuery}”
+              </span>
+              .
+            </p>
           )}
         </div>
+      )}
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <SectionCard
+          icon={<CalendarClock className="h-5 w-5" />}
+          iconClass="bg-brand-50 text-brand-700"
+          title="Active medication schedules"
+          description="Who's on treatment and what they're taking."
+          meta={
+            !loading &&
+            schedules.length > 0 && (
+              <Badge tone="default">
+                {query
+                  ? `${filteredSchedules.length} of ${schedules.length}`
+                  : schedules.length}
+              </Badge>
+            )
+          }
+        >
+          {loading ? (
+            <ListSkeleton rows={3} />
+          ) : schedules.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-slate-500">
+              No schedules yet. Use{" "}
+              <span className="font-medium text-slate-700">Add schedule</span> to
+              start a patient on treatment.
+            </p>
+          ) : filteredSchedules.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-slate-500">
+              No schedules match{" "}
+              <span className="font-medium text-slate-700">
+                “{patientQuery}”
+              </span>
+              .
+            </p>
+          ) : (
+            <ul className="max-h-[480px] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
+              {filteredSchedules.map((s) => (
+                <li
+                  key={s.id}
+                  className="px-5 py-3.5 transition-colors hover:bg-slate-50/70"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-slate-900">
+                        {s.medication}
+                      </div>
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {s.patient?.full_name ?? s.patient?.email ?? "—"} ·{" "}
+                        {s.dose} · {s.times_per_day}×/day
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right text-xs text-slate-500">
+                      {formatDate(s.start_date)}
+                      <div className="text-slate-400">
+                        to {formatDate(s.end_date)}
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          icon={<ListChecks className="h-5 w-5" />}
+          iconClass="bg-accent-50 text-accent-600"
+          title="Recent dose activity"
+          description="The latest doses logged across all patients."
+          meta={
+            !loading &&
+            logs.length > 0 && (
+              <Badge tone="default">
+                {query
+                  ? `${filteredLogs.length} of ${logs.length}`
+                  : logs.length}
+              </Badge>
+            )
+          }
+        >
+          {loading ? (
+            <ListSkeleton rows={3} />
+          ) : logs.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-slate-500">
+              No dose activity yet.
+            </p>
+          ) : filteredLogs.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-slate-500">
+              No dose activity for{" "}
+              <span className="font-medium text-slate-700">
+                “{patientQuery}”
+              </span>
+              .
+            </p>
+          ) : (
+            <ul className="max-h-[480px] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
+              {filteredLogs.map((l) => (
+                <li
+                  key={l.id}
+                  className="flex items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-slate-50/70"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-slate-900">
+                      {l.patient?.full_name ?? "—"}
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-500">
+                      {l.taken_at
+                        ? `Taken ${formatDateTime(l.taken_at)}`
+                        : `Due ${formatDateTime(l.scheduled_at)} · awaiting confirmation`}
+                    </div>
+                  </div>
+                  <Badge tone={STATUS_TONE[l.status]}>{DOSE_STATUS_LABEL[l.status]}</Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+      </div>
+
+      {/* "Who pays for the messages?" is answered with arithmetic, not a
+          policy statement — the volume is on screen next to the rule that
+          bounds it. */}
+      <div className="mt-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-soft">
+        <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+          <MessageSquareText className="h-3.5 w-3.5 text-sky-600" />
+          Messaging volume &amp; cost
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div>
+            <div className="font-display text-2xl font-extrabold tabular-nums tracking-tight text-slate-900">
+              {smsThisMonth}
+            </div>
+            <div className="mt-0.5 text-xs text-slate-500">
+              Messages this month
+            </div>
+          </div>
+          <div>
+            <div className="font-display text-2xl font-extrabold tabular-nums tracking-tight text-slate-900">
+              {MONTHLY_CAP}
+            </div>
+            <div className="mt-0.5 text-xs text-slate-500">
+              Hard cap per patient, per month
+            </div>
+          </div>
+          <div>
+            <div className="font-display text-2xl font-extrabold tabular-nums tracking-tight text-slate-900">
+              {SILENCE_DAYS}d
+            </div>
+            <div className="mt-0.5 text-xs text-slate-500">
+              Silence before a follow-up
+            </div>
+          </div>
+        </div>
+        <p className="mt-3 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-500">
+          No message is sent per dose. A patient who confirms their medicine is
+          never texted at all, and nobody is texted twice inside {COOLDOWN_DAYS}{" "}
+          days — after one unanswered follow-up the next step is a call or a
+          home visit, not another message.
+        </p>
+      </div>
+
+      <SectionCard
+        className="mt-4"
+        icon={<MessageSquareText className="h-5 w-5" />}
+        iconClass="bg-sky-50 text-sky-600"
+        title="Follow-up message history"
+        description="Messages sent to patients we had not heard from. Not dose reminders."
+        meta={
+          !loading &&
+          smsRows.length > 0 && <Badge tone="default">{smsRows.length}</Badge>
+        }
+      >
         {loading ? (
           <ListSkeleton rows={3} />
         ) : smsRows.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-slate-500">
-            No SMS messages yet. Create a schedule and click &ldquo;Send SMS
-            reminders&rdquo; to queue messages.
+          <p className="px-5 py-8 text-center text-sm text-slate-500">
+            No reminders sent yet. Add a schedule, then use{" "}
+            <span className="font-medium text-slate-700">Send reminders</span> to
+            text patients whose dose is due soon.
           </p>
         ) : (
           <ul className="max-h-[420px] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
             {smsRows.map((s) => (
               <li
                 key={s.id}
-                className="px-4 py-3 transition-colors hover:bg-slate-50/70"
+                className="px-5 py-3.5 transition-colors hover:bg-slate-50/70"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-slate-900">
+                    <div className="truncate text-sm font-semibold text-slate-900">
                       {s.patient?.full_name ?? "—"} · {s.to_phone}
                     </div>
                     <div className="mt-0.5 line-clamp-2 text-xs text-slate-500">
@@ -524,7 +734,7 @@ export function Adherence() {
                     >
                       {s.status}
                     </Badge>
-                    <span className="font-mono text-[9px] uppercase tracking-wider text-slate-400">
+                    <span className="text-[11px] text-slate-400">
                       {formatDateTime(s.created_at)}
                     </span>
                   </div>
@@ -533,8 +743,54 @@ export function Adherence() {
             ))}
           </ul>
         )}
-      </Card>
+      </SectionCard>
     </>
+  );
+}
+
+/**
+ * Consistent, human-readable header for the staff console sections: a colored
+ * icon chip, a plain-language title, a one-line description of what the section
+ * is for, and an optional count/status badge on the right. Replaces the terse
+ * monospace micro-labels so each section explains itself at a glance.
+ */
+function SectionCard({
+  icon,
+  iconClass,
+  title,
+  description,
+  meta,
+  className,
+  children,
+}: {
+  icon: React.ReactNode;
+  iconClass: string;
+  title: string;
+  description: string;
+  meta?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className={"overflow-hidden p-0" + (className ? " " + className : "")}>
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+        <div className="flex items-start gap-3">
+          <span
+            className={"grid h-9 w-9 shrink-0 place-items-center rounded-xl " + iconClass}
+          >
+            {icon}
+          </span>
+          <div className="min-w-0">
+            <h2 className="font-display text-base font-bold tracking-tight text-slate-900">
+              {title}
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500">{description}</p>
+          </div>
+        </div>
+        {meta && <div className="shrink-0">{meta}</div>}
+      </div>
+      {children}
+    </Card>
   );
 }
 
@@ -594,7 +850,7 @@ function AdherenceStatRow({
         icon={<AlertTriangle className="h-4.5 w-4.5" />}
         iconClass="bg-vigil-300/20 text-vigil-600"
         accentClass="bg-vigil-500"
-        label="Flagged patients"
+        label="Need follow-up"
         value={flaggedPatients.toLocaleString()}
         footer={<span className="text-slate-500">Last 14 days</span>}
       />
@@ -602,7 +858,7 @@ function AdherenceStatRow({
         icon={<MessageSquareText className="h-4.5 w-4.5" />}
         iconClass="bg-sky-50 text-sky-600"
         accentClass="bg-sky-500"
-        label="SMS outbox"
+        label="Reminders sent"
         value={smsCount.toLocaleString()}
         footer={<span className="text-slate-500">Recent messages</span>}
       />
@@ -1086,7 +1342,10 @@ function NewScheduleForm({
   onClose: () => void;
 }) {
   const { profile } = useAuth();
-  const [patients, setPatients] = useState<{ id: string; email: string; full_name: string | null }[]>([]);
+  // email is null for phone-only patients — the common case for a walk-in.
+  const [patients, setPatients] = useState<
+    { id: string; email: string | null; full_name: string | null }[]
+  >([]);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     patient_id: "",

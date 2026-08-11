@@ -30,6 +30,7 @@ interface Row {
   full_name: string | null;
   role: AppRole;
   barangay_psgc: number | null;
+  facility_id: string | null;
   created_at: string;
 }
 
@@ -70,23 +71,45 @@ export function Users() {
   const [draft, setDraft] = useState<{
     role: AppRole;
     barangay_psgc: number | null;
-  }>({ role: "patient", barangay_psgc: null });
+    facility_id: string | null;
+  }>({ role: "patient", barangay_psgc: null, facility_id: null });
   const [error, setError] = useState<string | null>(null);
 
   const canEdit = profile?.role === "system_admin";
+  // Only a health centre account reads by facility (see areaScope.ts). The
+  // column stays visible for everyone so the directory tells the whole story,
+  // but it is only editable — and only meaningful — on that one role.
+  const draftUsesFacility = draft.role === "health_worker";
 
   const { data, isPending: loading } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, email, full_name, role, barangay_psgc, created_at")
+        .select(
+          "id, email, full_name, role, barangay_psgc, facility_id, created_at"
+        )
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as Row[];
     },
   });
   const rows = data ?? [];
+
+  const { data: facilities } = useQuery({
+    queryKey: ["dots-centers-ref"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("dots_centers")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as { id: string; name: string }[];
+    },
+    staleTime: 60 * 60 * 1000,
+  });
+  const facilityName = (id: string | null) =>
+    id ? ((facilities ?? []).find((f) => f.id === id)?.name ?? "—") : null;
 
   const saveMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -95,6 +118,9 @@ export function Users() {
         .update({
           role: draft.role,
           barangay_psgc: draft.barangay_psgc,
+          // Clear the posting when the role no longer reads by facility, so a
+          // demoted account can't keep a clinic's register on a stale column.
+          facility_id: draftUsesFacility ? draft.facility_id : null,
         })
         .eq("id", id);
       if (error) throw error;
@@ -113,7 +139,11 @@ export function Users() {
 
   function startEdit(row: Row) {
     setEditingId(row.id);
-    setDraft({ role: row.role, barangay_psgc: row.barangay_psgc });
+    setDraft({
+      role: row.role,
+      barangay_psgc: row.barangay_psgc,
+      facility_id: row.facility_id,
+    });
     setError(null);
   }
 
@@ -153,8 +183,8 @@ export function Users() {
         title="Users"
         subtitle={
           canEdit
-            ? "System users, their roles, and barangay assignments. Click the pencil to reassign."
-            : "System users, their roles, and barangay assignments. Contact the System Administrator to update a user's role or area."
+            ? "System users, their roles, and what each one can see: a barangay covers its residents, a health centre also covers its own facility's register. Click the pencil to reassign."
+            : "System users, their roles, and what each one can see: a barangay covers its residents, a health centre also covers its own facility's register. Contact the System Administrator to update a user's role, area, or facility."
         }
       />
 
@@ -258,6 +288,9 @@ export function Users() {
                     Assigned area
                   </th>
                   <th className="px-3 py-2.5 text-left font-semibold">
+                    DOTS facility
+                  </th>
+                  <th className="px-3 py-2.5 text-left font-semibold">
                     Joined
                   </th>
                   {canEdit && <th className="py-2.5 pl-3 pr-5"></th>}
@@ -345,6 +378,35 @@ export function Users() {
                           <span className="text-slate-400">—</span>
                         )}
                       </td>
+                      <td className="px-3 py-3 text-slate-600">
+                        {isEditing && draftUsesFacility ? (
+                          <Select
+                            value={draft.facility_id ?? ""}
+                            aria-label="DOTS facility"
+                            onChange={(e) =>
+                              setDraft({
+                                ...draft,
+                                facility_id: e.target.value || null,
+                              })
+                            }
+                          >
+                            <option value="">— No facility —</option>
+                            {(facilities ?? []).map((f) => (
+                              <option key={f.id} value={f.id}>
+                                {f.name}
+                              </option>
+                            ))}
+                          </Select>
+                        ) : isEditing ? (
+                          <span className="text-xs text-slate-400">
+                            Not used by this role
+                          </span>
+                        ) : (
+                          (facilityName(r.facility_id) ?? (
+                            <span className="text-slate-400">—</span>
+                          ))
+                        )}
+                      </td>
                       <td className="whitespace-nowrap px-3 py-3 tabular-nums text-slate-500">
                         {formatDate(r.created_at)}
                       </td>
@@ -390,7 +452,7 @@ export function Users() {
                 {filtered.length === 0 && (
                   <tr>
                     <td
-                      colSpan={canEdit ? 6 : 5}
+                      colSpan={canEdit ? 7 : 6}
                       className="px-4 py-10 text-center text-sm text-slate-500"
                     >
                       No users match your filters.

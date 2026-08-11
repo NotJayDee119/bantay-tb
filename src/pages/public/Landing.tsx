@@ -16,7 +16,7 @@ import {
 import gsap from "gsap";
 import { Button } from "../../components/ui";
 import { PublicCaseMap } from "../../components/PublicCaseMap";
-import heroImage from "../../assets/davao_city_midnight_blue_20260528_090346.png";
+import heroImage from "../../assets/davao-city-hero.webp";
 import ctaImage from "../../assets/dots1.jpg";
 
 /* ── Capabilities — labelled by module, not a numbered sequence ──────── */
@@ -25,7 +25,7 @@ const CAPABILITIES = [
     tag: "MAP",
     icon: MapPin,
     title: "GIS Mapping & Hotspots",
-    body: "Near real-time geospatial view of TB cases with spatial detection of high-risk barangays for targeted response.",
+    body: "Near real-time geospatial view of TB cases, pinpointing hotspots — areas with a high concentration of cases — for targeted response.",
   },
   {
     tag: "CASES",
@@ -67,7 +67,7 @@ const RESIDENT_POINTS = [
 
 const WORKER_POINTS = [
   { icon: Activity, text: "Monitor TB cases across every barangay" },
-  { icon: MapPin, text: "Detect hotspots with spatial analysis" },
+  { icon: MapPin, text: "Pinpoint hotspots — areas where TB cases concentrate" },
   { icon: Bell, text: "Get alerted the moment a threshold is crossed" },
 ];
 
@@ -257,12 +257,12 @@ export function Landing() {
                     <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
                   </Button>
                 </Link>
-                <Link to="/register">
+                <Link to="/claim">
                   <Button
                     variant="secondary"
                     className="border-white/15 bg-white/5 text-white hover:border-white/25 hover:bg-white/10"
                   >
-                    Request an account
+                    I have a claim code
                   </Button>
                 </Link>
               </div>

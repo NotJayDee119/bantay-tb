@@ -22,14 +22,19 @@ import {
 import { Badge, Card, PageHeader, Skeleton } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import { useAreaScope } from "../../hooks/useAreaScope";
+import { areaSuffix, type AreaScope } from "../../lib/areaScope";
 import type { AppRole } from "../../lib/supabase";
 import barangays from "../../data/barangays.json";
 import {
   computeHotspotInsights,
+  type CaseAttribution,
+  type FacilityRow,
   type HotspotCaseRow,
   type HotspotCluster,
   type HotspotInsights,
 } from "../../lib/hotspotUtils";
+import { useCaseAttribution } from "../../hooks/useCaseAttribution";
 
 const TOTAL_BARANGAYS = (barangays as { psgc: number }[]).length;
 
@@ -123,8 +128,15 @@ interface DashboardStats {
   }[];
 }
 
-function buildStats(rows: DashboardCaseRow[]): DashboardStats {
-  const insights = computeHotspotInsights(rows);
+function buildStats(
+  rows: DashboardCaseRow[],
+  attribution: CaseAttribution,
+  facilities: FacilityRow[]
+): DashboardStats {
+  // Same axis the GIS map is drawing on. Without both arguments this silently
+  // falls back to residence, which is what used to put the two pages' barangay
+  // rankings out of step.
+  const insights = computeHotspotInsights(rows, { attribution, facilities });
 
   // Year-over-year change (current year vs previous year reported_at).
   const now = new Date();
@@ -198,12 +210,23 @@ function formatUpload(d: Date | null): string {
 
 export function Dashboard() {
   const { profile } = useAuth();
+  const scope = useAreaScope();
   const role = profile?.role;
 
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [attribution, setAttribution] = useCaseAttribution();
+  // The rows and the facility list, kept as fetched. Switching the axis is a
+  // different way of counting the same cases, not a different query — so the
+  // toggle recomputes rather than refetches.
+  const [caseRows, setCaseRows] = useState<DashboardCaseRow[] | null>(null);
+  const [facilities, setFacilities] = useState<FacilityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showHotspotsModal, setShowHotspotsModal] = useState(false);
   const cancelRef = useRef(false);
+
+  const stats = useMemo(
+    () => (caseRows ? buildStats(caseRows, attribution, facilities) : null),
+    [caseRows, attribution, facilities]
+  );
 
   const fetchData = useCallback(async () => {
     // Supabase imposes a default 1000-row response cap; page through it so we
@@ -211,18 +234,24 @@ export function Dashboard() {
     const pageSize = 1000;
     const all: DashboardCaseRow[] = [];
     for (let from = 0; ; from += pageSize) {
-      const { data, error } = await supabase
+      // Scoping is left entirely to RLS, which since 20261007000000 returns
+      // the union of "lives in my barangay" and "registered at a facility in
+      // my barangay". A local `eq("barangay_psgc", …)` would drop the cases
+      // the local facility registered and put this total out of step with the
+      // map and the case register.
+      const query = supabase
         .from("cases")
         .select(
-          "id, barangay_psgc, reported_at, created_at, tb_classification, jitter_lat, jitter_lon"
+          "id, barangay_psgc, facility_id, reported_at, created_at, tb_classification, jitter_lat, jitter_lon"
         )
-        .eq("disease", "tb")
+        .eq("disease", "tb");
+      const { data, error } = await query
         .order("created_at", { ascending: false })
         .range(from, from + pageSize - 1);
       if (cancelRef.current) return;
       if (error || !data) {
         if (all.length === 0) {
-          setStats(null);
+          setCaseRows(null);
           setLoading(false);
           return;
         }
@@ -231,10 +260,21 @@ export function Dashboard() {
       all.push(...(data as unknown as DashboardCaseRow[]));
       if (data.length < pageSize) break;
     }
+    // Needed to resolve a case's registering facility to a barangay. Without
+    // it the facility axis has nothing to map onto and every case falls back to
+    // residence — the map and the Dashboard would disagree again, silently.
+    const { data: centers } = await supabase
+      .from("dots_centers")
+      .select("id, name, lat, lon, barangay_psgc");
     if (cancelRef.current) return;
-    setStats(buildStats(all));
+    setFacilities((centers ?? []) as FacilityRow[]);
+    setCaseRows(all);
     setLoading(false);
-  }, []);
+    // scope is deliberately a dependency even though the query never reads it:
+    // the filtering happens server-side in RLS, so a change of assigned area
+    // means the same query returns a different set of rows and has to be re-run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope.scoped, scope.psgc]);
 
   // Initial load + realtime refresh on changes to the `cases` table so the
   // dashboard mirrors uploads and edits without a manual refresh.
@@ -281,34 +321,23 @@ export function Dashboard() {
     };
   }, [showHotspotsModal]);
 
-  const assignedAreaName = profile?.barangay_psgc
-    ? (barangays as { psgc: number; name: string }[]).find(
-        (b) => b.psgc === profile.barangay_psgc
-      )?.name
-    : null;
+  const assignedAreaName = scope.name;
 
-  const subtitle = useMemo(() => {
-    const base = SUBTITLE[role ?? "patient"];
-    if (
-      assignedAreaName &&
-      (role === "health_worker" || role === "barangay_admin")
-    ) {
-      return `${base} · Assigned area: ${assignedAreaName}.`;
-    }
-    return base;
-  }, [role, assignedAreaName]);
+  const subtitle = useMemo(
+    () => SUBTITLE[role ?? "patient"] + areaSuffix(scope),
+    [role, scope]
+  );
 
   return (
     <>
       {role !== "patient" && (
         <PageHeader
-          title={`Welcome${profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}`}
+          title={`Welcome${profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}!`}
           subtitle={subtitle}
         />
       )}
 
-      {assignedAreaName &&
-        (role === "health_worker" || role === "barangay_admin") && (
+      {scope.scoped && assignedAreaName && (
           <div className="mb-4">
             <Card className="flex items-center gap-3 border-brand-100 bg-brand-50/40 p-4">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-brand-100 text-brand-700">
@@ -322,11 +351,17 @@ export function Dashboard() {
                   {assignedAreaName}
                 </div>
                 <p className="text-xs text-slate-600">
-                  You are tracking{" "}
-                  <span className="font-semibold text-slate-900">
-                    {stats?.totalCases ?? 0}
-                  </span>{" "}
-                  case{stats?.totalCases === 1 ? "" : "s"} from this area.
+                  {stats && stats.totalCases > 0 ? (
+                    <>
+                      You are tracking{" "}
+                      <span className="font-semibold text-slate-900">
+                        {stats.totalCases}
+                      </span>{" "}
+                      case{stats.totalCases === 1 ? "" : "s"} from this area.
+                    </>
+                  ) : (
+                    "No cases recorded for this area yet."
+                  )}
                 </p>
               </div>
             </Card>
@@ -353,6 +388,9 @@ export function Dashboard() {
         <SurveillanceDashboard
           stats={stats}
           onOpenHotspots={() => setShowHotspotsModal(true)}
+          scope={scope}
+          attribution={attribution}
+          onAttributionChange={setAttribution}
         />
       )}
 
@@ -388,11 +426,83 @@ const QUICK_ACTIONS = [
 function SurveillanceDashboard({
   stats,
   onOpenHotspots,
+  scope,
+  attribution,
+  onAttributionChange,
 }: {
   stats: DashboardStats;
   onOpenHotspots: () => void;
+  scope: AreaScope;
+  attribution: CaseAttribution;
+  onAttributionChange: (next: CaseAttribution) => void;
 }) {
   const yoy = formatYoy(stats.yoyChangePct);
+  const scopeLabel = scope.scoped ? (scope.name ?? "Assigned area") : "City-wide";
+  const areaName = scope.name ?? "your assigned area";
+
+  // An area-scoped account whose barangay has no cases would otherwise get a
+  // wall of zeroes — 0 headline, 0 hotspots, 0 recent, 0%-share table — which
+  // reads as a broken dashboard rather than an accurate one. Say it once,
+  // plainly, and keep the upload provenance so they can tell "nothing here"
+  // apart from "data never arrived".
+  if (scope.scoped && stats.totalCases === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="relative overflow-hidden rounded-2xl border border-brand-900 bg-brand-950 p-6 text-white shadow-soft sm:p-8">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-vigil-grid opacity-60"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-accent-500/10 blur-3xl"
+          />
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-300">
+                <span className="h-2 w-2 rounded-full bg-slate-500" />
+                {scopeLabel} TB surveillance
+              </p>
+              <div className="mt-4 flex items-start gap-3.5">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-300">
+                  <ClipboardList className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="font-display text-2xl font-bold leading-tight tracking-tight text-white">
+                    No cases in this area
+                  </p>
+                  <p className="mt-1.5 max-w-md text-sm leading-relaxed text-slate-400">
+                    No TB cases have been recorded for{" "}
+                    <span className="font-semibold text-slate-300">
+                      {areaName}
+                    </span>
+                    . Cases encoded or imported for this barangay will appear
+                    here automatically.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <QuickActions />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatTile
+            icon={<Upload className="h-5 w-5" />}
+            iconClass="bg-brand-50 text-brand-700"
+            accentClass="bg-brand-500"
+            label="Last upload"
+            value={formatUpload(stats.lastUpload)}
+            footer={
+              <span className="text-slate-500">
+                CHO records · {stats.rowCount.toLocaleString()} rows
+              </span>
+            }
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -410,7 +520,7 @@ function SurveillanceDashboard({
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-vigil-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-vigil-400" />
               </span>
-              Live &middot; City-wide TB surveillance
+              Live &middot; {scopeLabel} TB surveillance
             </p>
             <div className="mt-3 flex flex-wrap items-end gap-3">
               <span className="font-display text-5xl font-black leading-none tracking-tight text-white sm:text-6xl">
@@ -439,28 +549,27 @@ function SurveillanceDashboard({
               )}
             </div>
             <p className="mt-2 text-sm text-slate-400">
-              Total confirmed TB cases across{" "}
-              <span className="font-semibold text-slate-200">
-                {stats.barangaysWithCases}
-              </span>{" "}
-              barangays.
+              {scope.scoped ? (
+                <>
+                  Total confirmed TB cases in{" "}
+                  <span className="font-semibold text-slate-200">
+                    {scope.name ?? "your assigned area"}
+                  </span>
+                  .
+                </>
+              ) : (
+                <>
+                  Total confirmed TB cases across{" "}
+                  <span className="font-semibold text-slate-200">
+                    {stats.barangaysWithCases}
+                  </span>{" "}
+                  barangays.
+                </>
+              )}
             </p>
           </div>
 
-          {/* Quick actions */}
-          <div className="grid grid-cols-2 gap-2 sm:max-w-xs">
-            {QUICK_ACTIONS.map((a) => (
-              <Link
-                key={a.to}
-                to={a.to}
-                className="group flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-slate-200 backdrop-blur-sm transition hover:border-white/25 hover:bg-white/10 hover:text-white"
-              >
-                <a.icon className="h-4 w-4 shrink-0 text-accent-400" />
-                <span className="truncate">{a.label}</span>
-                <ArrowRight className="ml-auto h-3.5 w-3.5 shrink-0 -translate-x-1 text-slate-500 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
-              </Link>
-            ))}
-          </div>
+          <QuickActions />
         </div>
       </div>
 
@@ -481,25 +590,44 @@ function SurveillanceDashboard({
             footer={
               <span className="inline-flex items-center gap-1 font-medium text-red-600">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                Click to inspect clusters
+                Areas with concentrated cases — click to inspect
               </span>
             }
             interactive
           />
         </button>
 
-        <StatTile
-          icon={<Activity className="h-5 w-5" />}
-          iconClass="bg-accent-50 text-accent-600"
-          accentClass="bg-accent-500"
-          label="Detection rate"
-          value={`${stats.detectionRatePct}%`}
-          footer={
-            <span className="text-slate-500">
-              {stats.barangaysWithCases} of {TOTAL_BARANGAYS} barangays covered
-            </span>
-          }
-        />
+        {/* "Detection rate" is barangays-with-cases over all 182 — a citywide
+            coverage measure. For a single-barangay account it collapses to
+            1/182 ≈ 1%, which reads as a failure rather than a statistic. Show
+            them recent caseload instead, which is what they can act on. */}
+        {scope.scoped ? (
+          <StatTile
+            icon={<Activity className="h-5 w-5" />}
+            iconClass="bg-accent-50 text-accent-600"
+            accentClass="bg-accent-500"
+            label={`Cases · last ${stats.insights.recentWindowDays}d`}
+            value={stats.insights.recentCases.toLocaleString()}
+            footer={
+              <span className="text-slate-500">
+                Within {scope.name ?? "your assigned area"}
+              </span>
+            }
+          />
+        ) : (
+          <StatTile
+            icon={<Activity className="h-5 w-5" />}
+            iconClass="bg-accent-50 text-accent-600"
+            accentClass="bg-accent-500"
+            label="Detection rate"
+            value={`${stats.detectionRatePct}%`}
+            footer={
+              <span className="text-slate-500">
+                {stats.barangaysWithCases} of {TOTAL_BARANGAYS} barangays covered
+              </span>
+            }
+          />
+        )}
 
         <StatTile
           icon={<Upload className="h-5 w-5" />}
@@ -515,8 +643,32 @@ function SurveillanceDashboard({
         />
       </div>
 
-      {/* Top barangay table with indicator labels */}
-      <BarangayTable rows={stats.topBarangays} />
+      {/* Top barangay table with indicator labels. Area-scoped accounts get a
+          single-row variant covering just their assigned barangay. */}
+      <BarangayTable
+        rows={stats.topBarangays}
+        scope={scope}
+        attribution={attribution}
+        onAttributionChange={onAttributionChange}
+      />
+    </div>
+  );
+}
+
+function QuickActions() {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:max-w-xs">
+      {QUICK_ACTIONS.map((a) => (
+        <Link
+          key={a.to}
+          to={a.to}
+          className="group flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-slate-200 backdrop-blur-sm transition hover:border-white/25 hover:bg-white/10 hover:text-white"
+        >
+          <a.icon className="h-4 w-4 shrink-0 text-accent-400" />
+          <span className="truncate">{a.label}</span>
+          <ArrowRight className="ml-auto h-3.5 w-3.5 shrink-0 -translate-x-1 text-slate-500 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
+        </Link>
+      ))}
     </div>
   );
 }
@@ -570,26 +722,85 @@ function StatTile({
 
 function BarangayTable({
   rows,
+  scope,
+  attribution,
+  onAttributionChange,
 }: {
   rows: DashboardStats["topBarangays"];
+  scope: AreaScope;
+  attribution: CaseAttribution;
+  onAttributionChange: (next: CaseAttribution) => void;
 }) {
   const maxCount = rows[0]?.caseCount ?? 0;
+  // Share and Status are both measured against the worst-hit barangay in the
+  // set. With a single scoped row that comparison is against itself, so the
+  // bar is always 100% full and the status always reads "Very high". Drop
+  // both columns there and keep the counts, which mean the same thing either
+  // way. The rank number goes too — there's nothing to rank against.
+  const comparative = !scope.scoped;
   return (
     <Card className="p-0">
-      <div className="flex items-center justify-between gap-2 border-b border-slate-100 p-5">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 p-5">
+        <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
             <MapPin className="h-4 w-4 text-brand-600" /> Cases by barangay
           </div>
+          {/* Which axis produced these numbers, spelled out. The same barangay
+              legitimately holds two different totals, and a table that doesn't
+              say which one it is showing is how the Dashboard and the map came
+              to look like they disagreed. */}
           <p className="mt-0.5 text-xs text-slate-500">
-            Ranked by total case count, most affected first.
+            {attribution === "facility"
+              ? "Counting each case where it was registered"
+              : "Counting each case where the patient lives"}
+            {comparative ? " · most affected first." : " · your assigned area."}
           </p>
         </div>
-        <Badge tone="info">{rows.length} active</Badge>
+        <div className="flex items-center gap-2">
+          {/* Same control, same wording as the GIS map's — and the same
+              setting behind it, so switching here moves the map too. */}
+          <div
+            role="group"
+            aria-label="Count cases by"
+            className="flex rounded-lg bg-slate-100 p-0.5"
+          >
+            {(
+              [
+                ["facility", "Registered at"],
+                ["residence", "Lives in"],
+              ] as [CaseAttribution, string][]
+            ).map(([key, label]) => {
+              const on = attribution === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => onAttributionChange(key)}
+                  aria-pressed={on}
+                  className={
+                    "rounded-md px-2.5 py-1 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 " +
+                    (on
+                      ? "bg-white text-brand-700 shadow-soft"
+                      : "text-slate-500 hover:text-slate-700")
+                  }
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          {comparative ? (
+            <Badge tone="info">{rows.length} active</Badge>
+          ) : (
+            scope.name && <Badge tone="info">{scope.name}</Badge>
+          )}
+        </div>
       </div>
       {rows.length === 0 ? (
         <p className="py-10 text-center text-sm text-slate-500">
-          No cases recorded yet.
+          {scope.unassigned
+            ? "No area assigned to your account yet."
+            : "No cases recorded yet."}
         </p>
       ) : (
         <div className="max-h-[30rem] overflow-y-auto overscroll-contain">
@@ -599,14 +810,25 @@ function BarangayTable({
                 <th className="py-2.5 pl-5 pr-2 text-left font-semibold">
                   Barangay
                 </th>
-                <th className="hidden w-[34%] px-3 text-left font-semibold sm:table-cell">
-                  Share
-                </th>
+                {comparative && (
+                  <th className="hidden w-[34%] px-3 text-left font-semibold sm:table-cell">
+                    Share
+                  </th>
+                )}
                 <th className="px-3 text-right font-semibold">Total</th>
-                <th className="px-3 text-right font-semibold">Last 30d</th>
-                <th className="py-2.5 pl-2 pr-5 text-right font-semibold">
-                  Status
+                <th
+                  className={
+                    "px-3 text-right font-semibold " +
+                    (comparative ? "" : "pr-5")
+                  }
+                >
+                  Last 30d
                 </th>
+                {comparative && (
+                  <th className="py-2.5 pl-2 pr-5 text-right font-semibold">
+                    Status
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -620,50 +842,63 @@ function BarangayTable({
                   >
                     <td className="py-3 pl-5 pr-2">
                       <div className="flex items-center gap-2.5">
-                        <span
-                          className={
-                            "grid h-6 w-6 shrink-0 place-items-center rounded-md font-mono text-[11px] font-bold " +
-                            (i < 3
-                              ? "bg-brand-950 text-white"
-                              : "bg-slate-100 text-slate-500")
-                          }
-                        >
-                          {i + 1}
-                        </span>
+                        {comparative && (
+                          <span
+                            className={
+                              "grid h-6 w-6 shrink-0 place-items-center rounded-md font-mono text-[11px] font-bold " +
+                              (i < 3
+                                ? "bg-brand-950 text-white"
+                                : "bg-slate-100 text-slate-500")
+                            }
+                          >
+                            {i + 1}
+                          </span>
+                        )}
                         <span className="font-medium text-slate-800">
                           {b.name}
                         </span>
                       </div>
                     </td>
-                    <td className="hidden px-3 sm:table-cell">
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className={"h-full rounded-full " + b.indicator.dotClass}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </td>
+                    {comparative && (
+                      <td className="hidden px-3 sm:table-cell">
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className={
+                              "h-full rounded-full " + b.indicator.dotClass
+                            }
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </td>
+                    )}
                     <td className="px-3 text-right font-display font-bold tabular-nums text-slate-900">
                       {b.caseCount}
                     </td>
-                    <td className="px-3 text-right tabular-nums text-slate-600">
+                    <td
+                      className={
+                        "px-3 text-right tabular-nums text-slate-600 " +
+                        (comparative ? "" : "pr-5")
+                      }
+                    >
                       {b.recentCases}
                     </td>
-                    <td className="py-3 pl-2 pr-5 text-right">
-                      <span
-                        className={
-                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold " +
-                          b.indicator.pillClass
-                        }
-                      >
+                    {comparative && (
+                      <td className="py-3 pl-2 pr-5 text-right">
                         <span
                           className={
-                            "h-1.5 w-1.5 rounded-full " + b.indicator.dotClass
+                            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold " +
+                            b.indicator.pillClass
                           }
-                        />
-                        {b.indicator.label}
-                      </span>
-                    </td>
+                        >
+                          <span
+                            className={
+                              "h-1.5 w-1.5 rounded-full " + b.indicator.dotClass
+                            }
+                          />
+                          {b.indicator.label}
+                        </span>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -717,8 +952,8 @@ function HotspotsModal({
               Active hotspots
             </h2>
             <p className="mt-0.5 text-sm text-slate-600">
-              {sorted.length} DBSCAN cluster{sorted.length === 1 ? "" : "s"}{" "}
-              detected from recent cases.
+              {sorted.length} area{sorted.length === 1 ? "" : "s"} with a high
+              concentration of TB cases, grouped by DBSCAN.
             </p>
           </div>
           <button
@@ -734,8 +969,8 @@ function HotspotsModal({
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {sorted.length === 0 ? (
             <p className="py-12 text-center text-sm text-slate-500">
-              No active hotspots detected. Cases are dispersed enough that
-              DBSCAN found no clusters meeting the density threshold.
+              No active hotspots. Cases are spread out enough that no area
+              reaches the concentration threshold DBSCAN looks for.
             </p>
           ) : (
             <ul className="space-y-3">
@@ -842,7 +1077,7 @@ function PatientDashboard({ name }: { name: string | null }) {
     {
       to: "/app/chatbot",
       label: "Ask a question",
-      blurb: "Chat in English, Filipino, o Bisaya — anytime.",
+      blurb: "Chat in English, Filipino, o Cebuano — anytime.",
       icon: Bot,
       card: "border-sky-200 bg-sky-50 hover:border-sky-300",
       iconBg: "bg-sky-500",

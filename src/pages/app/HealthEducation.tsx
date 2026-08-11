@@ -3,9 +3,12 @@ import { createPortal } from "react-dom";
 import {
   Activity,
   BookOpen,
+  Bug,
   Check,
   ChevronLeft,
   ChevronRight,
+  CircleAlert,
+  Expand,
   HeartPulse,
   Languages,
   PartyPopper,
@@ -33,6 +36,12 @@ import {
   type Category,
   type Disease,
 } from "../../data/healthContent";
+import {
+  articleImageFor,
+  type ResolvedArticleImage,
+} from "../../data/healthImages";
+import { parseArticleBody, type ArticleBlock } from "../../lib/articleBlocks";
+import { SymptomInfographic } from "../../components/SymptomInfographic";
 import { LOCALE_LABEL, type Locale } from "../../lib/i18n";
 
 const DISEASES: Disease[] = [
@@ -43,6 +52,9 @@ const DISEASES: Disease[] = [
   "bronchitis",
   "copd",
   "asthma",
+  // Last in the row: the one topic here that is not a respiratory infection,
+  // and one read *because* of TB rather than alongside it.
+  "paragonimiasis",
 ];
 const CATEGORIES: Category[] = [
   "overview",
@@ -60,6 +72,7 @@ const DISEASE_ICON: Record<Disease, LucideIcon> = {
   bronchitis: Waves,
   copd: HeartPulse,
   asthma: Wind,
+  paragonimiasis: Bug,
 };
 
 // Pastel chip palette per topic — playful but still 4.5:1 on text.
@@ -91,6 +104,12 @@ const DISEASE_STYLE: Record<Disease, { idle: string; active: string }> = {
   asthma: {
     idle: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
     active: "border-emerald-500 bg-emerald-500 text-white",
+  },
+  // Deliberately unlike the seven above: this one is not a respiratory
+  // infection, and the chip row is where that difference first shows.
+  paragonimiasis: {
+    idle: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 hover:bg-fuchsia-100",
+    active: "border-fuchsia-500 bg-fuchsia-500 text-white",
   },
 };
 
@@ -144,8 +163,16 @@ const CATEGORY_HINT: Record<Category, Record<Locale, string>> = {
   overview: { en: "What it is", tl: "Ano ito", ceb: "Unsa kini" },
   symptoms: { en: "How it feels", tl: "Mga pakiramdam", ceb: "Mga bati" },
   treatment: { en: "Getting better", tl: "Paggaling", ceb: "Pag-ayo" },
-  prevention: { en: "Stay safe", tl: "Manatiling ligtas", ceb: "Magpabilin luwas" },
-  lifestyle: { en: "Live healthy", tl: "Mabuhay nang malusog", ceb: "Himsog nga kinabuhi" },
+  prevention: {
+    en: "Stay safe",
+    tl: "Manatiling ligtas",
+    ceb: "Magpabilin luwas",
+  },
+  lifestyle: {
+    en: "Live healthy",
+    tl: "Mabuhay nang malusog",
+    ceb: "Himsog nga kinabuhi",
+  },
 };
 
 const TAP_HINT: Record<Locale, string> = {
@@ -161,7 +188,10 @@ const TAP_HINT: Record<Locale, string> = {
  * full reviewed article, references, and step-to-step navigation.
  */
 export function HealthEducation() {
-  const [locale, setLocale] = useState<Locale>("en");
+  // Filipino, not English — matching the public Learn page. The patients
+  // reading this are Davao TB patients, and every poster in it is drawn in
+  // Filipino. English and Cebuano stay one tap away.
+  const [locale, setLocale] = useState<Locale>("tl");
   const [disease, setDisease] = useState<Disease>("tb");
   // The step whose detail modal is open — null means the card grid is showing.
   const [openCategory, setOpenCategory] = useState<Category | null>(null);
@@ -181,7 +211,7 @@ export function HealthEducation() {
 
   const visitedCount = useMemo(
     () => CATEGORIES.filter((c) => visited.has(`${disease}:${c}`)).length,
-    [visited, disease]
+    [visited, disease],
   );
   const allDone = visitedCount === CATEGORIES.length;
 
@@ -207,8 +237,9 @@ export function HealthEducation() {
               Health Education
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-700 sm:text-base">
-              Easy, friendly guides about TB and other sicknesses — tap a card to
-              read in English, Filipino, or Bisaya.
+              Easy, friendly guides to TB and other lung diseases — with
+              pictures of what to look for. Tap a card to read in English,
+              Filipino, or Cebuano.
             </p>
           </div>
 
@@ -223,7 +254,7 @@ export function HealthEducation() {
                   "rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200",
                   locale === l
                     ? "bg-sky-500 text-white shadow-soft"
-                    : "text-slate-600 hover:bg-sky-100 hover:text-sky-700"
+                    : "text-slate-600 hover:bg-sky-100 hover:text-sky-700",
                 )}
               >
                 {LOCALE_LABEL[l]}
@@ -250,7 +281,7 @@ export function HealthEducation() {
                 onClick={() => setDisease(d)}
                 className={cn(
                   "inline-flex shrink-0 items-center gap-2 rounded-full border-2 px-4 py-2 text-sm font-bold transition-all duration-200 active:scale-95",
-                  active ? style.active + " shadow-soft" : style.idle
+                  active ? style.active + " shadow-soft" : style.idle,
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -267,13 +298,13 @@ export function HealthEducation() {
           "flex items-center gap-3 rounded-3xl border-2 p-4 transition-colors",
           allDone
             ? "border-emerald-200 bg-emerald-50"
-            : "border-amber-200 bg-amber-50/70"
+            : "border-amber-200 bg-amber-50/70",
         )}
       >
         <span
           className={cn(
             "grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-white",
-            allDone ? "bg-emerald-500" : "bg-amber-400"
+            allDone ? "bg-emerald-500" : "bg-amber-400",
           )}
         >
           {allDone ? (
@@ -301,7 +332,7 @@ export function HealthEducation() {
                   "h-4 w-4",
                   visited.has(`${disease}:${c}`)
                     ? "fill-amber-400 text-amber-400"
-                    : "text-slate-300"
+                    : "text-slate-300",
                 )}
               />
             ))}
@@ -317,7 +348,10 @@ export function HealthEducation() {
             const style = CATEGORY_STYLE[c];
             const seen = visited.has(`${disease}:${c}`);
             const hasArticle = HEALTH_ARTICLES.some(
-              (a) => a.disease === disease && a.locale === locale && a.category === c
+              (a) =>
+                a.disease === disease &&
+                a.locale === locale &&
+                a.category === c,
             );
             return (
               <button
@@ -326,7 +360,7 @@ export function HealthEducation() {
                 onClick={() => openStep(c)}
                 className={cn(
                   "group relative flex h-full flex-col items-start gap-3 rounded-3xl border-2 bg-white p-4 text-left shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift active:scale-[0.98]",
-                  style.ring
+                  style.ring,
                 )}
               >
                 {seen && (
@@ -337,13 +371,13 @@ export function HealthEducation() {
                 <span
                   className={cn(
                     "grid h-12 w-12 place-items-center rounded-2xl transition-transform duration-200 group-hover:scale-105",
-                    style.tint
+                    style.tint,
                   )}
                 >
                   <Icon
                     className={cn(
                       "h-6 w-6",
-                      seen ? "text-slate-500" : "text-slate-700"
+                      seen ? "text-slate-500" : "text-slate-700",
                     )}
                   />
                 </span>
@@ -351,7 +385,7 @@ export function HealthEducation() {
                   <span
                     className={cn(
                       "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide",
-                      style.badge
+                      style.badge,
                     )}
                   >
                     <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-white/70 text-[9px] text-slate-700">
@@ -393,6 +427,175 @@ export function HealthEducation() {
   );
 }
 
+/* ── A photograph with its caption and credit ─────────────────────────── */
+function ArticleFigure({
+  image,
+  className,
+}: {
+  image: ResolvedArticleImage;
+  className?: string;
+}) {
+  return (
+    <figure
+      className={cn(
+        "overflow-hidden rounded-2xl border-2 border-slate-200",
+        className,
+      )}
+    >
+      {image.fit === "figure" ? (
+        // An infographic is text, so it is never cropped or boxed to a ratio.
+        // But this sheet is only 512px wide and 88vh tall, and a portrait
+        // poster filling its width ate almost the whole of it — the reader
+        // opened a chapter and met one picture. So it is capped at 45vh here,
+        // tighter than the 70vh on the public page, because it is sharing a
+        // sheet rather than owning a column.
+        //
+        // Tapping it opens the poster full-size in a new tab, which is what
+        // keeps the small rendering honest: the wording is still reachable.
+        // `max-w` at the intrinsic width keeps a 768px poster from being
+        // upscaled into a blurry one, and the width/height attributes let the
+        // browser reserve the space before the file arrives.
+        <a
+          href={image.src}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group relative block cursor-zoom-in bg-slate-100/70"
+        >
+          <img
+            src={image.src}
+            alt={image.alt}
+            width={image.width}
+            height={image.height}
+            loading="lazy"
+            decoding="async"
+            className="mx-auto block h-auto max-h-[45vh] w-auto"
+            style={{
+              maxWidth: image.width ? `min(100%, ${image.width}px)` : "100%",
+            }}
+          />
+          <span className="pointer-events-none absolute right-2 top-2 rounded-md bg-slate-900/55 p-1.5 text-white">
+            <Expand className="h-3.5 w-3.5" />
+          </span>
+        </a>
+      ) : (
+        <img
+          src={image.src}
+          alt={image.alt}
+          // The sheet is closed until tapped, so nothing here is ever on the
+          // first screen — fetching it eagerly would spend the reader's data
+          // on an article they may not open.
+          loading="lazy"
+          decoding="async"
+          className={cn(
+            "w-full",
+            // Clinical images sit whole against a dark backing rather than
+            // being cropped: cropping a chest X-ray cuts off the lungs, and
+            // cropping the micrograph loses its scale bar.
+            image.fit === "contain"
+              ? "h-44 bg-slate-900 object-contain"
+              : "h-40 object-cover",
+          )}
+        />
+      )}
+      <figcaption className="bg-slate-50 px-3.5 py-2.5">
+        <p className="text-[12px] leading-relaxed text-slate-700">
+          {image.caption}
+        </p>
+        <p className="mt-1 text-[10px] text-slate-500">
+          {image.creditUrl ? (
+            <a
+              href={image.creditUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline decoration-slate-300 hover:text-slate-700"
+            >
+              {image.credit}
+            </a>
+          ) : (
+            image.credit
+          )}
+        </p>
+      </figcaption>
+    </figure>
+  );
+}
+
+/* ── One parsed piece of an article ───────────────────────────────────── */
+function BodyBlock({ block }: { block: ArticleBlock }) {
+  if (block.kind === "prose") {
+    return (
+      <p className="text-[15px] leading-[1.85] text-slate-800">{block.text}</p>
+    );
+  }
+
+  // Care-seeking guidance must not read like the sentence before it.
+  if (block.kind === "alert") {
+    return (
+      <aside className="flex gap-3 rounded-2xl border-2 border-rose-200 bg-rose-50 p-3.5">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-rose-500 text-white">
+          <CircleAlert className="h-4 w-4" aria-hidden />
+        </span>
+        <p className="text-[14px] font-semibold leading-relaxed text-rose-900">
+          {block.text}
+        </p>
+      </aside>
+    );
+  }
+
+  if (block.kind === "checklist") {
+    return (
+      <div>
+        {block.lead && (
+          <p className="text-[15px] font-bold leading-relaxed text-slate-900">
+            {block.lead}
+          </p>
+        )}
+        <ul className={cn("space-y-1.5", block.lead && "mt-2")}>
+          {block.items.map((item, i) => (
+            <li key={i} className="flex items-start gap-2.5">
+              <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-sky-100 text-sky-600">
+                <Check className="h-2.5 w-2.5" aria-hidden />
+              </span>
+              <span className="text-[14px] leading-relaxed text-slate-800">
+                {item}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  // A named sub-section the author wrote longhand — "Sleep:", "Nutrisyon:".
+  return (
+    <div className="rounded-2xl bg-slate-50 p-3.5">
+      <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">
+        {block.label}
+      </p>
+      {block.text && (
+        <p className="mt-1.5 text-[14px] leading-relaxed text-slate-800">
+          {block.text}
+        </p>
+      )}
+      {block.items.length > 0 && (
+        <ul className="mt-2 space-y-1.5">
+          {block.items.map((item, i) => (
+            <li key={i} className="flex items-start gap-2.5">
+              <span
+                aria-hidden
+                className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400"
+              />
+              <span className="text-[14px] leading-relaxed text-slate-800">
+                {item}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /* ── Detail modal: bottom sheet on phones, centered dialog on desktop ─── */
 function ArticleModal({
   disease,
@@ -408,10 +611,17 @@ function ArticleModal({
   onNavigate: (c: Category) => void;
 }) {
   const article = HEALTH_ARTICLES.find(
-    (a) => a.disease === disease && a.locale === locale && a.category === category
+    (a) =>
+      a.disease === disease && a.locale === locale && a.category === category,
   );
   const style = CATEGORY_STYLE[category];
   const Icon = CATEGORY_ICON[category];
+
+  const articleImage = articleImageFor(disease, category, locale);
+  const blocks = useMemo(
+    () => (article ? parseArticleBody(article.body_md) : []),
+    [article],
+  );
 
   const catIndex = CATEGORIES.indexOf(category);
   const prevCat = catIndex > 0 ? CATEGORIES[catIndex - 1] : null;
@@ -456,7 +666,7 @@ function ArticleModal({
           <span
             className={cn(
               "grid h-11 w-11 shrink-0 place-items-center rounded-2xl",
-              style.tint
+              style.tint,
             )}
           >
             <Icon className="h-6 w-6 text-slate-700" />
@@ -466,7 +676,7 @@ function ArticleModal({
               <span
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full border-2 px-2.5 py-0.5 text-[11px] font-bold",
-                  DISEASE_STYLE[disease].idle
+                  DISEASE_STYLE[disease].idle,
                 )}
               >
                 {DISEASE_LABEL[disease][locale]}
@@ -474,7 +684,7 @@ function ArticleModal({
               <span
                 className={cn(
                   "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide",
-                  style.badge
+                  style.badge,
                 )}
               >
                 {CATEGORY_LABEL[category][locale]}
@@ -517,8 +727,24 @@ function ArticleModal({
                 </div>
               </div>
 
-              <div className="mt-5 whitespace-pre-line text-[15px] leading-[1.9] text-slate-800">
-                {article.body_md}
+              {/* Symptom pictures come before the prose: the reader who most
+                  needs them is the one who will not finish the paragraph. */}
+              {category === "symptoms" && (
+                <SymptomInfographic
+                  disease={disease}
+                  locale={locale}
+                  className="mt-5"
+                />
+              )}
+
+              {articleImage && (
+                <ArticleFigure image={articleImage} className="mt-5" />
+              )}
+
+              <div className="mt-5 space-y-4">
+                {blocks.map((block, i) => (
+                  <BodyBlock key={i} block={block} />
+                ))}
               </div>
 
               {/* References — for parents & guardians */}
@@ -627,6 +853,6 @@ function ArticleModal({
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

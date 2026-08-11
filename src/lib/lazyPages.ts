@@ -6,7 +6,7 @@ export const About = lazyWithPreload(() => import("../pages/public/About").then(
 export const DotsLocator = lazyWithPreload(() => import("../pages/public/DotsLocator").then(m => ({ default: m.DotsLocator })));
 export const LearnPublic = lazyWithPreload(() => import("../pages/public/LearnPublic").then(m => ({ default: m.LearnPublic })));
 export const Login = lazyWithPreload(() => import("../pages/public/Login").then(m => ({ default: m.Login })));
-export const Register = lazyWithPreload(() => import("../pages/public/Register").then(m => ({ default: m.Register })));
+export const ClaimAccount = lazyWithPreload(() => import("../pages/public/ClaimAccount").then(m => ({ default: m.ClaimAccount })));
 export const StaffRegister = lazyWithPreload(() => import("../pages/public/StaffRegister").then(m => ({ default: m.StaffRegister })));
 export const ForgotPassword = lazyWithPreload(() => import("../pages/public/ForgotPassword").then(m => ({ default: m.ForgotPassword })));
 export const ResetPassword = lazyWithPreload(() => import("../pages/public/ResetPassword").then(m => ({ default: m.ResetPassword })));
@@ -27,6 +27,8 @@ export const DotsCentersAdmin = lazyWithPreload(() => import("../pages/app/DotsC
 export const SettingsPage = lazyWithPreload(() => import("../pages/app/SettingsPage").then(m => ({ default: m.SettingsPage })));
 export const Analytics = lazyWithPreload(() => import("../pages/app/Analytics").then(m => ({ default: m.Analytics })));
 export const Users = lazyWithPreload(() => import("../pages/app/Users").then(m => ({ default: m.Users })));
+export const InviteCodes = lazyWithPreload(() => import("../pages/app/InviteCodes").then(m => ({ default: m.InviteCodes })));
+export const PatientCodes = lazyWithPreload(() => import("../pages/app/PatientCodes").then(m => ({ default: m.PatientCodes })));
 export const AdminDashboard = lazyWithPreload(() => import("../pages/app/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
 
 /**
@@ -41,7 +43,7 @@ const PRELOAD_BY_PATH: Record<string, () => Promise<unknown>> = {
   "/dots-locator": DotsLocator.preload,
   "/learn": LearnPublic.preload,
   "/login": Login.preload,
-  "/register": Register.preload,
+  "/claim": ClaimAccount.preload,
   "/register/staff": StaffRegister.preload,
   "/forgot-password": ForgotPassword.preload,
   "/reset-password": ResetPassword.preload,
@@ -62,6 +64,8 @@ const PRELOAD_BY_PATH: Record<string, () => Promise<unknown>> = {
   "/app/chatbot": Chatbot.preload,
   "/app/settings": SettingsPage.preload,
   "/app/users": Users.preload,
+  "/app/invites": InviteCodes.preload,
+  "/app/patient-codes": PatientCodes.preload,
 };
 
 /**

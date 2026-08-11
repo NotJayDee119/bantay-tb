@@ -84,6 +84,29 @@ describe("detectLocale", () => {
     expect(accuracy).toBeGreaterThanOrEqual(0.9);
   });
 
+  // The aggregate figure hid a lopsided classifier: it sat at 95% overall
+  // while Cebuano alone was 17/20, every miss landing on Tagalog. Bisaya is a
+  // first-class language here, not rounding error in an average — so each
+  // language carries its own floor and a regression names itself.
+  it("holds every language to the same bar, not just the average", () => {
+    for (const lang of ["en", "tl", "ceb"] as const) {
+      const subset = CORPUS.filter((c) => c.expected === lang);
+      const correct = subset.filter((c) => detectLocale(c.text) === lang).length;
+      expect(
+        correct / subset.length,
+        `${lang}: ${correct}/${subset.length}`
+      ).toBeGreaterThanOrEqual(0.9);
+    }
+  });
+
+  it("reads Cebuano 'my area' questions as Cebuano", () => {
+    // These are the phrasings HERE_PATTERN in the chatbot keys on, so a
+    // misdetection here answers a Bisaya question in Tagalog.
+    expect(detectLocale("Pila ka kaso diri sa among barangay?")).toBe("ceb");
+    expect(detectLocale("Pila ang TB sa akong lugar?")).toBe("ceb");
+    expect(detectLocale("Naa bay hotspot duol nako?")).toBe("ceb");
+  });
+
   it("returns en for empty input", () => {
     expect(detectLocale("")).toBe("en");
   });

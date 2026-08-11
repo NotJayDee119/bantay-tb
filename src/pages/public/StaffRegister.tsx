@@ -1,5 +1,11 @@
-import { useState } from "react";
-import { Activity, ArrowLeft, ArrowRight, KeyRound } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  Activity,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  KeyRound,
+} from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -10,7 +16,7 @@ import {
   Select,
 } from "../../components/ui";
 import { useAuth } from "../../hooks/useAuth";
-import { ROLE_LABELS, type AppRole } from "../../lib/supabase";
+import { supabase, ROLE_LABELS, type AppRole } from "../../lib/supabase";
 import barangays from "../../data/barangays.json";
 import dotsImage from "../../assets/dots.webp";
 
@@ -20,14 +26,30 @@ const STAFF_ROLES: AppRole[] = [
   "health_worker",
 ];
 
-const REQUIRED_INVITE_CODE = (import.meta.env.VITE_STAFF_INVITE_CODE ?? "")
-  .toString()
-  .trim();
+const STEPS = ["Credentials", "Confirm"] as const;
 
-const STEPS = ["Credentials", "Assignment"] as const;
+const INVALID_REASON: Record<string, string> = {
+  not_found: "Invalid invite code. Double-check it with your TB coordinator.",
+  used: "This invite code has already been used. Ask for a new one.",
+  expired:
+    "This invite code has expired (codes last 24 hours). Ask your TB coordinator for a new one.",
+};
+
+/** Why `claim_staff_role` refused to assign the role. */
+const CLAIM_FAILURE: Record<string, string> = {
+  code_unavailable:
+    "This invite code was just used or expired. Ask your TB coordinator for a new one.",
+  already_assigned:
+    "This account already has a role. Sign in instead, or ask a system admin to change it.",
+  barangay_required: "Please select your assigned barangay.",
+  role_not_allowed:
+    "That role can't be self-assigned. Ask a system admin to set it up for you.",
+  not_authenticated:
+    "Your account needs email confirmation before its role can be assigned. Confirm your email, then contact your TB coordinator.",
+};
 
 export function StaffRegister() {
-  const { signUp } = useAuth();
+  const { signUp, reloadProfile } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
@@ -36,15 +58,39 @@ export function StaffRegister() {
     fullName: "",
     role: "health_worker" as AppRole,
     barangayPsgc: "",
+    facilityId: "",
     inviteCode: "",
   });
+  const [validating, setValidating] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [facilities, setFacilities] = useState<
+    { id: string; name: string }[]
+  >([]);
 
   const needsBarangay =
     form.role === "barangay_admin" || form.role === "health_worker";
+  // Only a health centre account reads by facility. A barangay admin covers
+  // residents, so offering them a facility would promise a view they don't get.
+  const needsFacility = form.role === "health_worker";
 
-  function goNext() {
-    if (!form.inviteCode.trim()) {
+  // `dots_centers` is world-readable, so this loads before sign-in.
+  useEffect(() => {
+    let cancelled = false;
+    void supabase
+      .from("dots_centers")
+      .select("id, name")
+      .order("name")
+      .then(({ data }) => {
+        if (!cancelled) setFacilities(data ?? []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function goNext() {
+    const code = form.inviteCode.trim();
+    if (!code) {
       toast.error("Please enter your invite code.");
       return;
     }
@@ -60,38 +106,83 @@ export function StaffRegister() {
       toast.error("Password must be at least 6 characters.");
       return;
     }
+
+    // Verify the code is real, unused, and unexpired before advancing. This is
+    // a non-consuming check — the code is only redeemed on final submit. An
+    // invalid code blocks the Confirm step entirely.
+    setValidating(true);
+    const { data, error } = await supabase.rpc("validate_invite_code", {
+      p_code: code,
+    });
+    setValidating(false);
+
+    if (error) {
+      toast.error("Could not verify invite code. Please try again.");
+      return;
+    }
+    const result = data?.[0];
+    if (!result || !result.valid) {
+      toast.error(INVALID_REASON[result?.reason ?? ""] ?? "Invalid invite code.");
+      return;
+    }
+
     setStep(1);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!REQUIRED_INVITE_CODE) {
-      toast.error(
-        "Staff registration is not configured. Please contact the TB coordinator."
-      );
-      return;
-    }
-    if (form.inviteCode.trim() !== REQUIRED_INVITE_CODE) {
-      toast.error("Invalid invite code.");
-      return;
-    }
     if (needsBarangay && !form.barangayPsgc) {
       toast.error("Please select your assigned barangay.");
       return;
     }
     setLoading(true);
+
+    // signUp only ever creates a `patient` account — the role is not something
+    // the client can ask for. Promotion happens in the RPC below, where the
+    // invite code is verified server-side.
     const { error, confirmed } = await signUp(
       form.email,
       form.password,
-      form.fullName,
-      form.role,
-      form.barangayPsgc ? Number(form.barangayPsgc) : null
+      form.fullName
     );
-    setLoading(false);
+
     if (error) {
+      setLoading(false);
       toast.error(error);
       return;
     }
+
+    // Consume the code and receive the role in one call. The DB burns the code
+    // atomically, so it stays single-use even if two people raced the same code
+    // through the Confirm step — and if the burn fails, no role is granted.
+    const { data: claim, error: claimError } = await supabase.rpc(
+      "claim_staff_role",
+      {
+        p_code: form.inviteCode.trim(),
+        p_role: form.role,
+        p_barangay_psgc: form.barangayPsgc ? Number(form.barangayPsgc) : null,
+        p_facility_id:
+          needsFacility && form.facilityId ? form.facilityId : null,
+      }
+    );
+
+    const result = claim?.[0];
+    if (claimError || !result?.ok) {
+      setLoading(false);
+      toast.error(
+        CLAIM_FAILURE[result?.reason ?? ""] ??
+          "Your account was created, but its role could not be assigned. Contact your TB coordinator."
+      );
+      return;
+    }
+
+    // The session was established by signUp, so the cached profile was read
+    // back while the trigger's `patient` default was still on it. Without this
+    // re-read the app renders the patient dashboard for a health worker —
+    // the role only became correct once the RPC above ran.
+    await reloadProfile();
+
+    setLoading(false);
     if (confirmed) {
       toast.success("Staff account created. Welcome to BANTAY-TB!");
       navigate("/app");
@@ -148,7 +239,7 @@ export function StaffRegister() {
             <div className="mt-7 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 backdrop-blur-sm">
               <KeyRound className="h-3.5 w-3.5 text-accent-400" />
               <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-300">
-                Invite-only &middot; role-based access
+                Invite-only &middot; single-use codes
               </span>
             </div>
           </div>
@@ -195,8 +286,8 @@ export function StaffRegister() {
             </h1>
             <p className="mt-2 text-sm text-slate-500">
               {step === 0
-                ? "Enter your invite code and login credentials."
-                : "Select your role and assigned barangay."}
+                ? "Enter the invite code from your TB coordinator and your login details."
+                : "Select your role and the area you cover, then create your account."}
             </p>
           </div>
 
@@ -218,7 +309,7 @@ export function StaffRegister() {
           </div>
 
           {/* Steps */}
-          <form onSubmit={step === 0 ? (e) => { e.preventDefault(); goNext(); } : handleSubmit}>
+          <form onSubmit={step === 0 ? (e) => { e.preventDefault(); void goNext(); } : handleSubmit}>
               {step === 0 && (
                 <div className="step-in-left mt-6 space-y-5">
                   <div className="space-y-1.5">
@@ -231,14 +322,22 @@ export function StaffRegister() {
                         id="inviteCode"
                         required
                         autoComplete="off"
-                        className="pl-9"
+                        autoCapitalize="characters"
+                        className="pl-9 font-mono uppercase tracking-widest"
                         placeholder="From your TB coordinator"
                         value={form.inviteCode}
                         onChange={(e) =>
-                          setForm({ ...form, inviteCode: e.target.value })
+                          setForm({
+                            ...form,
+                            inviteCode: e.target.value.toUpperCase(),
+                          })
                         }
                       />
                     </div>
+                    <p className="text-xs text-slate-400">
+                      Don&apos;t have one? Contact your TB coordinator to be
+                      issued a single-use code.
+                    </p>
                   </div>
 
                   <div className="space-y-1.5">
@@ -284,15 +383,24 @@ export function StaffRegister() {
                     </p>
                   </div>
 
-                  <Button type="submit" className="!mt-7 w-full gap-2">
-                    Continue
-                    <ArrowRight className="h-4 w-4" />
+                  <Button
+                    type="submit"
+                    className="!mt-7 w-full gap-2"
+                    loading={validating}
+                  >
+                    {validating ? "Verifying code…" : "Continue"}
+                    {!validating && <ArrowRight className="h-4 w-4" />}
                   </Button>
                 </div>
               )}
 
               {step === 1 && (
                 <div className="step-in-right mt-6 space-y-5">
+                  <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-2.5 text-sm font-medium text-emerald-800">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Invite code verified
+                  </div>
+
                   <div className="space-y-1.5">
                     <Label htmlFor="role">Role</Label>
                     <Select
@@ -339,10 +447,43 @@ export function StaffRegister() {
                     </Select>
                     {needsBarangay && (
                       <p className="text-xs text-slate-400">
-                        You will only see cases and patients within this barangay.
+                        {needsFacility
+                          ? "You will see the cases of people living in this barangay."
+                          : "You will only see cases and patients within this barangay."}
                       </p>
                     )}
                   </div>
+
+                  {needsFacility && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="facility">
+                        DOTS facility{" "}
+                        <span className="font-normal text-slate-400">
+                          (if you are posted to one)
+                        </span>
+                      </Label>
+                      <Select
+                        id="facility"
+                        value={form.facilityId}
+                        onChange={(e) =>
+                          setForm({ ...form, facilityId: e.target.value })
+                        }
+                      >
+                        <option value="">— Not posted to a facility —</option>
+                        {facilities.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </Select>
+                      <p className="text-xs text-slate-400">
+                        Adds every case your facility registered, including
+                        patients who live in other barangays. Leave blank if you
+                        work in the community rather than at a clinic — a
+                        coordinator can set it later.
+                      </p>
+                    </div>
+                  )}
 
                   <Button type="submit" className="!mt-7 w-full" loading={loading}>
                     {loading ? "Creating account…" : "Create staff account"}
@@ -370,19 +511,21 @@ export function StaffRegister() {
             Sign in instead
           </Link>
 
-          {/* Patient registration callout */}
+          {/* Patients don't create accounts — a nurse enrolls them and the
+              system generates one, which they claim with a code. */}
           <div className="mt-6 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 lg:bg-white">
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-50 text-accent-700 ring-1 ring-accent-100">
               <Activity className="h-4 w-4" />
             </span>
             <p className="text-xs text-slate-500">
-              Not a health worker?{" "}
+              Are you a patient?{" "}
               <Link
-                to="/register"
+                to="/claim"
                 className="font-semibold text-brand-700 transition hover:text-brand-800"
               >
-                Create a patient account
-              </Link>
+                Claim your account
+              </Link>{" "}
+              with the code your health worker gave you.
             </p>
           </div>
         </div>

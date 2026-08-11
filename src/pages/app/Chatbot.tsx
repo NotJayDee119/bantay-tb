@@ -20,6 +20,8 @@ import {
 import { PatientSheet } from "../../components/PatientSheet";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import { useAreaScope } from "../../hooks/useAreaScope";
+import { useGeolocation } from "../../hooks/useGeolocation";
 import { detectLocale, LOCALE_LABEL, type Locale } from "../../lib/i18n";
 import barangays from "../../data/barangays.json";
 
@@ -54,14 +56,30 @@ interface TreatmentSummary {
 // Roles that can access live surveillance data
 const DATA_ROLES = new Set(["health_worker", "barangay_admin", "tb_coordinator", "system_admin"]);
 
+/**
+ * "My area" in the three languages the assistant speaks.
+ *
+ * Without this, "how many cases in my area" was answered from the account's
+ * *assigned* barangay — right for a BHW sitting in their own barangay, wrong
+ * for anyone asking while standing somewhere else, and answerable at all only
+ * for accounts that have an assignment. With a GPS fix the question means what
+ * it says: here, where I am now.
+ */
+const HERE_PATTERN =
+  /\b(my area|my barangay|my place|near me|around me|nearby|here|dito|dito sa amin|sa amin|aming lugar|aking lugar|aming barangay|malapit sa akin|diri|dinhi|akong lugar|among lugar|among barangay|duol nako|sa amoa|ari sa amoa)\b/i;
+
 const MICRO_LABEL =
   "font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500";
 
 export function Chatbot() {
   const { profile } = useAuth();
+  const scope = useAreaScope();
   const isPatient = profile?.role === "patient";
   const canAccessData = !isPatient && DATA_ROLES.has(profile?.role ?? "");
   const firstName = profile?.full_name?.trim().split(/\s+/)[0] ?? null;
+
+  // Opt-in, button-triggered only — see useGeolocation.
+  const geo = useGeolocation();
 
   const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
   const [history, setHistory] = useState<Session[]>([]);
@@ -201,52 +219,135 @@ export function Chatbot() {
       ),
     ]);
 
+    // For area-scoped staff every count above is already filtered by RLS to
+    // their barangay, so labelling them "Davao City" would make the assistant
+    // report their area's numbers as citywide totals.
+    const coverage = scope.scoped
+      ? `${scope.name ?? "the assigned area"} only`
+      : "Davao City";
     const lines: string[] = [
       `LIVE DATA from BANTAY-TB database (as of ${now}):`,
-      `- Davao City TB cases (all-time): ${totalCount}`,
+      `- Data coverage: ${coverage}`,
+      `- TB cases (all-time) in ${coverage}: ${totalCount}`,
       `- TB cases in the last 30 days: ${recentCount}`,
       `- Active hotspot clusters on record: ${hotspotCount}`,
     ];
+    if (scope.scoped) {
+      lines.push(
+        "- NOTE: this user is a community-level operator and may only access " +
+          `${scope.name ?? "their assigned area"}. You have NO data for any ` +
+          "other barangay. If asked about one, say you can only report on " +
+          "their assigned area — never state or imply another barangay has " +
+          "zero cases."
+      );
+    }
 
     // Assigned-area stats for health_worker / barangay_admin
-    if (profile?.barangay_psgc) {
+    const assignedPsgc = profile?.barangay_psgc ?? null;
+    if (assignedPsgc !== null || scope.facilityId) {
       const bgyName =
         (barangays as { psgc: number; name: string }[]).find(
-          (b) => b.psgc === profile.barangay_psgc
+          (b) => b.psgc === assignedPsgc
         )?.name ?? "your assigned area";
-      const [areaTotal, areaRecent] = await Promise.all([
-        safeCount(
-          supabase
-            .from("cases")
-            .select("*", { count: "exact", head: true })
-            .eq("disease", "tb")
-            .eq("barangay_psgc", profile.barangay_psgc)
-        ),
-        safeCount(
-          supabase
-            .from("cases")
-            .select("*", { count: "exact", head: true })
-            .eq("disease", "tb")
-            .eq("barangay_psgc", profile.barangay_psgc)
-            .gte("reported_at", isoThirty)
-        ),
+      // Residence and place of registration are separate axes, and reporting
+      // only the first is what made a Mintal worker read "0 cases" while five
+      // were registered at their own facility. Both are stated, each named.
+      //
+      // The registration half asks about THIS user's facility, not every
+      // clinic standing in their barangay: a neighbouring clinic's register is
+      // somebody else's, and a health worker posted outside their assigned
+      // barangay would otherwise have their own register counted as zero.
+      const ownFacility = scope.facilityId
+        ? ((
+            await supabase
+              .from("dots_centers")
+              .select("name")
+              .eq("id", scope.facilityId)
+              .maybeSingle()
+          ).data?.name ?? "your DOTS facility")
+        : null;
+
+      const [areaTotal, areaRecent, clinicTotal] = await Promise.all([
+        assignedPsgc !== null
+          ? safeCount(
+              supabase
+                .from("cases")
+                .select("*", { count: "exact", head: true })
+                .eq("disease", "tb")
+                .eq("barangay_psgc", assignedPsgc)
+            )
+          : Promise.resolve(0),
+        assignedPsgc !== null
+          ? safeCount(
+              supabase
+                .from("cases")
+                .select("*", { count: "exact", head: true })
+                .eq("disease", "tb")
+                .eq("barangay_psgc", assignedPsgc)
+                .gte("reported_at", isoThirty)
+            )
+          : Promise.resolve(0),
+        scope.facilityId
+          ? safeCount(
+              supabase
+                .from("cases")
+                .select("*", { count: "exact", head: true })
+                .eq("disease", "tb")
+                .eq("facility_id", scope.facilityId)
+            )
+          : Promise.resolve(0),
       ]);
-      lines.push(
-        `- ${bgyName} (assigned area): ${areaTotal} total cases, ${areaRecent} in last 30 days`
-      );
+      if (assignedPsgc !== null) {
+        lines.push(
+          `- ${bgyName} (assigned area), cases whose patients LIVE there: ${areaTotal} total, ${areaRecent} in last 30 days`
+        );
+      }
+      if (ownFacility) {
+        lines.push(
+          `- ${ownFacility} (this user's own DOTS facility), cases REGISTERED there: ${clinicTotal} (patients may live in other barangays)`
+        );
+      }
     }
 
     // Barangays mentioned in the query — match full names and distinctive
     // name parts so "cases in matina" finds Matina Crossing / Aplaya / Pangi.
-    const mentioned = (barangays as { psgc: number; name: string }[])
+    const mentioned: { psgc: number; name: string }[] = (
+      barangays as { psgc: number; name: string }[]
+    )
       .filter((b) => {
+        // Area-scoped staff can't read other barangays: the count would come
+        // back 0 and the assistant would report it as "no cases there".
+        if (scope.scoped && b.psgc !== scope.psgc) return false;
         const name = b.name.toLowerCase();
         if (lower.includes(name)) return true;
         return name
           .split(/\s+/)
           .some((part) => part.length >= 4 && lower.includes(part));
       })
-      .slice(0, 3);
+      .slice(0, 3)
+      .map((b) => ({ psgc: b.psgc, name: b.name }));
+
+    // "How many cases in my area" answered from where the user actually is.
+    // Only when they have shared a fix — no location, no location answer.
+    const here = geo.area;
+    if (here && HERE_PATTERN.test(lower)) {
+      const readable = !scope.scoped || scope.psgc === here.psgc;
+      if (!readable) {
+        // Their GPS says one barangay, their permissions cover another. The
+        // count would come back 0 and read as "no TB here", which is the
+        // opposite of true — name the limit instead.
+        lines.push(
+          `- NOTE: the user is physically in ${here.name}, which is OUTSIDE their assigned area. You have NO data for ${here.name}. Say you can only report on their assigned area — never state or imply ${here.name} has zero cases.`
+        );
+      } else if (!mentioned.some((b) => b.psgc === here.psgc)) {
+        mentioned.unshift({ psgc: here.psgc, name: here.name });
+        lines.push(
+          `- The user is physically in ${here.name}${
+            here.confident ? "" : " (approximate — nearest barangay to their GPS fix)"
+          }. Read "my area" / "dinhi" / "dito sa amin" as ${here.name}.`
+        );
+      }
+    }
 
     for (const bgy of mentioned) {
       const [bgyTotal, bgyRecent] = await Promise.all([
@@ -305,7 +406,7 @@ export function Chatbot() {
         /* detail lines are best-effort */
       }
 
-      // Active hotspot cluster in this barangay, if any
+      // Active hotspot (area of concentrated cases) in this barangay, if any
       try {
         const { data: hs } = await supabase
           .from("hotspots")
@@ -316,10 +417,10 @@ export function Chatbot() {
           .maybeSingle();
         if (hs) {
           lines.push(
-            `- ${bgy.name} hotspot: ${hs.severity} severity, ${hs.case_count} clustered cases (detected ${new Date(hs.detected_at).toLocaleDateString("en-PH")})`
+            `- ${bgy.name} hotspot (area with a high concentration of TB cases): ${hs.severity} severity, ${hs.case_count} cases concentrated there (last updated ${new Date(hs.detected_at).toLocaleDateString("en-PH")})`
           );
         } else {
-          lines.push(`- ${bgy.name}: no hotspot cluster on record`);
+          lines.push(`- ${bgy.name}: no hotspot on record`);
         }
       } catch {
         /* best-effort */
@@ -433,8 +534,12 @@ export function Chatbot() {
     // Kept outside the try so the catch can build a data-aware fallback
     // reply even when the Edge Function is unreachable.
     let patientSummary: TreatmentSummary | null = null;
+    // Hoisted so the catch can answer from the live DB data we already
+    // fetched, even when the Edge Function / AI is unreachable.
+    let statsContext: string | null = null;
     try {
       let context = await fetchDataContext(text);
+      statsContext = context;
       if (isPatient && isSelfCareQuery(text)) {
         patientSummary = await fetchTreatmentSummary();
         if (patientSummary) context = buildPatientContext(patientSummary);
@@ -469,7 +574,9 @@ export function Chatbot() {
       // it directly — real data beats a canned reply.
       const fallback = patientSummary
         ? treatmentFallbackReply(patientSummary, language)
-        : localFallback(text, language, isPatient);
+        : statsContext
+          ? statsFallbackReply(statsContext, language)
+          : localFallback(text, language, isPatient);
       setMessages((m) => [
         ...m,
         {
@@ -515,8 +622,8 @@ export function Chatbot() {
         title={isPatient ? "Health Assistant" : "Multilingual Chatbot"}
         subtitle={
           isPatient
-            ? "I'm here to help with your TB care — ask me anything in English, Filipino, or Bisaya."
-            : "Ask in English, Filipino (Tagalog), or Bisaya. Language is detected automatically."
+            ? "I'm here to help with your TB care — ask me anything in English, Filipino, or Cebuano."
+            : "Ask in English, Filipino (Tagalog), or Cebuano. Language is detected automatically."
         }
         actions={
           <>
@@ -594,7 +701,7 @@ export function Chatbot() {
                     <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-slate-600">
                       I&apos;m your TB care assistant. Ask me about symptoms,
                       treatment, or your medicines — in English, Filipino, or
-                      Bisaya.
+                      Cebuano.
                     </p>
                   </div>
                   <div className="grid w-full max-w-md gap-2 sm:grid-cols-2">
@@ -726,7 +833,7 @@ export function Chatbot() {
                 placeholder={
                   isPatient
                     ? "Ask me anything about your TB care…"
-                    : "Type in English, Filipino, or Bisaya…"
+                    : "Type in English, Filipino, or Cebuano…"
                 }
                 aria-label="Message"
                 onKeyDown={(e) => {
@@ -957,6 +1064,32 @@ function treatmentFallbackReply(s: TreatmentSummary, locale: Locale): string {
     );
   }
   return lines.join("\n");
+}
+
+/**
+ * Offline answer built straight from the live database context we already
+ * fetched (case counts, hotspots, per-barangay figures). Used when the AI
+ * Edge Function is unreachable so staff still get real numbers instead of a
+ * canned line. `context` is the string produced by fetchDataContext().
+ */
+function statsFallbackReply(context: string, locale: Locale): string {
+  // Drop the machine-facing header line; keep the "- ..." data lines.
+  const dataLines = context
+    .split("\n")
+    .filter((l) => l.trim().startsWith("-"));
+  if (dataLines.length === 0) return localFallback("", locale, false);
+
+  const header: Record<Locale, string> = {
+    en: "Here are the latest figures from the BANTAY-TB database:",
+    tl: "Narito ang pinakabagong datos mula sa BANTAY-TB database:",
+    ceb: "Ania ang pinakabag-ong datos gikan sa BANTAY-TB database:",
+  };
+  const footer: Record<Locale, string> = {
+    en: "(Live database figures — the AI assistant is temporarily unavailable.)",
+    tl: "(Live na datos mula sa database — pansamantalang hindi available ang AI assistant.)",
+    ceb: "(Live nga datos gikan sa database — temporaryong dili available ang AI assistant.)",
+  };
+  return [header[locale], "", ...dataLines, "", footer[locale]].join("\n");
 }
 
 function localFallback(text: string, locale: Locale, patient: boolean): string {

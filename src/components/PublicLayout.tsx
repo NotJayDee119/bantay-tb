@@ -50,7 +50,7 @@ const HEADER_FLAT = {
 };
 const AUTH_PATHS = [
   "/login",
-  "/register",
+  "/claim",
   "/register/staff",
   "/forgot-password",
   "/reset-password",
@@ -71,7 +71,8 @@ const FOOTER_PATIENT_LINKS = [
 
 const FOOTER_WORKER_LINKS = [
   { to: "/login", label: "Sign in" },
-  { to: "/register", label: "Request an account" },
+  { to: "/claim", label: "I have a claim code" },
+  { to: "/register/staff", label: "Staff registration" },
 ];
 
 export function PublicLayout() {
@@ -233,7 +234,7 @@ export function PublicLayout() {
   // Check if current page should hide footer
   const hideFooter = [
     "/login",
-    "/register",
+    "/claim",
     "/register/staff",
     "/dots-locator",
   ].includes(location.pathname);
@@ -405,11 +406,11 @@ export function PublicLayout() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                to="/register"
-                {...preloadProps("/register")}
+                to="/claim"
+                {...preloadProps("/claim")}
                 className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 font-medium text-slate-700 shadow-soft transition hover:bg-slate-50"
               >
-                Request an account
+                I have a claim code
               </Link>
             </div>
           </nav>
@@ -426,7 +427,16 @@ export function PublicLayout() {
         onClick={() => setMobileOpen(false)}
         aria-hidden="true"
       />
-      <main className="flex-1 overflow-x-hidden">
+      {/* `overflow-x: clip` rather than `hidden` wherever it is supported.
+          Per the overflow spec, a non-visible value on one axis computes the
+          other axis to `auto`, so `overflow-x: hidden` quietly turns this
+          element into a scroll container — and `position: sticky` inside it
+          then resolves against a scrollport that never scrolls, so nothing
+          sticks. `clip` clips exactly the same but creates no scroll
+          container. Older browsers keep `hidden`: they lose sticky rails but
+          are still protected from sideways scroll, which is the reason this
+          was here in the first place. */}
+      <main className="flex-1 overflow-x-hidden supports-[overflow:clip]:overflow-x-clip">
         {/* Suspense lives *inside* the keyed transition container: a cold
             page chunk falls back to the route-progress bar while the header,
             nav and footer stay mounted, and pageRef stays stable so the GSAP

@@ -156,13 +156,21 @@ export function Label({
   children,
   htmlFor,
   className,
+  id,
 }: {
   children: ReactNode;
   htmlFor?: string;
   className?: string;
+  /**
+   * For labelling something that isn't a form control — a read-only value
+   * shown in place of an input, which `htmlFor` cannot point at. Reference it
+   * from the value's `aria-labelledby`.
+   */
+  id?: string;
 }) {
   return (
     <label
+      id={id}
       htmlFor={htmlFor}
       className={cn("text-sm font-medium text-slate-700", className)}
     >

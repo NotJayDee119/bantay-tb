@@ -17,19 +17,19 @@ export type Locale = "en" | "tl" | "ceb";
 export const LOCALE_LABEL: Record<Locale, string> = {
   en: "English",
   tl: "Filipino (Tagalog)",
-  ceb: "Cebuano (Bisaya)",
+  ceb: "Cebuano",
 };
 
 // Words that are STRICTLY Tagalog (rare or absent in Bisaya).
 const TL_ONLY = new Set([
-  "ng", "mga", "po", "opo", "naman", "lang", "lamang", "kasi", "bakit", "kahit",
+  "ng", "po", "opo", "naman", "lang", "lamang", "kasi", "bakit", "kahit",
   "talaga", "kailangan", "huwag", "hindi", "ito", "iyan", "iyon", "doon",
   "dito", "saan", "kailan", "paano", "ano", "ikaw", "kayo", "tayo",
-  "magkano", "marami", "konti", "pakisabi", "hika", "gamot", "sintomas",
+  "magkano", "marami", "konti", "pakisabi", "hika", "gamot",
   "tigdas", "trangkaso", "lagnat", "pagod", "ubo", "dugo", "dibdib",
-  "bahay", "anak", "mahawa", "magpasuri", "gumaling", "uminom", "umuubo",
+  "bahay", "magpasuri", "gumaling", "uminom", "umuubo",
   "umubo", "kainin", "kain", "tulog", "tungkol", "tatlong", "linggo",
-  "buwan", "katagal", "gaano", "tatanong", "tanong", "alak", "ginagawa",
+  "buwan", "katagal", "gaano", "tatanong", "tanong", "ginagawa",
   "gagawin", "pwede", "kong", "habang", "gumagamot", "ninyo", "iyong",
   "iyo", "nagtatrabaho", "trabaho", "meron", "nakakahawa", "ibang",
   "magbigay", "bibigay", "narito", "andito", "andiyan", "andoon", "kanya",
@@ -37,7 +37,7 @@ const TL_ONLY = new Set([
   "magpapasuri", "pinakamalapit", "pakihingi", "subukan", "iniinom",
   "iniwasan", "iwasan", "iiwasan", "subukin", "isa", "dalawa", "limang",
   "limampung", "ibinabalita", "buong", "tagal", "akin", "magsuri", "yung",
-  "binigay", "ibinigay", "ibinibigay", "ibibigay", "impormasyon",
+  "binigay", "ibinigay", "ibinibigay", "ibibigay",
 ]);
 
 // Words that are STRICTLY Cebuano/Bisaya (rare or absent in Tagalog).
@@ -63,6 +63,20 @@ const CEB_ONLY = new Set([
 // here for documentation only.
 // SHARED = ang, sa, ba, may, ko, ka, ta, mo, ako, ikaw, siya, kami, sila,
 //          kumusta, salamat, mga (mostly Tagalog but present in Bisaya too).
+//
+// The following were in TL_ONLY despite being shared, which is exactly the bias
+// this split exists to prevent. Each one cost a Cebuano sentence: a Bisaya
+// question carrying one decisive marker ("unsa", "akong") lost to two of these,
+// and the tie-break at the bottom of detectLocale favours Tagalog. Removing
+// them took Cebuano detection from 17/20 to 20/20 with no Tagalog regression —
+// "mga" alone accounted for two of the three misses.
+//   mga         — the comment above already said so; it was in the set anyway
+//   sintomas    — Spanish loan, identical in Cebuano
+//   impormasyon — Spanish loan, identical in Cebuano
+//   anak, alak  — same word, same meaning, both languages
+//   mahawa      — "mahawa ba" is ordinary Cebuano too
+// Anything added to TL_ONLY or CEB_ONLY must be checked against the other
+// language first, or it will quietly re-introduce the same skew.
 
 const EN_STRONG = new Set([
   "the", "is", "are", "was", "were", "and", "or", "but", "of", "in", "on",

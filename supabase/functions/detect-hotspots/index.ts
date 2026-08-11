@@ -1,13 +1,15 @@
 // BANTAY-TB hotspot detection Edge Function.
 //
-// Runs DBSCAN on TB cases reported in the configured window and writes one
-// row to public.hotspots per detected cluster. Triggers a hotspot_alert for
-// every TB Coordinator account when a HIGH severity cluster is created.
+// A hotspot is an AREA with a high concentration of TB cases — not a batch of
+// newly recorded cases. Newness is the alerts' concern, not the definition's:
+// this function runs DBSCAN over the cases in the configured window, writes one
+// public.hotspots row per qualifying area, and raises a hotspot_alert when one
+// of those areas comes back at HIGH/URGENT severity.
 //
 // Defaults: 90-day window, eps=1.2 km, minPts=8.
 
 import { corsHeaders } from "../_shared/cors.ts";
-import { dbFromEnv, dbInsert, dbSelect } from "../_shared/db.ts";
+import { dbDelete, dbFromEnv, dbInsert, dbSelect } from "../_shared/db.ts";
 
 interface Body {
   trigger?: string;
@@ -150,6 +152,11 @@ Deno.serve(async (req) => {
     for (const p of pts)
       counts.set(p.barangay_psgc, (counts.get(p.barangay_psgc) ?? 0) + 1);
     const topBgy = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    // Every barangay of residence in the cluster, not just the modal one:
+    // alerts route on this so a cluster straddling a boundary reaches both
+    // sides, and each recipient can resolve case_ids back to the addresses
+    // RLS lets them read.
+    const barangay_psgcs = [...counts.keys()];
     const cLat = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
     const cLon = pts.reduce((s, p) => s + p.lon, 0) / pts.length;
     const radius_km = Math.max(
@@ -161,6 +168,8 @@ Deno.serve(async (req) => {
       pts.length >= 50 ? "urgent" : pts.length >= 20 ? "high" : pts.length >= 10 ? "moderate" : "watch";
     return {
       barangay_psgc: topBgy ?? null,
+      barangay_psgcs,
+      case_ids: pts.map((p) => p.id),
       disease: "tb" as const,
       case_count: pts.length,
       density,
@@ -173,17 +182,29 @@ Deno.serve(async (req) => {
     };
   });
 
+  // Replace the previous detection run instead of appending to it, so the
+  // Hotspots list reflects the current picture rather than a duplicate of
+  // every cluster on each run. Runs even when there are no clusters, so stale
+  // hotspots clear out. service_role bypasses RLS for the full citywide reset.
+  try {
+    await dbDelete(cfg, "hotspots", "disease=eq.tb");
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+
   if (inserts.length > 0) {
     let inserted: {
       id: string;
       severity: string;
       barangay_psgc: number | null;
+      barangay_psgcs: number[] | null;
     }[];
     try {
       inserted = await dbInsert<{
         id: string;
         severity: string;
         barangay_psgc: number | null;
+        barangay_psgcs: number[] | null;
       }>(
         cfg,
         "hotspots",
@@ -191,6 +212,7 @@ Deno.serve(async (req) => {
           id: string;
           severity: string;
           barangay_psgc: number | null;
+          barangay_psgcs: number[] | null;
         }[]
       );
     } catch (err) {
@@ -203,8 +225,12 @@ Deno.serve(async (req) => {
       try {
         // Per the BANTAY-TB framework + community-scoped RLS:
         //   * system_admin / tb_coordinator get every high-severity alert (citywide).
-        //   * barangay_admin / health_worker only get alerts for hotspots
-        //     in *their own* barangay.
+        //   * barangay_admin / health_worker get an alert when the cluster
+        //     contains a resident of *their own* barangay — tested against
+        //     every barangay in the cluster, not just its modal one. Filing a
+        //     straddling cluster under the modal barangay alone alerted one
+        //     area for another area's residents and left the second area
+        //     unwarned about its own.
         const recipients = await dbSelect<{
           id: string;
           role: string;
@@ -222,12 +248,17 @@ Deno.serve(async (req) => {
               alerts.push({ hotspot_id: h.id, recipient_id: r.id });
               continue;
             }
-            // BA / HW: only notify if hotspot is in their assigned barangay.
-            if (
-              r.barangay_psgc !== null &&
-              h.barangay_psgc !== null &&
-              r.barangay_psgc === h.barangay_psgc
-            ) {
+            // BA / HW: notify when one of their own residents is in the
+            // cluster. Mirrors buildHotspotAlerts() in src/lib/hotspotAlerts.ts
+            // — this function deploys with --no-remote and cannot import it,
+            // so the two copies must be changed together.
+            if (r.barangay_psgc === null) continue;
+            const members = h.barangay_psgcs;
+            const covers =
+              members && members.length > 0
+                ? members.includes(r.barangay_psgc)
+                : h.barangay_psgc === r.barangay_psgc;
+            if (covers) {
               alerts.push({ hotspot_id: h.id, recipient_id: r.id });
             }
           }

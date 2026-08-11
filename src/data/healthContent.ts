@@ -7,7 +7,12 @@ export type Disease =
   | "asthma"
   | "influenza"
   | "bronchitis"
-  | "copd";
+  | "copd"
+  /** Not a respiratory infection but a lung fluke, included because it
+   *  presents almost exactly like TB — chronic cough with blood-streaked
+   *  sputum — and is repeatedly treated as TB before anyone asks about raw
+   *  crab. Knowing it exists is what stops months of the wrong treatment. */
+  | "paragonimiasis";
 export type Category =
   | "overview"
   | "symptoms"
@@ -36,6 +41,11 @@ export const DISEASE_LABEL: Record<Disease, Record<Locale, string>> = {
     en: "COPD (Chronic Obstructive Pulmonary Disease)",
     tl: "COPD (Malalang Sakit sa Baga)",
     ceb: "COPD (Dugay nga Sakit sa Baga)",
+  },
+  paragonimiasis: {
+    en: "Paragonimiasis (Lung Fluke)",
+    tl: "Paragonimiasis (Uod sa Baga)",
+    ceb: "Paragonimiasis (Ulod sa Baga)",
   },
 };
 
@@ -1212,6 +1222,177 @@ export const HEALTH_ARTICLES: HealthArticle[] = [
     body_md:
       "Bahin-bahina ang trabaho ug pagpahuway. Buhata ang pursed-lip breathing kung gikapoy. Paglakaw o pag-bike og 20–30 ka minuto kung kaya; makatabang ang pulmonary rehab. Pagkaon og gamay apan kanunay — taas sa protina ug himsog nga tambok; ang dako nga pagkaon makapalisod sa pagginhawa. Bantayan ang flare-up, dad-on ang inhaler, ug pakonsulta dayon sa doktor o DOTS Center kung mograbe.",
   },
+
+  // ---------- Paragonimiasis (lung fluke) ----------
+  // Included because it is the great TB mimic: chronic cough with
+  // blood-streaked sputum, a chest X-ray that looks like TB, and a negative
+  // sputum smear. Patients are commonly treated for TB for months before
+  // anyone asks whether they ate raw crab.
+  {
+    slug: "paragonimiasis-overview-en",
+    disease: "paragonimiasis",
+    locale: "en",
+    category: "overview",
+    title: "What is Paragonimiasis?",
+    summary:
+      "A lung worm caught from raw or undercooked freshwater crab that looks almost exactly like TB.",
+    body_md:
+      "Paragonimiasis is caused by a flatworm called a lung fluke (Paragonimus). People catch it by eating raw, pickled, salted, wine-soaked, or half-cooked freshwater crab and crayfish — never from another person. After the meal, the young flukes leave the gut, cross into the chest, and settle in the lungs, where they can live for years. It matters here because it imitates tuberculosis so closely: the same long cough with blood-streaked sputum, and a chest X-ray a radiologist may read as TB. The difference is that TB sputum tests come back negative while the real cause goes untreated. Paragonimiasis is not contagious and is cured by a short course of tablets.",
+  },
+  {
+    slug: "paragonimiasis-overview-tl",
+    disease: "paragonimiasis",
+    locale: "tl",
+    category: "overview",
+    title: "Ano ang Paragonimiasis?",
+    summary:
+      "Uod sa baga mula sa hilaw o kulang sa lutong talangka na kamukha ng TB.",
+    body_md:
+      "Ang paragonimiasis ay dulot ng uod sa baga (Paragonimus). Nakukuha ito sa pagkain ng hilaw, kinilaw, inasnan, o kulang sa lutong talangka at ulang sa tubig-tabang — hindi ito nakukuha sa kapwa tao. Pagkatapos kainin, lumalabas ang batang uod sa bituka, tumatawid sa dibdib, at namumuhay sa baga nang maraming taon. Mahalaga itong malaman dahil halos kamukha ito ng tuberkulosis: parehong matagalang ubo na may dugo sa plema, at X-ray na parang TB. Ang pagkakaiba, negatibo ang sputum test para sa TB samtang hindi nagagamot ang tunay na sanhi. Hindi ito nakakahawa at gumagaling sa maikling gamutan.",
+  },
+  {
+    slug: "paragonimiasis-overview-ceb",
+    disease: "paragonimiasis",
+    locale: "ceb",
+    category: "overview",
+    title: "Unsa ang Paragonimiasis?",
+    summary:
+      "Ulod sa baga gikan sa hilaw o kulang sa luto nga kasag nga morag TB kaayo.",
+    body_md:
+      "Ang paragonimiasis gipahinabo sa ulod sa baga (Paragonimus). Makuha kini pinaagi sa pagkaon og hilaw, kinilaw, gia-asinan, o kulang sa luto nga kasag ug ulang sa tubig-tab-ang — dili kini makuha gikan sa laing tawo. Human makaon, mogawas ang bata nga ulod sa tinai, motabok sa dughan, ug mopuyo sa baga sa mga tuig. Importante kini kay morag tuberkulosis kaayo: parehas nga dugay nga ubo nga may dugo sa plema, ug X-ray nga morag TB. Ang kalainan, negatibo ang sputum test para sa TB samtang wala matambali ang tinuod nga hinungdan. Dili kini makatakod ug maayo pinaagi sa mubo nga tambal.",
+  },
+  {
+    slug: "paragonimiasis-symptoms-en",
+    disease: "paragonimiasis",
+    locale: "en",
+    category: "symptoms",
+    title: "Symptoms — and How They Differ from TB",
+    summary:
+      "A long cough with rust-brown sputum. Tell the doctor if you have eaten raw crab.",
+    body_md:
+      "Early on, while the flukes are crossing from the gut to the chest, there may be belly pain, diarrhoea, fever, or hives. Once they reach the lungs the picture becomes chest disease: cough lasting weeks to months; sputum that is rust-brown or streaked with blood; chest pain; shortness of breath; low fever; night sweats; tiredness. Read that list again and it is TB — which is exactly the problem. Two things point away from TB: the sputum smear and Xpert test come back negative despite months of symptoms, and there is a history of eating raw, pickled, or half-cooked freshwater crab or crayfish. Tell the health worker about that meal even if it was months or years ago — it is the single most useful thing you can say. If you have a cough lasting 2 weeks or more, visit the nearest DOTS center: the workup for TB is the same one that finds this.",
+  },
+  {
+    slug: "paragonimiasis-symptoms-tl",
+    disease: "paragonimiasis",
+    locale: "tl",
+    category: "symptoms",
+    title: "Mga Sintomas — at Pagkaiba sa TB",
+    summary:
+      "Matagalang ubo na may kulay-kalawang na plema. Sabihin kung kumain ng hilaw na talangka.",
+    body_md:
+      "Sa simula, habang tumatawid ang uod mula bituka papuntang dibdib, maaaring may sakit ng tiyan, pagtatae, lagnat, o pantal. Kapag nakarating na sa baga, sakit na sa dibdib ang nararamdaman: ubong tumatagal ng linggo hanggang buwan; plemang kulay-kalawang o may guhit ng dugo; sakit sa dibdib; hirap huminga; mahinang lagnat; pagpapawis sa gabi; pagkapagod. Basahin muli ang listahan — TB ang mukha nito, at iyon ang problema. Dalawang bagay ang nagpapakita na hindi TB: negatibo ang sputum at Xpert test kahit matagal nang may sintomas, at may kasaysayan ng pagkain ng hilaw, kinilaw, o kulang sa lutong talangka o ulang. Sabihin sa health worker ang tungkol sa pagkaing iyon kahit ilang buwan o taon na ang nakalipas — ito ang pinakamahalagang maibibigay mong impormasyon. Kung may ubo nang lampas dalawang linggo, bumisita sa pinakamalapit na DOTS Center: ang pagsusuri para sa TB ang siya ring makakakita nito.",
+  },
+  {
+    slug: "paragonimiasis-symptoms-ceb",
+    disease: "paragonimiasis",
+    locale: "ceb",
+    category: "symptoms",
+    title: "Mga Sintomas — ug Kalainan sa TB",
+    summary:
+      "Dugay nga ubo nga may plema morag taya. Isulti kung nakakaon og hilaw nga kasag.",
+    body_md:
+      "Sa sinugdan, samtang nagtabok ang ulod gikan sa tinai ngadto sa dughan, mahimong adunay sakit sa tiyan, kalibanga, hilanat, o katol. Kung makaabot na sa baga, sakit na sa dughan ang mabati: ubo nga molungtad og semana ngadto sa bulan; plema nga morag taya o may dugo; kasakit sa dughan; lisod magginhawa; gamay nga hilanat; paghigwaos sa gabii; kakapoy. Basaha pag-usab ang listahan — morag TB, ug mao gyud kana ang problema. Duha ka butang ang nagpakita nga dili TB: negatibo ang sputum ug Xpert test bisan dugay nang naay sintomas, ug adunay kasaysayan sa pagkaon og hilaw, kinilaw, o kulang sa luto nga kasag o ulang. Isulti sa health worker mahitungod sa pagkaon bisan pila ka bulan o tuig na ang milabay — kini ang labing mapuslanon nga imong ikasulti. Kung adunay ubo nga molabaw duha ka semana, adto sa pinaka-suod nga DOTS Center: ang eksamen para sa TB mao ra usab ang makakita niini.",
+  },
+  {
+    slug: "paragonimiasis-treatment-en",
+    disease: "paragonimiasis",
+    locale: "en",
+    category: "treatment",
+    title: "Treatment",
+    summary:
+      "Curable with praziquantel tablets in 2–3 days — far shorter than TB treatment.",
+    body_md:
+      "Diagnosis is by finding fluke eggs in sputum or stool, or by a blood antibody test when eggs cannot be found; the chest X-ray alone cannot tell this apart from TB. Treatment is praziquantel, usually three doses a day for two to three days, or triclabendazole as an alternative — a matter of days, not the six months TB needs. Most people improve within weeks, though a cough can linger while the lungs heal, and scarring already present does not reverse. Take the tablets with food and expect possible dizziness or a headache for a day. Do not stop TB medicines on your own because you suspect this instead: bring it up with the doctor and let them re-test, since being wrong in either direction is harmful. Anyone who shared that raw crab meal should be checked too, even if they feel well.",
+  },
+  {
+    slug: "paragonimiasis-treatment-tl",
+    disease: "paragonimiasis",
+    locale: "tl",
+    category: "treatment",
+    title: "Paggamot",
+    summary:
+      "Nagagamot ng praziquantel sa 2–3 araw — mas maikli kaysa paggamot sa TB.",
+    body_md:
+      "Nakikita ang sakit sa pagtuklas ng bilog na itlog ng uod sa plema o dumi, o sa blood antibody test kung wala itong makita; hindi kayang ipagkaiba ng X-ray lamang ito sa TB. Ang gamot ay praziquantel, karaniwang tatlong dosis sa isang araw sa loob ng dalawa hanggang tatlong araw, o triclabendazole bilang alternatibo — araw lamang, hindi anim na buwan na kailangan ng TB. Karamihan ay bumubuti sa loob ng ilang linggo, ngunit maaaring magtagal ang ubo habang gumagaling ang baga, at hindi na maibabalik ang pilat na nauna nang nabuo. Kainin ang gamot kasama ng pagkain at asahan ang posibleng pagkahilo o sakit ng ulo sa loob ng isang araw. Huwag basta ihinto ang gamot sa TB dahil hinihinala mo ito: sabihin sa doktor at hayaang mag-test muli, dahil delikado ang pagkakamali sa alinmang direksyon. Dapat ding suriin ang mga kasama sa pagkain ng hilaw na talangka, kahit maayos ang pakiramdam nila.",
+  },
+  {
+    slug: "paragonimiasis-treatment-ceb",
+    disease: "paragonimiasis",
+    locale: "ceb",
+    category: "treatment",
+    title: "Pagtambal",
+    summary:
+      "Maayo pinaagi sa praziquantel sulod 2–3 adlaw — mas mubo kaysa tambal sa TB.",
+    body_md:
+      "Makita ang sakit pinaagi sa pagpangita og itlog sa ulod sa plema o kalibang, o pinaagi sa blood antibody test kung walay makita; dili kaya sa X-ray lamang nga ilahi kini sa TB. Ang tambal mao ang praziquantel, kasagaran tulo ka dosis sa usa ka adlaw sulod sa duha ngadto tulo ka adlaw, o triclabendazole isip alternatibo — mga adlaw lamang, dili unom ka bulan sama sa TB. Kadaghanan mouswag sulod sa pipila ka semana, apan mahimong molungtad ang ubo samtang nag-ayo ang baga, ug dili na mabawi ang uwat nga naporma na. Kan-a ang tambal kauban sa pagkaon ug paabota ang posibleng pagkalipong o labad sa ulo sulod sa usa ka adlaw. Ayaw hunonga ang tambal sa TB sa imong kaugalingon tungod kay nagduda ka niini: isulti sa doktor ug tugoti nga mag-test pag-usab, kay delikado ang sayop sa bisan asa nga direksyon. Kinahanglan usab nga eksaminon ang mga nakauban sa pagkaon og hilaw nga kasag, bisan maayo ra ang ilang pamati.",
+  },
+  {
+    slug: "paragonimiasis-prevention-en",
+    disease: "paragonimiasis",
+    locale: "en",
+    category: "prevention",
+    title: "Prevention",
+    summary:
+      "Cook freshwater crab and crayfish thoroughly. Vinegar, salt, and wine do not kill the flukes.",
+    body_md:
+      "There is one rule that prevents almost every case: cook freshwater crab, crayfish, and shrimp all the way through before eating them. Heat until the shell has turned fully red and the meat is opaque and firm — not warmed, not seared. What does not work: kinilaw and other vinegar or citrus preparations; salting; soaking in wine or alcohol; brief blanching; smoking. These change the taste and the texture but leave the young flukes alive, which is why the dish feels prepared and still passes on the infection. Also worth doing: keep raw crab away from cooked food, wash the board, knife, and hands that touched it, and avoid drinking untreated stream water where crabs live. Cooking well protects the whole household, since one shared dish is how families are infected together.",
+  },
+  {
+    slug: "paragonimiasis-prevention-tl",
+    disease: "paragonimiasis",
+    locale: "tl",
+    category: "prevention",
+    title: "Pag-iwas",
+    summary:
+      "Lutuin nang husto ang talangka at ulang. Hindi pumapatay ang suka, asin, o alak.",
+    body_md:
+      "May isang tuntunin na halos pumipigil sa lahat ng kaso: lutuing mabuti ang talangka, ulang, at hipon sa tubig-tabang bago kainin. Painitin hanggang tuluyang mamula ang talukap at maging puti at matigas ang laman — hindi basta pinainit, hindi basta sinangag. Hindi umuubra ang: kinilaw at iba pang paggamit ng suka o kalamansi; pag-asin; pagbabad sa alak; sandaling pagbanli; pagtutuyo sa usok. Nagbabago ang lasa at texture pero nabubuhay pa ang batang uod — kaya parang luto na ang ulam ngunit nakakahawa pa rin. Mainam din: ihiwalay ang hilaw na talangka sa lutong pagkain, hugasan ang sangkalan, kutsilyo, at kamay na nahawakan nito, at iwasang uminom ng hindi ginamot na tubig sa sapa kung saan may talangka. Ang mabuting pagluluto ay nagpoprotekta sa buong pamilya, dahil isang ulam na pinagsaluhan ang dahilan kung bakit sabay-sabay nahahawa ang mga sambahayan.",
+  },
+  {
+    slug: "paragonimiasis-prevention-ceb",
+    disease: "paragonimiasis",
+    locale: "ceb",
+    category: "prevention",
+    title: "Pag-likay",
+    summary:
+      "Lutoa pag-ayo ang kasag ug ulang. Dili makapatay ang suka, asin, o bino.",
+    body_md:
+      "Adunay usa ka lagda nga halos makapugong sa tanang kaso: lutoa pag-ayo ang kasag, ulang, ug pasayan sa tubig-tab-ang una kan-on. Pabukala hangtod nga mopula na gyud ang kabhang ug moputi ug mogahi ang unod — dili basta gipatugnaw, dili basta gisugba pagdali. Wala kini mopugong: kinilaw ug uban nga paggamit sa suka o limonsito; pag-asin; pagpatuhop sa bino; mubo nga paghulom sa bukal nga tubig; pag-aso. Mausab ang lami ug texture apan buhi pa ang bata nga ulod — mao nga morag luto na ang sud-an apan makatakod pa gihapon. Maayo usab: ilahi ang hilaw nga kasag sa luto nga pagkaon, hugasi ang tadtaran, kutsilyo, ug kamot nga nakahikap niini, ug likayi ang pag-inom sa wala matambali nga tubig sa sapa diin naay kasag. Ang maayong pagluto manalipod sa tibuok panimalay, kay usa ka sud-an nga gipanagsalo mao ang hinungdan nga dungan matakdan ang mga pamilya.",
+  },
+  {
+    slug: "paragonimiasis-lifestyle-en",
+    disease: "paragonimiasis",
+    locale: "en",
+    category: "lifestyle",
+    title: "Recovering Well",
+    summary:
+      "Rest, eat well, protect the lungs, and go back for the follow-up check.",
+    body_md:
+      "Sleep: keep regular hours and aim for 7–9 hours; the cough often disturbs sleep for a few weeks after the tablets, and rest is what carries the repair. Nutrition: eat protein at every meal — fish, eggs, beans, chicken — with fruit and vegetables, and drink water steadily to keep sputum loose and easier to clear. Exercise: start with short walks and add a little each week; if you are breathless mid-sentence, ease off and build again more slowly. Lungs: do not smoke and stay out of smoke, since damaged lung tissue heals badly in it. Follow-up: return for the repeat sputum or X-ray your health worker asks for, because it confirms the flukes are gone rather than merely quiet. Family: make sure everyone who shared the meal has been checked, and switch the household to fully cooked crab so this does not come back.",
+  },
+  {
+    slug: "paragonimiasis-lifestyle-tl",
+    disease: "paragonimiasis",
+    locale: "tl",
+    category: "lifestyle",
+    title: "Maayos na Paggaling",
+    summary:
+      "Magpahinga, kumain nang tama, ingatan ang baga, at bumalik sa follow-up.",
+    body_md:
+      "Tulog: panatilihin ang regular na oras at target ang 7–9 oras; madalas naiistorbo ang tulog ng ubo sa loob ng ilang linggo pagkatapos ng gamot, at ang pahinga ang tumutulong sa paggaling. Nutrisyon: kumain ng protina sa bawat pagkain — isda, itlog, munggo, manok — kasama ng prutas at gulay, at uminom ng tubig nang regular para lumabnaw at madaling maalis ang plema. Ehersisyo: magsimula sa maiikling lakad at dagdagan nang kaunti linggo-linggo; kung hinahabol ang hininga habang nagsasalita, magbawas at bumuo muli nang mas mabagal. Baga: huwag manigarilyo at iwasan ang usok, dahil mahirap gumaling ang napinsalang baga dito. Follow-up: bumalik para sa paulit na sputum o X-ray na hinihingi ng health worker, dahil ito ang nagpapatunay na wala na talaga ang uod. Pamilya: tiyakin na nasuri ang lahat ng kasama sa pagkain, at palitan ang ugali ng sambahayan tungo sa lubusang lutong talangka para hindi ito maulit.",
+  },
+  {
+    slug: "paragonimiasis-lifestyle-ceb",
+    disease: "paragonimiasis",
+    locale: "ceb",
+    category: "lifestyle",
+    title: "Maayong Pagkaayo",
+    summary:
+      "Pagpahulay, pagkaon og tarong, ampingi ang baga, ug balik sa follow-up.",
+    body_md:
+      "Katulog: himoa nga regular ang oras ug tumonga ang 7–9 ka oras; kasagaran matugaw ang katulog sa ubo sulod sa pipila ka semana human sa tambal, ug ang pahulay mao ang motabang sa pag-ayo. Nutrisyon: pagkaon og protina sa matag pagkaon — isda, itlog, monggos, manok — kauban sa prutas ug utanon, ug pag-inom og tubig kanunay aron molubnaw ug sayon mawala ang plema. Ehersisyo: sugdi sa mubo nga paglakaw ug dugangi gamay matag semana; kung hangakon ka samtang nagsulti, hinayi ug tukora pag-usab nga mas hinay. Baga: ayaw panigarilyo ug likayi ang aso, kay lisod mo-ayo ang nadaot nga baga niini. Follow-up: balik para sa balik-sputum o X-ray nga gipangayo sa health worker, kay kini ang mopamatuod nga wala na gyud ang ulod. Pamilya: siguroha nga naeksaminar ang tanang nakauban sa pagkaon, ug usba ang batasan sa panimalay ngadto sa hingpit nga luto nga kasag aron dili kini mobalik.",
+  },
 ];
 
 export function articlesFor(disease: Disease, locale: Locale): HealthArticle[] {
@@ -1370,6 +1551,26 @@ export const DISEASE_SOURCES: Record<Disease, Source[]> = {
       publisher: "U.S. Centers for Disease Control and Prevention",
       title: "COPD — Basics About COPD",
       url: "https://www.cdc.gov/copd/basics-about.html",
+      year: 2024,
+    },
+  ],
+  paragonimiasis: [
+    {
+      publisher: "World Health Organization",
+      title: "Foodborne trematode infections — Fact sheet",
+      url: "https://www.who.int/news-room/fact-sheets/detail/foodborne-trematode-infections",
+      year: 2024,
+    },
+    {
+      publisher: "U.S. Centers for Disease Control and Prevention",
+      title: "About Paragonimiasis",
+      url: "https://www.cdc.gov/paragonimus/about/index.html",
+      year: 2024,
+    },
+    {
+      publisher: "U.S. Centers for Disease Control and Prevention",
+      title: "Clinical Care of Paragonimiasis",
+      url: "https://www.cdc.gov/paragonimus/hcp/clinical-care/index.html",
       year: 2024,
     },
   ],

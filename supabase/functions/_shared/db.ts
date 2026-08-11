@@ -63,6 +63,21 @@ export async function dbInsert<T = Record<string, unknown>>(
   return (await res.json()) as T[];
 }
 
+export async function dbDelete(
+  cfg: DbConfig,
+  table: string,
+  query: string
+): Promise<void> {
+  // A filter is required so we never issue an unfiltered DELETE by accident.
+  if (!query) throw new Error(`db delete ${table}: refusing to delete without a filter`);
+  const sep = query.startsWith("?") ? "" : "?";
+  const res = await fetch(`${cfg.url}/rest/v1/${table}${sep}${query}`, {
+    method: "DELETE",
+    headers: headers(cfg, { Prefer: "return=minimal" }),
+  });
+  if (!res.ok) throw new Error(`db delete ${table}: ${res.status} ${await res.text()}`);
+}
+
 export async function dbUpdate(
   cfg: DbConfig,
   table: string,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Upload,
@@ -13,6 +13,9 @@ import {
   History,
   Sigma,
   Table2,
+  Building2,
+  MapPin,
+  Lock,
 } from "lucide-react";
 import {
   Badge,
@@ -25,6 +28,11 @@ import { parseImportFile, type ImportPreview } from "../../lib/excel";
 import { supabase } from "../../lib/supabase";
 import { toast } from "sonner";
 import { useAuth } from "../../hooks/useAuth";
+import {
+  explainImportBlocker,
+  scopeImport,
+  type ScopedImport,
+} from "../../lib/importScope";
 
 interface UploadedFile {
   name: string;
@@ -43,10 +51,43 @@ export function BulkImport() {
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [importedCount, setImportedCount] = useState<number | null>(null);
-  const [showReplaceWarning, setShowReplaceWarning] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [existingCount, setExistingCount] = useState(0);
   const [uploads, setUploads] = useState<UploadedFile[]>([]);
   const [uploadsLoading, setUploadsLoading] = useState(false);
+
+  // What this account is allowed to file, and whether the import adds or
+  // replaces. Derived from the profile rather than the sheet — the file says
+  // what was found, the profile says who is entitled to file it.
+  const scoped: ScopedImport = useMemo(
+    () => scopeImport(profile, preview?.inserts ?? []),
+    [profile, preview]
+  );
+  const blockedReason = explainImportBlocker(scoped.blocker);
+  const replaces = scoped.mode === "replace_all";
+
+  // Name the clinic rather than calling it "your facility" — a nurse posted to
+  // two centres needs to see which one the upload will be stamped with.
+  const [facilityName, setFacilityName] = useState<string | null>(null);
+  useEffect(() => {
+    const id = scoped.stampedFacility;
+    if (!id) {
+      setFacilityName(null);
+      return;
+    }
+    let cancelled = false;
+    void supabase
+      .from("dots_centers")
+      .select("name")
+      .eq("id", id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setFacilityName((data as { name: string } | null)?.name ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scoped.stampedFacility]);
 
   const loadUploadHistory = useCallback(async () => {
     if (!profile?.id) return;
@@ -93,29 +134,40 @@ export function BulkImport() {
     }
   }
 
-  async function promptReplace() {
-    const { count } = await supabase
-      .from("cases")
-      .select("id", { count: "exact", head: true });
-    setExistingCount(count ?? 0);
-    setShowReplaceWarning(true);
+  async function promptImport() {
+    // Only the replace-all path needs the running total — it is the number the
+    // confirmation is asking the coordinator to destroy. An append has nothing
+    // to weigh it against.
+    if (replaces) {
+      const { count } = await supabase
+        .from("cases")
+        .select("id", { count: "exact", head: true });
+      setExistingCount(count ?? 0);
+    }
+    setShowConfirm(true);
   }
 
   async function handleConfirm() {
-    if (!preview) return;
-    setShowReplaceWarning(false);
+    if (!preview || scoped.blocker) return;
+    setShowConfirm(false);
     setConfirming(true);
     try {
-      // Step 1: Delete all existing cases (replace-all strategy).
-      const { error: deleteError } = await supabase
-        .from("cases")
-        .delete()
-        .neq("id", "00000000-0000-0000-0000-000000000000");
-      if (deleteError) throw deleteError;
+      // Step 1: Citywide replace-all. Field uploads skip this entirely — RLS
+      // would narrow the delete to the uploader's own barangay, which means a
+      // BHW's monthly upload would wipe their barangay's whole case history
+      // before adding a single row.
+      if (replaces) {
+        const { error: deleteError } = await supabase
+          .from("cases")
+          .delete()
+          .neq("id", "00000000-0000-0000-0000-000000000000");
+        if (deleteError) throw deleteError;
+      }
 
-      // Step 2: Insert all mapped rows.
+      // Step 2: Insert the scoped rows — stamped with the uploader's facility,
+      // or filed under the area they cover.
       const filePath = file?.name ?? null;
-      const inserts = preview.inserts.map((r) => ({
+      const inserts = scoped.inserts.map((r) => ({
         ...r,
         reported_by: profile?.id ?? null,
         source_file_path: filePath,
@@ -157,7 +209,9 @@ export function BulkImport() {
       setPreview(null);
       void loadUploadHistory();
       toast.success(
-        `Replaced all cases with ${inserts.length} new rows. Hotspot detection re-running.`
+        replaces
+          ? `Replaced all cases with ${inserts.length} new rows. Hotspot detection re-running.`
+          : `Added ${inserts.length} cases. Hotspot detection re-running.`
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -212,8 +266,31 @@ export function BulkImport() {
     <>
       <PageHeader
         title="Bulk Excel Import"
-        subtitle="Upload monthly CHO TB reports. PII is stripped client-side before any data is sent to Supabase."
+        subtitle={
+          replaces
+            ? "Upload monthly CHO TB reports. PII is stripped client-side before any data is sent to Supabase."
+            : "Upload your area's case list. PII is stripped client-side, and imported cases are added to your existing records — nothing is deleted."
+        }
       />
+
+      {/* ── Account has nothing to file against ── */}
+      {blockedReason && (
+        <Card className="p-5">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-600">
+              <Lock className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="font-display text-base font-bold text-slate-900">
+                Upload unavailable
+              </h2>
+              <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                {blockedReason}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* ── Success banner after import ── */}
       {importedCount !== null && (
@@ -255,7 +332,7 @@ export function BulkImport() {
       )}
 
       {/* ── File drop zone ── */}
-      {importedCount === null && (
+      {importedCount === null && !blockedReason && (
         <Card className="p-6">
           <label
             htmlFor="file"
@@ -290,6 +367,68 @@ export function BulkImport() {
         <div className="mt-4 flex items-center gap-2 text-sm text-slate-600">
           <Spinner /> Parsing file and stripping PII…
         </div>
+      )}
+
+      {/* ── Where these rows will land ── */}
+      {preview && !blockedReason && !replaces && (
+        <Card className="mt-6 overflow-hidden p-0">
+          <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
+            {scoped.stampedFacility ? (
+              <Building2 className="h-3.5 w-3.5 text-brand-600" />
+            ) : (
+              <MapPin className="h-3.5 w-3.5 text-brand-600" />
+            )}
+            <span className={MICRO_LABEL}>Filed under your assignment</span>
+          </div>
+          <div className="p-4 text-sm leading-relaxed text-slate-700">
+            {scoped.stampedFacility ? (
+              <p>
+                Every imported case is registered to{" "}
+                <strong className="text-slate-900">
+                  {facilityName ?? "your DOTS facility"}
+                </strong>
+                . Each patient keeps the barangay of residence named in your
+                file, so their map pin stays where they actually live.
+              </p>
+            ) : (
+              <p>
+                Every imported case is filed under{" "}
+                <strong className="text-slate-900">
+                  {scoped.forcedTo?.name}
+                </strong>
+                , the area assigned to your account.
+              </p>
+            )}
+
+            {scoped.relocations.length > 0 && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
+                <p className="font-semibold">
+                  {scoped.relocations
+                    .reduce((n, r) => n + r.count, 0)
+                    .toLocaleString()}{" "}
+                  row(s) name a different barangay and will be re-filed under{" "}
+                  {scoped.forcedTo?.name}.
+                </p>
+                <ul className="mt-1.5 space-y-0.5">
+                  {scoped.relocations.slice(0, 6).map((r) => (
+                    <li key={r.from}>
+                      {r.from} — {r.count.toLocaleString()} row(s)
+                    </li>
+                  ))}
+                  {scoped.relocations.length > 6 && (
+                    <li>…and {scoped.relocations.length - 6} more</li>
+                  )}
+                </ul>
+                <p className="mt-1.5">
+                  Their street addresses and map pins are reset to the{" "}
+                  {scoped.forcedTo?.name} centroid. If these patients really
+                  live elsewhere, ask a system administrator to link your DOTS
+                  facility — then their home barangay is kept.
+                </p>
+              </div>
+            )}
+          </div>
+        </Card>
       )}
 
       {preview && (
@@ -359,7 +498,7 @@ export function BulkImport() {
                 <div className="flex items-baseline justify-between">
                   <dt className="text-slate-500">Importable rows</dt>
                   <dd className="font-display font-bold tabular-nums text-emerald-700">
-                    {preview.inserts.length.toLocaleString()}
+                    {scoped.inserts.length.toLocaleString()}
                   </dd>
                 </div>
                 <div className="flex items-baseline justify-between">
@@ -452,7 +591,7 @@ export function BulkImport() {
         </Card>
       )}
 
-      {preview && preview.inserts.length > 0 && (
+      {preview && scoped.inserts.length > 0 && (
         <div className="mt-6 flex justify-end gap-2">
           <Button
             variant="secondary"
@@ -463,49 +602,81 @@ export function BulkImport() {
           >
             Cancel
           </Button>
-          <Button onClick={promptReplace} disabled={confirming}>
+          <Button onClick={promptImport} disabled={confirming}>
             {confirming ? (
               <Spinner className="h-4 w-4 text-white" />
+            ) : replaces ? (
+              `Import ${scoped.inserts.length} cases`
             ) : (
-              `Import ${preview.inserts.length} cases`
+              `Add ${scoped.inserts.length} cases`
             )}
           </Button>
         </div>
       )}
 
-      {/* ── Replace-all confirmation dialog ── */}
-      {showReplaceWarning && (
+      {/* ── Confirmation. Two different questions: the coordinator is being
+             asked to destroy the city's caseload, a field user only to add to
+             their own. Same dialog, deliberately different weight. ── */}
+      {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-950/60 p-4 backdrop-blur-sm">
           <Card className="w-full max-w-md p-6">
             <div className="flex items-start gap-3">
-              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600">
-                <AlertTriangle className="h-5 w-5" />
+              <span
+                className={
+                  "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border " +
+                  (replaces
+                    ? "border-red-200 bg-red-50 text-red-600"
+                    : "border-brand-200 bg-brand-50 text-brand-600")
+                }
+              >
+                {replaces ? (
+                  <AlertTriangle className="h-5 w-5" />
+                ) : (
+                  <Upload className="h-5 w-5" />
+                )}
               </span>
               <div>
                 <h3 className="font-display text-base font-bold text-slate-900">
-                  Replace all existing cases?
+                  {replaces
+                    ? "Replace all existing cases?"
+                    : `Add ${scoped.inserts.length.toLocaleString()} cases?`}
                 </h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                  This will permanently delete{" "}
-                  <strong>{existingCount.toLocaleString()}</strong> existing
-                  case(s) and replace them with{" "}
-                  <strong>{preview?.inserts.length.toLocaleString()}</strong> new
-                  rows from this file. This action cannot be undone.
-                </p>
+                {replaces ? (
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                    This will permanently delete{" "}
+                    <strong>{existingCount.toLocaleString()}</strong> existing
+                    case(s) and replace them with{" "}
+                    <strong>{scoped.inserts.length.toLocaleString()}</strong> new
+                    rows from this file. This action cannot be undone.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                    These rows will be added to{" "}
+                    <strong>
+                      {scoped.stampedFacility
+                        ? (facilityName ?? "your DOTS facility")
+                        : scoped.forcedTo?.name}
+                    </strong>
+                    . Your existing cases are left untouched, and the new cases
+                    appear on the GIS map straight away.
+                  </p>
+                )}
                 <div className="mt-4 flex justify-end gap-2">
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => setShowReplaceWarning(false)}
+                    onClick={() => setShowConfirm(false)}
                   >
                     Cancel
                   </Button>
                   <Button
-                    variant="danger"
+                    variant={replaces ? "danger" : "primary"}
                     size="sm"
                     onClick={handleConfirm}
                   >
-                    Replace All Cases
+                    {replaces
+                      ? "Replace All Cases"
+                      : `Add ${scoped.inserts.length.toLocaleString()} Cases`}
                   </Button>
                 </div>
               </div>
