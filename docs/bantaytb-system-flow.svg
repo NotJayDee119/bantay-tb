@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1960 1160" width="1960" height="1160" font-family="Segoe UI, Inter, Arial, sans-serif">
+  <defs>
+    <marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#E5309F"/>
+    </marker>
+    <marker id="aMs" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M10,0 L0,5 L10,10 z" fill="#E5309F"/>
+    </marker>
+    <marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2F6FD0"/>
+    </marker>
+    <marker id="aT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#12A594"/>
+    </marker>
+  </defs>
+
+  <rect width="1960" height="1160" fill="#FFFFFF"/>
+
+  <!-- ══ TITLE ══ -->
+  <text x="30" y="44" font-size="27" font-weight="700" fill="#111827">BantayTB — System Flow</text>
+  <text x="30" y="70" font-size="14.5" fill="#6B7280">Who uses each part of the system, and what the system does on its own</text>
+
+  <!-- ══ STYLE GROUPS ══ -->
+  <g id="actors" fill="#FFFFFF" stroke="#EE7C6B" stroke-width="2">
+    <rect x="30"   y="150" width="180" height="56" rx="28"/>
+    <rect x="30"   y="430" width="180" height="56" rx="28"/>
+    <rect x="30"   y="730" width="180" height="56" rx="28"/>
+    <rect x="1600" y="94"  width="190" height="56" rx="28"/>
+    <rect x="1600" y="294" width="190" height="56" rx="28"/>
+    <rect x="1600" y="532" width="190" height="56" rx="28"/>
+  </g>
+  <g font-size="15" font-weight="600" fill="#1F2937" text-anchor="middle">
+    <text x="120" y="184">Public Visitor</text>
+    <text x="120" y="464">Patient</text>
+    <text x="120" y="756">Health Worker</text>
+    <text x="120" y="772">/ Nurse</text>
+    <text x="1695" y="128">System Admin</text>
+    <text x="1695" y="328">TB Coordinator</text>
+    <text x="1695" y="566">Barangay Admin</text>
+  </g>
+
+  <g id="modules" fill="#FFFFFF" stroke="#6EA0DC" stroke-width="2">
+    <rect x="520"  y="70"  width="250" height="64" rx="5"/>
+    <rect x="520"  y="180" width="250" height="64" rx="5"/>
+    <rect x="520"  y="300" width="250" height="64" rx="5"/>
+    <rect x="520"  y="420" width="250" height="64" rx="5"/>
+    <rect x="520"  y="540" width="250" height="64" rx="5"/>
+    <rect x="520"  y="660" width="250" height="64" rx="5"/>
+    <rect x="520"  y="790" width="250" height="64" rx="5"/>
+    <rect x="1160" y="90"  width="260" height="64" rx="5"/>
+    <rect x="1160" y="290" width="260" height="64" rx="5"/>
+    <rect x="1160" y="410" width="260" height="64" rx="5"/>
+  </g>
+  <g font-size="14.5" font-weight="600" fill="#1E3A5F" text-anchor="middle">
+    <text x="645" y="96">Health Education</text>
+    <text x="645" y="114">&amp; DOTS Locator</text>
+    <text x="645" y="217">AI Chatbot</text>
+    <text x="645" y="337">Account Access &amp; Claim Codes</text>
+    <text x="645" y="457">Cases (ACF) &amp; Diagnosis</text>
+    <text x="645" y="577">Patient Enrollment</text>
+    <text x="645" y="697">Adherence Monitoring</text>
+    <text x="645" y="827">Bulk Import</text>
+    <text x="1290" y="116">User &amp; Code</text>
+    <text x="1290" y="134">Administration</text>
+    <text x="1290" y="327">Hotspot Detection &amp; Alerts</text>
+    <text x="1290" y="447">Analytics &amp; Reports</text>
+  </g>
+
+  <!-- ══ CENTRE APP ILLUSTRATION ══ -->
+  <g>
+    <rect x="880" y="452" width="140" height="104" rx="8" fill="#E8F1FD" stroke="#3B82F6" stroke-width="2.5"/>
+    <path d="M880,460 a8,8 0 0 1 8,-8 h124 a8,8 0 0 1 8,8 v12 h-140 z" fill="#3B82F6"/>
+    <circle cx="893" cy="466" r="3" fill="#FFFFFF"/>
+    <circle cx="904" cy="466" r="3" fill="#FFFFFF"/>
+    <circle cx="915" cy="466" r="3" fill="#FFFFFF"/>
+    <rect x="896" y="490" width="72" height="7" rx="3.5" fill="#93B9EE"/>
+    <rect x="896" y="506" width="98" height="7" rx="3.5" fill="#93B9EE"/>
+    <rect x="896" y="522" width="56" height="7" rx="3.5" fill="#93B9EE"/>
+    <rect x="988" y="486" width="56" height="104" rx="11" fill="#FFFFFF" stroke="#0EA5B7" stroke-width="2.5"/>
+    <rect x="995" y="498" width="42" height="74" rx="3" fill="#CFF3F6"/>
+    <circle cx="1016" cy="581" r="3.5" fill="#0EA5B7"/>
+    <text x="955" y="626" font-size="16.5" font-weight="700" fill="#1E3A5F" text-anchor="middle">BantayTB Web App</text>
+    <text x="955" y="647" font-size="12.5" fill="#6B7280" text-anchor="middle">every blue box is a screen inside this app</text>
+  </g>
+
+  <!-- ══ DATABASE ══ -->
+  <g>
+    <circle cx="1795" cy="686" r="32" fill="#3B82F6"/>
+    <circle cx="1840" cy="672" r="42" fill="#3B82F6"/>
+    <circle cx="1878" cy="690" r="27" fill="#3B82F6"/>
+    <rect x="1768" y="686" width="120" height="38" rx="19" fill="#3B82F6"/>
+    <ellipse cx="1830" cy="664" rx="21" ry="7.5" fill="#FFFFFF"/>
+    <rect x="1809" y="664" width="42" height="26" fill="#FFFFFF"/>
+    <ellipse cx="1830" cy="690" rx="21" ry="7.5" fill="#FFFFFF"/>
+    <ellipse cx="1830" cy="677" rx="21" ry="7.5" fill="none" stroke="#3B82F6" stroke-width="1.6"/>
+    <text x="1830" y="768" font-size="16" font-weight="700" fill="#1E3A5F" text-anchor="middle">Database</text>
+  </g>
+
+  <!-- ══ MAGENTA — WHAT PEOPLE DO ══ -->
+  <g fill="none" stroke="#E5309F" stroke-width="1.7" marker-end="url(#aM)">
+    <path d="M210,166 H400 V90 H520"/>
+    <path d="M210,440 H410 V118 H520"/>
+    <path d="M210,452 H380 V332 H520"/>
+    <path d="M210,464 H350 V680 H520"/>
+    <path d="M210,736 H430 V462 H520"/>
+    <path d="M210,746 H410 V572 H520"/>
+    <path d="M210,756 H390 V704 H520"/>
+    <path d="M210,766 H370 V822 H520"/>
+    <path d="M1600,122 H1420"/>
+    <path d="M1600,308 H1545 V150 H1420"/>
+    <path d="M1420,330 H1600"/>
+    <path d="M1420,348 H1575 V560 H1600"/>
+    <path d="M1420,436 H1470 V344 H1600"/>
+    <path d="M1420,452 H1555 V572 H1600"/>
+    <path d="M1695,588 V1025 H785 V462 H770"/>
+  </g>
+  <path d="M210,190 H430 V212 H520" fill="none" stroke="#E5309F" stroke-width="1.7" marker-end="url(#aM)" marker-start="url(#aMs)"/>
+
+  <g font-size="12.5" fill="#B31E7C">
+    <text x="300" y="142" text-anchor="middle">View TB info /</text>
+    <text x="300" y="157" text-anchor="middle">find DOTS center</text>
+    <text x="320" y="236" text-anchor="middle">Ask TB question /</text>
+    <text x="320" y="251" text-anchor="middle">health answer</text>
+    <text x="416" y="268">View health education</text>
+    <text x="450" y="322" text-anchor="middle">Redeem claim code</text>
+    <text x="368" y="670">Confirm dose taken</text>
+    <text x="438" y="502">Record symptoms /</text>
+    <text x="438" y="517">enter test result</text>
+    <text x="418" y="630">Enroll patient /</text>
+    <text x="418" y="645">print claim slip</text>
+    <text x="215" y="700">Follow up missed doses</text>
+    <text x="250" y="800">Upload field records</text>
+    <text x="1510" y="90" text-anchor="middle">Manage users, roles</text>
+    <text x="1510" y="105" text-anchor="middle">&amp; DOTS facilities</text>
+    <text x="1430" y="202">Issue staff</text>
+    <text x="1430" y="217">invite codes</text>
+    <text x="1510" y="356" text-anchor="middle">Outbreak alert</text>
+    <text x="1440" y="545">Outbreak alert</text>
+    <text x="1425" y="425">View citywide data &amp; export</text>
+    <text x="1440" y="612">View barangay data</text>
+    <text x="1180" y="1015">File case in own barangay</text>
+  </g>
+
+  <!-- ══ TEAL DASHED — AUTOMATIC ══ -->
+  <g fill="none" stroke="#12A594" stroke-width="1.8" stroke-dasharray="7 5" marker-end="url(#aT)">
+    <path d="M645,604 V660"/>
+    <path d="M520,692 H460 V476 H210"/>
+    <path d="M770,436 H815 V330 H1160"/>
+  </g>
+  <g font-size="12.5" fill="#0B7C70">
+    <text x="600" y="637">Auto-generate dose schedule</text>
+    <text x="240" y="508">Scheduled SMS reminder</text>
+    <text x="990" y="316" text-anchor="middle">Automatic cluster detection (DBSCAN)</text>
+  </g>
+
+  <!-- ══ BLUE — DATA SAVED ══ -->
+  <g fill="none" stroke="#2F6FD0" stroke-width="1.7">
+    <path d="M770,344 H805 V905 H1830"/>
+    <path d="M770,478 H825 V935 H1830"/>
+    <path d="M770,708 H845 V965 H1830"/>
+    <path d="M1160,346 H1130 V995 H1830"/>
+    <path d="M1830,995 V734" marker-end="url(#aB)"/>
+  </g>
+  <g font-size="12.5" fill="#22509C">
+    <text x="1000" y="897">User &amp; code data</text>
+    <text x="1000" y="927">Case data</text>
+    <text x="1000" y="957">Dose logs</text>
+    <text x="1200" y="987">Hotspot &amp; alert data</text>
+  </g>
+
+  <!-- ══ LEGEND ══ -->
+  <g>
+    <rect x="30" y="880" width="430" height="160" rx="10" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+    <text x="52" y="912" font-size="15" font-weight="700" fill="#1F2937">Legend</text>
+    <path d="M52,944 H108" stroke="#E5309F" stroke-width="1.9" marker-end="url(#aM)"/>
+    <text x="122" y="949" font-size="13.5" fill="#374151">Something a person does</text>
+    <path d="M52,982 H108" stroke="#12A594" stroke-width="1.9" stroke-dasharray="7 5" marker-end="url(#aT)"/>
+    <text x="122" y="987" font-size="13.5" fill="#374151">Automatic — no one has to act</text>
+    <path d="M52,1020 H108" stroke="#2F6FD0" stroke-width="1.9" marker-end="url(#aB)"/>
+    <text x="122" y="1025" font-size="13.5" fill="#374151">Record saved to the database</text>
+  </g>
+
+  <!-- ══ SCOPE NOTE ══ -->
+  <g>
+    <rect x="500" y="1058" width="1010" height="76" rx="10" fill="#FDF6F4" stroke="#F2C7BE" stroke-width="1.5"/>
+    <text x="524" y="1086" font-size="13.5" font-weight="700" fill="#8C3A2A">What each account can see</text>
+    <text x="524" y="1108" font-size="13" fill="#5A4038">Health Workers and Barangay Admins also open the GIS map, hotspots, alerts and analytics — but only for the barangay they cover</text>
+    <text x="524" y="1126" font-size="13" fill="#5A4038">or the DOTS facility they are posted to. TB Coordinators and System Admins see all of Davao City.</text>
+  </g>
+</svg>
