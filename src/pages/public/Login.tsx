@@ -9,7 +9,7 @@ import {
   PasswordInput,
 } from "../../components/ui";
 import { useAuth } from "../../hooks/useAuth";
-import loginImage from "../../assets/login.jpg";
+import loginImage from "../../assets/login.webp";
 
 export function Login() {
   const { signIn } = useAuth();

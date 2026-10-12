@@ -10,7 +10,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
-import { AlertTriangle, Eye, EyeOff } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, X } from "lucide-react";
 import { cn } from "../lib/utils";
 
 export const Button = forwardRef<
@@ -425,6 +425,107 @@ export function ConfirmDialog({
             {confirmLabel}
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * General-purpose modal shell. Render it conditionally or drive it with
+ * `open`; Escape, the backdrop and the close button all call `onClose`.
+ * Page scroll is locked while it is up, and focus moves to the close button
+ * so keyboard users land inside the dialog.
+ */
+export function Modal({
+  open,
+  title,
+  description,
+  icon,
+  footer,
+  className,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  description?: ReactNode;
+  icon?: ReactNode;
+  footer?: ReactNode;
+  className?: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const prevFocus = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+      prevFocus?.focus?.();
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[1000] flex items-end justify-center p-0 sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-slate-900/50 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <div
+        className={cn(
+          "panel-in relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-lift sm:rounded-2xl",
+          className
+        )}
+      >
+        <div className="flex items-start gap-3 border-b border-slate-200 px-5 py-4">
+          {icon && (
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700">
+              {icon}
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <h2
+              id="modal-title"
+              className="font-display text-lg font-bold text-slate-900"
+            >
+              {title}
+            </h2>
+            {description && (
+              <p className="mt-0.5 text-sm text-slate-500">{description}</p>
+            )}
+          </div>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="-mr-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        {footer && (
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-5 py-3">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

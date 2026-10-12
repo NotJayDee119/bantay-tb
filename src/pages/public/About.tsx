@@ -22,14 +22,44 @@ import {
 import { Link } from "react-router-dom";
 import gsap from "gsap";
 import { Button } from "../../components/ui";
+import {
+  latestYearTotal,
+  usePublicYearlyCounts,
+} from "../../hooks/usePublicYearlyCounts";
 import heroImage from "../../assets/davao-city-hero.webp";
-import ctaImage from "../../assets/dots1.jpg";
+import ctaImage from "../../assets/dots1.webp";
 
-const STATS = [
-  { value: "8,601", label: "TB cases recorded in 2024", icon: Activity },
-  { value: "182", label: "Barangays covered", icon: MapPin },
-  { value: "6 months", label: "Standard DOTS treatment", icon: Clock },
+// The case total is filled in from the live database inside About(); these
+// two never change.
+const FIXED_STATS = [
+  { key: "barangays", value: "182", label: "Barangays covered", icon: MapPin },
+  { key: "dots", value: "6 months", label: "Standard DOTS treatment", icon: Clock },
 ];
+
+/**
+ * "TB cases recorded in <year>" for the newest year in the register. Reads the
+ * same public aggregate as the landing map, so the two pages always agree.
+ * The current calendar year is still filling up, so it says "so far".
+ */
+function useCaseStat() {
+  const { rows, status } = usePublicYearlyCounts();
+  const latest = latestYearTotal(rows);
+  if (!latest) {
+    return {
+      key: "cases",
+      value: status === "loading" ? "…" : "—",
+      label: "TB cases recorded",
+      icon: Activity,
+    };
+  }
+  const thisYear = new Date().getFullYear();
+  return {
+    key: "cases",
+    value: latest.total.toLocaleString("en-PH"),
+    label: `TB cases recorded in ${latest.year}${latest.year === thisYear ? " so far" : ""}`,
+    icon: Activity,
+  };
+}
 
 const PRINCIPLES = [
   {
@@ -56,6 +86,7 @@ const PRINCIPLES = [
 
 export function About() {
   const rootRef = useRef<HTMLDivElement>(null);
+  const stats = [useCaseStat(), ...FIXED_STATS];
 
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
@@ -146,8 +177,8 @@ export function About() {
 
           {/* Stats — glass ticker, mirrors the landing hero */}
           <div className="reveal-hero-copy mt-14 flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-sm sm:flex-row sm:divide-x sm:divide-white/10">
-            {STATS.map((s) => (
-              <div key={s.label} className="flex flex-1 items-center gap-4 px-6 py-5">
+            {stats.map((s) => (
+              <div key={s.key} className="flex flex-1 items-center gap-4 px-6 py-5">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/10 text-accent-400">
                   <s.icon className="h-5 w-5" />
                 </div>
@@ -596,6 +627,8 @@ export function About() {
           <img
             src={ctaImage}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover object-top opacity-20"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-brand-950/80 via-brand-950/60 to-brand-950" />

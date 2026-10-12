@@ -15,6 +15,8 @@ import {
   Menu,
   Pill,
   Settings,
+  ScrollText,
+  Share2,
   Stethoscope,
   Ticket,
   Users,
@@ -34,8 +36,7 @@ import { usePageTransition } from "../hooks/usePageTransition";
 import { preloadRoute } from "../lib/lazyPages";
 import { ROLE_LABELS, type AppRole } from "../lib/supabase";
 import { supabase } from "../lib/supabase";
-import { LazyFallback } from "./LazyFallback";
-import { Spinner } from "./ui";
+import { LazyFallback, LoadingSpinner } from "./LazyFallback";
 
 interface NavItem {
   to: string;
@@ -48,6 +49,33 @@ interface NavItem {
 
 // Section order for the sidebar; groups with no visible items collapse away.
 const NAV_GROUPS = ["Overview", "Surveillance", "Care", "Tools", "Admin"];
+
+// Health workers and the TB coordinator get plain-language names: each page
+// is called after the job it does, not the feature behind it. Health workers
+// also see patient care first. Admin roles keep the original vocabulary.
+const PLAIN_ROLES: AppRole[] = ["health_worker", "tb_coordinator"];
+const HW_GROUPS = ["Overview", "Care", "Surveillance", "Tools", "Admin"];
+const PLAIN_GROUP_LABELS: Record<string, string> = {
+  Overview: "Home",
+  Care: "Patient care",
+  Surveillance: "Monitoring",
+  Tools: "Tools",
+  Admin: "Manage",
+};
+const PLAIN_LABELS: Record<string, string> = {
+  "/app": "Home",
+  "/app/invites": "Invite Staff",
+  "/app/cases": "Patients & Cases",
+  "/app/cds": "Check Symptoms",
+  "/app/adherence": "Medicine Tracking",
+  "/app/patient-codes": "Patient Login Codes",
+  "/app/map": "Case Map",
+  "/app/hotspots": "Hotspot Areas",
+  "/app/alerts": "Alerts",
+  "/app/analytics": "Reports & Charts",
+  "/app/import": "Upload Records",
+  "/app/chatbot": "Ask the Assistant",
+};
 
 // Sidebar visibility per the BANTAY-TB conceptual framework.
 //   system_admin    : central admin dashboard, user management, settings.
@@ -168,6 +196,20 @@ const NAV: NavItem[] = [
     group: "Care",
   },
   {
+    to: "/app/interoperability",
+    label: "FHIR Interoperability",
+    icon: Share2,
+    roles: ["system_admin"],
+    group: "Admin",
+  },
+  {
+    to: "/app/audit-log",
+    label: "Audit Log",
+    icon: ScrollText,
+    roles: ["system_admin"],
+    group: "Admin",
+  },
+  {
     to: "/app/users",
     label: "Users",
     icon: Users,
@@ -246,9 +288,7 @@ export function AppLayout() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <Spinner />
-      </div>
+      <LoadingSpinner className="h-screen bg-slate-50" />
     );
   }
 
@@ -295,9 +335,13 @@ export function AppLayout() {
     return <Navigate to="/login" replace />;
   }
 
+  const plain = PLAIN_ROLES.includes(profile.role);
   const visibleNav = NAV.filter(
     (n) => !n.roles || n.roles.includes(profile.role)
+  ).map((n) =>
+    plain && PLAIN_LABELS[n.to] ? { ...n, label: PLAIN_LABELS[n.to] } : n
   );
+  const groups = profile.role === "health_worker" ? HW_GROUPS : NAV_GROUPS;
 
   // The sidebar is rendered twice (desktop + mobile drawer).
   const renderSidebar = (scope: "desktop" | "mobile") => (
@@ -331,13 +375,13 @@ export function AppLayout() {
         )}
       </div>
       <nav className="flex-1 overflow-y-auto px-3 pb-4">
-        {NAV_GROUPS.map((group) => {
+        {groups.map((group) => {
           const items = visibleNav.filter((n) => n.group === group);
           if (items.length === 0) return null;
           return (
             <div key={group} className="mb-1">
               <div className="px-3 pb-1 pt-3 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                {group}
+                {plain ? PLAIN_GROUP_LABELS[group] ?? group : group}
               </div>
               <ul className="flex flex-col gap-0.5">
                 {items.map((item) => (
@@ -348,7 +392,7 @@ export function AppLayout() {
                       onMouseEnter={() => preloadRoute(item.to)}
                       onFocus={() => preloadRoute(item.to)}
                       className={({ isActive }) =>
-                        "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition " +
+                        "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ease-out " +
                         (isActive
                           ? "bg-gradient-to-r from-brand-600 to-brand-800 text-white shadow-soft"
                           : "text-slate-600 hover:bg-slate-100 hover:text-slate-900")
@@ -499,7 +543,7 @@ export function AppLayout() {
       {["/app/map", "/app/hotspots", "/app/chatbot"].includes(pageKey) ? (
         <main className="flex-1 overflow-hidden pt-14 md:pt-0">
           {/* Suspense inside the keyed transition container: a cold page
-              chunk falls back to the route-progress bar while the sidebar
+              chunk falls back to the loading spinner while the sidebar
               stays mounted, and pageRef stays stable for the GSAP tweens. */}
           <div key={pageKey} ref={pageRef} className="h-full">
             <Suspense fallback={<LazyFallback />}>{pageElement}</Suspense>

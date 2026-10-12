@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "seed": "tsx scripts/seed-supabase.ts"
+    "seed": "tsx scripts/seed-supabase.ts",
+    "fhir:sample": "tsx scripts/sample-fhir-payload.ts"
   },
   "dependencies": {
     "@maplibre/maplibre-gl-leaflet": "^0.1.3",

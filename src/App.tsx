@@ -1,10 +1,11 @@
 import { Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AppLayout } from "./components/AppLayout";
 import { PublicLayout } from "./components/PublicLayout";
 import { useAuth } from "./hooks/useAuth";
 import type { AppRole } from "./lib/supabase";
-import { Spinner } from "./components/ui";
+import { LoadingSpinner } from "./components/LazyFallback";
 import {
   Landing,
   About,
@@ -33,6 +34,8 @@ import {
   InviteCodes,
   PatientCodes,
   AdminDashboard,
+  Interoperability,
+  AuditLog,
 } from "./lib/lazyPages";
 
 function RequireRole({
@@ -44,11 +47,7 @@ function RequireRole({
 }) {
   const { profile, loading } = useAuth();
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Spinner />
-      </div>
-    );
+    return <LoadingSpinner className="min-h-[60vh]" />;
   }
   if (!profile || !roles.includes(profile.role)) {
     return <Navigate to="/app" replace />;
@@ -57,13 +56,9 @@ function RequireRole({
 }
 
 export default function App() {
+  const { pathname } = useLocation();
   return (
-    // Bare safety-net boundary. Each layout wraps its own routed content in a
-    // Suspense that shows the route-progress bar, so a cold page chunk falls
-    // back *inside* the still-mounted shell (header/sidebar) rather than
-    // blanking the whole app. This top-level boundary only catches anything
-    // lazy that might suspend outside a layout — normal navigation never
-    // reaches it.
+    <ErrorBoundary resetKey={pathname}>
     <Suspense fallback={null}>
     <Routes>
       <Route element={<PublicLayout />}>
@@ -249,6 +244,27 @@ export default function App() {
           }
         />
         <Route
+          /* System admin only. This guard hides the page; the Edge Function
+             and the database refuse every other role independently, which is
+             the gate that actually counts. */
+          path="interoperability"
+          element={
+            <RequireRole roles={["system_admin"]}>
+              <Interoperability />
+            </RequireRole>
+          }
+        />
+        <Route
+          /* System admin only, enforced again by the database (RLS +
+             is_super_admin), so this guard is not the gate. */
+          path="audit-log"
+          element={
+            <RequireRole roles={["system_admin"]}>
+              <AuditLog />
+            </RequireRole>
+          }
+        />
+        <Route
           path="patient-codes"
           element={
             <RequireRole
@@ -263,5 +279,6 @@ export default function App() {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </Suspense>
+    </ErrorBoundary>
   );
 }

@@ -33,6 +33,7 @@ import {
 } from "../../components/ui";
 import { PatientSheet } from "../../components/PatientSheet";
 import { supabase } from "../../lib/supabase";
+import { fetchAll } from "../../lib/fetchAll";
 import { useAuth } from "../../hooks/useAuth";
 import {
   COOLDOWN_DAYS,
@@ -232,16 +233,19 @@ export function Adherence() {
     const since = new Date(now.getTime() - SILENCE_DAYS * 2 * 86_400_000);
 
     // Two windows' worth: enough to tell "silent since" from "never started".
-    const { data: recentLogs } = await supabase
-      .from("adherence_logs")
-      .select("patient_id, scheduled_at, status")
-      .gte("scheduled_at", since.toISOString())
-      .limit(5000);
-
-    const candidates = findSilentPatients(
-      (recentLogs ?? []) as DoseLog[],
-      now
+    const { data: recentLogs } = await fetchAll<DoseLog>((from, to) =>
+      supabase
+        .from("adherence_logs")
+        .select("patient_id, scheduled_at, status")
+        .gte("scheduled_at", since.toISOString())
+        .order("id")
+        .range(from, to) as unknown as PromiseLike<{
+        data: DoseLog[] | null;
+        error: { message: string } | null;
+      }>
     );
+
+    const candidates = findSilentPatients(recentLogs, now);
 
     if (candidates.length === 0) {
       toast.info("Everyone has checked in this week — no follow-ups needed.");

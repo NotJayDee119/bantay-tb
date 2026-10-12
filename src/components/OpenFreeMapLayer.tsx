@@ -81,7 +81,35 @@ export function OpenFreeMapLayer({
     gl?.on("styledata", hidePlaceLabels);
     if (gl?.isStyleLoaded?.()) hidePlaceLabels();
 
+    // Re-sync the basemap after a zoom that was cut short.
+    //
+    // The plugin raises a private `_zooming` flag on `zoomstart` and refuses
+    // to reposition the basemap until `zoomend` lowers it. `flyTo` fires
+    // `zoomstart` as it takes off — but when the flight is interrupted by
+    // Leaflet's internal `_stop()` (most often the user grabbing the map
+    // mid-flight; on a mouse, a "click" that moves 3px counts as a grab), no
+    // `zoomend` ever follows. The flag sticks, the basemap stays where it was,
+    // and the markers carry on without it: bubbles land out over the sea, by
+    // exactly the distance dragged, until some later zoom happens to clear it.
+    //
+    // Every one of those interrupted paths still ends in a `moveend`. A normal
+    // flight fires `zoomend` *before* its `moveend`, so by the time this runs
+    // the flag is already down and it does nothing; it only acts when a
+    // zoomend went missing. `_animatingZoom` keeps it out of the way of a
+    // button or wheel zoom that's legitimately still running.
+    const glLayer = layer as unknown as {
+      _zooming?: boolean;
+      _zoomEnd?: () => void;
+    };
+    const resyncAfterInterruptedZoom = () => {
+      const animating = (map as unknown as { _animatingZoom?: boolean })
+        ._animatingZoom;
+      if (glLayer._zooming && !animating) glLayer._zoomEnd?.();
+    };
+    map.on("moveend", resyncAfterInterruptedZoom);
+
     return () => {
+      map.off("moveend", resyncAfterInterruptedZoom);
       gl?.off("load", hidePlaceLabels);
       gl?.off("styledata", hidePlaceLabels);
       map.removeLayer(layer);

@@ -94,6 +94,21 @@ export function PublicChatbotFab() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fabRef = useRef<HTMLButtonElement>(null);
+
+  // Escape closes the chat, as it does every other surface on the site, and
+  // hands focus back to the button — otherwise it stays on a control that just
+  // went invisible and the next Tab starts from nowhere.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      fabRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -217,10 +232,15 @@ export function PublicChatbotFab() {
               </button>
             </div>
 
-            {/* Messages */}
+            {/* Messages. `data-lenis-prevent` hands the wheel back to this
+                list: the site-wide smooth scroller in PublicLayout otherwise
+                takes it first, so wheeling over a long answer scrolled the
+                page behind the chat and left the answer where it was.
+                `overscroll-contain` stops it chaining out at either end. */}
             <div
               ref={scrollRef}
-              className="flex-1 space-y-3 overflow-y-auto px-4 py-4"
+              data-lenis-prevent
+              className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
             >
               {messages.map((m) => (
                 <div
@@ -281,7 +301,7 @@ export function PublicChatbotFab() {
                         key={s}
                         type="button"
                         onClick={() => send(s)}
-                        className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-left text-xs text-slate-600 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:border-accent-200 hover:bg-accent-50/50 hover:text-slate-900 hover:shadow-lift"
+                        className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-left text-xs text-slate-600 transition-colors duration-150 hover:border-accent-200 hover:bg-accent-50/50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-300"
                       >
                         {s}
                       </button>
@@ -310,7 +330,7 @@ export function PublicChatbotFab() {
                 <button
                   type="submit"
                   disabled={sending || !draft.trim()}
-                  className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-accent-600 text-white shadow-soft transition-all duration-200 hover:bg-accent-700 enabled:hover:scale-105 disabled:opacity-40"
+                  className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-accent-600 text-white shadow-soft transition-colors duration-150 hover:bg-accent-700 disabled:opacity-40"
                   aria-label="Send"
                 >
                   <Send className="h-4 w-4" />
@@ -329,10 +349,11 @@ export function PublicChatbotFab() {
 
       {/* FAB — accent pill; icon cross-fades between chat and close */}
       <button
+        ref={fabRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={
-          "fixed bottom-5 right-4 z-50 flex h-12 items-center gap-2 rounded-full px-4 text-white shadow-lift transition-all duration-300 hover:scale-105 active:scale-95 sm:right-6 " +
+          "fixed bottom-5 right-4 z-50 flex h-12 items-center gap-2 rounded-full px-4 text-white shadow-lift transition-colors duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-300 focus-visible:ring-offset-2 sm:right-6 " +
           (open ? "bg-brand-950 hover:bg-brand-900" : "bg-accent-600 hover:bg-accent-700")
         }
         aria-expanded={open}

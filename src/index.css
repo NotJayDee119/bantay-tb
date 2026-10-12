@@ -285,34 +285,15 @@ body {
   animation: step-in-right 0.25s ease-out;
 }
 
-/* Route-chunk loading — thin progress bar pinned above everything.
-   Invisible for the first ~150ms (fast loads never flash it), then
-   sweeps out quickly and slows as it approaches ~90%, where it parks
-   until the loaded page replaces it. */
-.route-progress {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 60;
-  height: 3px;
-  width: 0;
-  border-radius: 0 9999px 9999px 0;
-  background: linear-gradient(90deg, #059669, #34d399);
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.55);
-  animation: route-progress 1.6s cubic-bezier(0.16, 1, 0.3, 1) 0.15s forwards;
+/* Loading spinner (LoadingSpinner) — stays invisible for the first 150ms so
+   a page that loads quickly never flashes it, then fades in. */
+.loading-delay {
   opacity: 0;
+  animation: loading-fade-in 0.2s ease-out 0.15s forwards;
 }
-@keyframes route-progress {
-  0% {
+@keyframes loading-fade-in {
+  to {
     opacity: 1;
-    width: 0;
-  }
-  55% {
-    width: 65%;
-  }
-  100% {
-    opacity: 1;
-    width: 90%;
   }
 }
 
@@ -331,6 +312,11 @@ body {
 }
 .panel-in {
   animation: page-in 0.2s ease-out;
+}
+/* Staggered entrance for dashboard blocks; pair with an inline
+   animation-delay. `both` keeps a delayed block hidden until its turn. */
+.rise-in {
+  animation: page-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* Health Education — modal backdrop fade + sheet slide-up (mobile) / pop (desktop). */
@@ -374,19 +360,140 @@ body {
   }
 }
 
-/* DOTS Locator — floating cards slide up into view. */
-@keyframes dl-card-in {
+/* DOTS Locator — the detail dock rises from the foot of the sidebar when a
+   center is picked. It's docked, not floating, so it only needs to announce
+   itself: a short lift, no scale, no backdrop. */
+@keyframes dl-dock-in {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
-.dl-card-in {
-  animation: dl-card-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+.dl-dock-in {
+  animation: dl-dock-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Landing hero map — zoom buttons. Leaflet's stock ones are bright white
+   boxes, the only light surface on an otherwise dark map; these take the
+   side panel's own dark surface so the controls read as part of the card. */
+.pcm-map .leaflet-control-zoom {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.pcm-map .leaflet-control-zoom a {
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
+  border: none;
+  color: #cbd5e1;
+  background: #061020;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+.pcm-map .leaflet-control-zoom a:first-child {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.pcm-map .leaflet-control-zoom a:hover {
+  background: #0f1d33;
+  color: #ffffff;
+}
+
+/* Learn — image viewer. The backdrop fades while the picture settles up from
+   a slightly smaller scale, so it reads as the figure growing out of the page
+   rather than a new screen replacing it. Both are short: a viewer that takes
+   its time to open is one the reader hesitates to open again. */
+@keyframes lb-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.lb-backdrop-in {
+  animation: lb-backdrop-in 0.2s ease-out;
+}
+@keyframes lb-image-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.lb-image-in {
+  animation: lb-image-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* DOTS Locator — pin hover label. Leaflet's stock tooltip is a grey box with
+   a border and an arrow; this is the same dark chip the rest of the site uses
+   for transient labels. Scoped to .dl-map so other maps keep their own. */
+.dl-map .leaflet-tooltip {
+  padding: 4px 9px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+}
+/* The arrow is drawn as a bordered CSS triangle that can't follow the fill
+   above, so it reads as a grey notch against the dark chip. Drop it. */
+.dl-map .leaflet-tooltip::before {
+  display: none;
+}
+/* Tooltips are transient and pointer-driven; fading them in stops a fast
+   mouse sweep across a cluster of pins from strobing. */
+.dl-map .leaflet-tooltip {
+  animation: dl-tooltip-in 0.14s ease-out;
+}
+@keyframes dl-tooltip-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* DOTS Locator — zoom buttons, restyled from Leaflet's 1990s chrome to the
+   same rounded, soft-shadowed surface as the page's own controls. */
+.dl-map .leaflet-control-zoom {
+  border: none !important;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.1),
+    0 1px 3px rgba(15, 23, 42, 0.08);
+}
+.dl-map .leaflet-control-zoom a {
+  width: 34px;
+  height: 34px;
+  line-height: 34px;
+  border: none;
+  color: #334155;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+.dl-map .leaflet-control-zoom a:first-child {
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+.dl-map .leaflet-control-zoom a:hover {
+  background: #ffffff;
+  color: #0f172a;
 }
 
 /* Learn — the article settles in when the reader changes section, disease, or
@@ -632,5 +739,25 @@ body {
   }
   @page {
     margin: 10mm;
+  }
+}
+
+/* Interoperability page: indeterminate "sending" bar. Slides a third-width
+   segment across the track so the user sees activity without the bar
+   claiming a percentage the server never reports. */
+@keyframes interop-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[interop-slide_1\.2s_ease-in-out_infinite\] {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
   }
 }

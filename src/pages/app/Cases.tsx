@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -54,6 +54,7 @@ import {
 } from "../../components/EnrollPatientPanel";
 import { RecordDiagnosisPanel } from "../../components/RecordDiagnosisPanel";
 import { supabase } from "../../lib/supabase";
+import { fetchAll } from "../../lib/fetchAll";
 import { useAuth } from "../../hooks/useAuth";
 import { useAreaScope } from "../../hooks/useAreaScope";
 import { useDebounce } from "../../hooks/useDebounce";
@@ -237,19 +238,23 @@ async function fetchFrequency(
 ): Promise<FreqRow[]> {
   const since = new Date();
   since.setDate(since.getDate() - days);
-  let q = supabase
-    .from("cases")
-    .select(
-      "disease, barangay_psgc, age, sex, tb_site, diagnosis_status, treatment_outcome"
-    )
-    .gte("reported_at", since.toISOString())
-    .limit(20000);
-  if (barangay) q = q.eq("barangay_psgc", Number(barangay));
-  if (disease !== "all")
-    q = q.eq("disease", disease as "tb" | "pneumonia" | "covid19" | "asthma");
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []) as FreqRow[];
+  const { data, error } = await fetchAll<FreqRow>((from, to) => {
+    let q = supabase
+      .from("cases")
+      .select(
+        "disease, barangay_psgc, age, sex, tb_site, diagnosis_status, treatment_outcome"
+      )
+      .gte("reported_at", since.toISOString());
+    if (barangay) q = q.eq("barangay_psgc", Number(barangay));
+    if (disease !== "all")
+      q = q.eq("disease", disease as "tb" | "pneumonia" | "covid19" | "asthma");
+    return q.order("id").range(from, to) as unknown as PromiseLike<{
+      data: FreqRow[] | null;
+      error: { message: string } | null;
+    }>;
+  });
+  if (error) throw new Error(error);
+  return data;
 }
 
 function countBy(rows: FreqRow[], key: (r: FreqRow) => string | null) {
@@ -339,18 +344,23 @@ export function Cases() {
   // shouldn't move the treatment list out from under you.
   const [acfPage, setAcfPage] = useState(0);
   const [activePage, setActivePage] = useState(0);
-  const [includeClosed, setIncludeClosed] = useState(false);
+  // Deep links from the home screens: `?q=` pre-fills the search and
+  // `?closed=1` includes finished treatments (lost to follow-up is one).
+  const [params] = useSearchParams();
+  const [includeClosed, setIncludeClosed] = useState(
+    () => params.get("closed") === "1"
+  );
   const [period, setPeriod] = useState(30);
   // Trends panel visibility — remembered across visits, so staff who only
   // work the registers aren't scrolling past the charts every time.
   const [trendsOpen, setTrendsOpen] = useState<boolean>(
     () => localStorage.getItem("bantay-cases-trends") !== "0"
   );
-  const [filter, setFilter] = useState({
+  const [filter, setFilter] = useState(() => ({
     barangay: "",
     disease: "all",
-    search: "",
-  });
+    search: params.get("q") ?? "",
+  }));
   const search = useDebounce(filter.search, 300);
 
   useEffect(() => {

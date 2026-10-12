@@ -1,4 +1,16 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
+import { useLenis } from "lenis/react";
 import {
   Activity,
   BookOpen,
@@ -30,6 +42,9 @@ import {
   Utensils,
   Waves,
   Wind,
+  X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
@@ -183,6 +198,16 @@ const UI = {
     tl: "Wala pa sa wikang ito ang bahaging ito. Sumubok ng ibang bahagi o palitan ang wika.",
     ceb: "Wala pa niini nga pinulongan kini nga bahin. Sulayi ang laing bahin o usba ang pinulongan.",
   },
+  // Image viewer. Spoken by screen readers only — the controls themselves are
+  // icons, for the same reason the figure's own affordance carries no words.
+  viewLarger: {
+    en: "View larger",
+    tl: "Tingnan nang mas malaki",
+    ceb: "Tan-awa nga mas dako",
+  },
+  zoomIn: { en: "Zoom in", tl: "Palakihin", ceb: "Padakua" },
+  zoomOut: { en: "Zoom out", tl: "Paliitin", ceb: "Pagamya" },
+  close: { en: "Close", tl: "Isara", ceb: "Isira" },
 } satisfies Record<string, Record<Locale, string>>;
 
 function t(
@@ -232,6 +257,304 @@ function RailHeading({
   );
 }
 
+/** Pointer travel, in px, past which a press on the zoomed image counts as a
+ *  drag to pan rather than a click. Small enough that a deliberate pan always
+ *  registers, large enough that the wobble in an ordinary click doesn't. */
+const DRAG_THRESHOLD = 5;
+
+/** The article's poster at full size, opened over the page in a viewer rather
+ *  than in a new tab — a new tab left the reader on a bare image with no way
+ *  back but the browser's tab strip, and lost their place in the article.
+ *
+ *  It opens *fitted*: the whole poster on one screen, which is what most
+ *  readers want. Its wording is often too small to read fitted, so a click
+ *  (or the zoom button) switches to actual size, landing on the spot that was
+ *  clicked — the reader asked to see *that* part bigger, not the top-left
+ *  corner. Zoomed, it pans by drag with a mouse, by finger on touch, and by
+ *  wheel or trackpad either way.
+ *
+ *  Zoom is only offered when actual size is meaningfully bigger than fitted.
+ *  On a large monitor a 768px poster already shows at full size, and a zoom
+ *  control that does nothing reads as broken. */
+function ImageLightbox({
+  image,
+  locale,
+  onClose,
+}: {
+  image: ResolvedArticleImage;
+  locale: Locale;
+  onClose: () => void;
+}) {
+  const lenis = useLenis();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [zoomed, setZoomed] = useState(false);
+  const [canZoom, setCanZoom] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  // Where the reader clicked, as fractions of the fitted image's width and
+  // height. Read once, right after zooming in, to aim the scroll there.
+  const focusPoint = useRef<{ x: number; y: number } | null>(null);
+  // In-progress mouse pan. `moved` survives until the click that ends the
+  // gesture, so a pan doesn't also register as "zoom out" when released.
+  const drag = useRef<{
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+    moved: boolean;
+  } | null>(null);
+
+  // Freeze the page behind the viewer. `overflow: hidden` stops native
+  // scrolling, but Lenis drives this page from its own animation loop and
+  // ignores that, so it has to be stopped too — the same pair PublicLayout
+  // uses for the mobile menu. The scroller below opts back in with
+  // `data-lenis-prevent`, which Lenis honours ahead of its stopped state.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    lenis?.stop();
+    return () => {
+      document.body.style.overflow = prev;
+      lenis?.start();
+    };
+  }, [lenis]);
+
+  // Focus moves into the viewer on open and back to the figure on close, so a
+  // keyboard reader resumes exactly where they were in the article.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    return () => opener?.focus?.();
+  }, []);
+
+  // Escape closes; Tab cycles within the viewer instead of wandering off into
+  // the page hidden behind it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const nodes =
+        dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
+      if (!nodes?.length) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  // Fitted size against actual size. Only measured while fitted — zoomed, the
+  // rendered size *is* the actual size and the comparison means nothing.
+  const measure = useCallback(() => {
+    const img = imgRef.current;
+    if (!img || !img.naturalWidth) return;
+    setCanZoom(
+      img.naturalWidth > img.clientWidth * 1.15 ||
+        img.naturalHeight > img.clientHeight * 1.15,
+    );
+  }, []);
+
+  useEffect(() => {
+    if (zoomed) return;
+    // The figure already loaded this file, so it's usually cached and `load`
+    // may have fired before React could listen for it.
+    if (imgRef.current?.complete) measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [zoomed, measure]);
+
+  // Aim the zoomed view at the point that was clicked. Layout effect, so the
+  // scroll lands in the same frame as the zoom and the reader never sees the
+  // image flash at its top-left corner first.
+  useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (!zoomed || !el) return;
+    const p = focusPoint.current ?? { x: 0.5, y: 0.5 };
+    focusPoint.current = null;
+    el.scrollLeft = p.x * el.scrollWidth - el.clientWidth / 2;
+    el.scrollTop = p.y * el.scrollHeight - el.clientHeight / 2;
+  }, [zoomed]);
+
+  function toggleZoom(e?: ReactMouseEvent) {
+    if (zoomed) {
+      setZoomed(false);
+      return;
+    }
+    if (!canZoom) return;
+    const img = imgRef.current;
+    if (e && img) {
+      const r = img.getBoundingClientRect();
+      focusPoint.current = {
+        x: (e.clientX - r.left) / r.width,
+        y: (e.clientY - r.top) / r.height,
+      };
+    } else {
+      // Keyboard or toolbar button: no point was chosen, so start centred.
+      focusPoint.current = { x: 0.5, y: 0.5 };
+    }
+    setZoomed(true);
+  }
+
+  // Mouse-only drag to pan. Touch and pen already pan the scroller natively,
+  // and capturing them here would fight the browser's own momentum scrolling.
+  function onPointerDown(e: ReactPointerEvent<HTMLImageElement>) {
+    if (!zoomed || e.pointerType !== "mouse" || e.button !== 0) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    e.preventDefault(); // no native image drag-and-drop ghost
+    drag.current = {
+      x: e.clientX,
+      y: e.clientY,
+      left: el.scrollLeft,
+      top: el.scrollTop,
+      moved: false,
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: ReactPointerEvent<HTMLImageElement>) {
+    const d = drag.current;
+    const el = scrollerRef.current;
+    if (!d || !el) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    if (!d.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    if (!d.moved) {
+      d.moved = true;
+      setDragging(true);
+    }
+    el.scrollLeft = d.left - dx;
+    el.scrollTop = d.top - dy;
+  }
+
+  function onPointerUp(e: ReactPointerEvent<HTMLImageElement>) {
+    if (!drag.current) return;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setDragging(false);
+    // Leave `drag` set until the click handler has seen it — that's how a
+    // pan that ends on the image avoids also zooming out.
+  }
+
+  function onImageClick(e: ReactMouseEvent) {
+    const wasDrag = drag.current?.moved;
+    drag.current = null;
+    if (wasDrag) return;
+    toggleZoom(e);
+  }
+
+  return createPortal(
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={image.alt}
+      className="lb-backdrop-in fixed inset-0 z-[1000] flex flex-col bg-slate-950/90 backdrop-blur-sm"
+    >
+      {/* Controls sit in their own bar above the image, never on top of it —
+          a poster is text, and a button floating over it covers words. */}
+      <div className="flex flex-none items-center justify-end gap-2 p-3 sm:p-4">
+        {(canZoom || zoomed) && (
+          <button
+            type="button"
+            onClick={() => toggleZoom()}
+            aria-label={t(zoomed ? "zoomOut" : "zoomIn", locale)}
+            aria-pressed={zoomed}
+            className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition-colors duration-150 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          >
+            {zoomed ? (
+              <ZoomOut className="h-5 w-5" aria-hidden />
+            ) : (
+              <ZoomIn className="h-5 w-5" aria-hidden />
+            )}
+          </button>
+        )}
+        <button
+          ref={closeRef}
+          type="button"
+          onClick={onClose}
+          aria-label={t("close", locale)}
+          className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition-colors duration-150 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
+      </div>
+
+      <div
+        ref={scrollerRef}
+        data-lenis-prevent
+        className={cn(
+          "min-h-0 flex-1 overscroll-contain",
+          zoomed ? "overflow-auto" : "overflow-hidden",
+        )}
+      >
+        {/* A click on the dark space around the picture closes the viewer —
+            the target check keeps a click on the picture itself from counting.
+            Zoomed, the wrapper grows to the image (`w-max`) but still fills the
+            scroller on any axis the image is smaller on, so a wide poster
+            stays centred vertically while it pans sideways. */}
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) onClose();
+          }}
+          className={cn(
+            "flex items-center justify-center",
+            zoomed
+              ? "min-h-full min-w-full w-max p-4"
+              : "h-full w-full px-4 pb-4 sm:px-8 sm:pb-8",
+          )}
+        >
+          <img
+            ref={imgRef}
+            src={image.src}
+            alt={image.alt}
+            width={image.width}
+            height={image.height}
+            draggable={false}
+            onLoad={() => !zoomed && measure()}
+            onClick={onImageClick}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            className={cn(
+              "lb-image-in block select-none rounded-lg shadow-2xl",
+              zoomed
+                ? cn(
+                    "max-h-none max-w-none",
+                    dragging ? "cursor-grabbing" : "cursor-grab",
+                  )
+                : cn(
+                    "h-auto max-h-full w-auto max-w-full object-contain",
+                    canZoom && "cursor-zoom-in",
+                  ),
+            )}
+          />
+        </div>
+      </div>
+
+      {image.caption && (
+        <p className="flex-none px-4 pb-4 text-center text-[13px] leading-relaxed text-slate-300 sm:px-8 sm:pb-5">
+          {image.caption}
+        </p>
+      )}
+    </div>,
+    document.body,
+  );
+}
+
 /** The article's picture, with its caption and credit.
  *
  *  Two quite different things arrive here and they are not laid out the same
@@ -244,8 +567,16 @@ function RailHeading({
  *
  *  `width`/`height` on the tag let the browser reserve the space itself, so
  *  the natural-aspect figures don't reflow the page as they load. */
-function ArticleImageFigure({ image }: { image: ResolvedArticleImage }) {
+function ArticleImageFigure({
+  image,
+  locale,
+}: {
+  image: ResolvedArticleImage;
+  locale: Locale;
+}) {
   const isFigure = image.fit === "figure";
+  const [viewing, setViewing] = useState(false);
+  const closeViewer = useCallback(() => setViewing(false), []);
 
   return (
     <figure className="border-y border-slate-200 bg-white">
@@ -256,36 +587,46 @@ function ArticleImageFigure({ image }: { image: ResolvedArticleImage }) {
         // the height and its wording shrinks past reading.
         //
         // So the figure is capped to fit one screen — 70vh, never taller than
-        // the reader's viewport — and the whole thing opens full-size in a new
-        // tab on click. The page stays readable at a glance; the poster stays
-        // legible for anyone who wants to actually read it. `max-w` at the
-        // intrinsic width still keeps the column from upscaling a 768px file
-        // into a blurry one.
-        <a
-          href={image.src}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group relative block cursor-zoom-in bg-slate-100/70"
-        >
-          <img
-            src={image.src}
-            alt={image.alt}
-            width={image.width}
-            height={image.height}
-            loading="eager"
-            fetchPriority="high"
-            decoding="async"
-            className="mx-auto block h-auto max-h-[70vh] w-auto"
-            style={{
-              maxWidth: image.width ? `min(100%, ${image.width}px)` : "100%",
-            }}
-          />
-          {/* No wording on the affordance: this page runs in three languages
-              and a picture that opens bigger does not need a sentence. */}
-          <span className="pointer-events-none absolute right-3 top-3 rounded-md bg-slate-900/55 p-1.5 text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
-            <Expand className="h-4 w-4" />
-          </span>
-        </a>
+        // the reader's viewport — and opens in ImageLightbox on click. The
+        // page stays readable at a glance; the poster stays legible for anyone
+        // who wants to actually read it. `max-w` at the intrinsic width still
+        // keeps the column from upscaling a 768px file into a blurry one.
+        <>
+          <button
+            type="button"
+            onClick={() => setViewing(true)}
+            // The label replaces the image's alt as the button's name, so it
+            // carries the alt along — otherwise a screen reader hears "View
+            // larger" with no word on what the picture is.
+            aria-label={`${t("viewLarger", locale)}: ${image.alt}`}
+            aria-haspopup="dialog"
+            className="group relative block w-full cursor-zoom-in bg-slate-100/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/60"
+          >
+            <img
+              src={image.src}
+              alt={image.alt}
+              width={image.width}
+              height={image.height}
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
+              className="mx-auto block h-auto max-h-[70vh] w-auto"
+              style={{
+                maxWidth: image.width ? `min(100%, ${image.width}px)` : "100%",
+              }}
+            />
+            {/* No wording on the affordance: this page runs in three languages
+                and a picture that opens bigger does not need a sentence.
+                Hover-revealed for a mouse, but always shown where there is no
+                hover — on a phone it would otherwise never appear at all. */}
+            <span className="pointer-events-none absolute right-3 top-3 rounded-md bg-slate-900/55 p-1.5 text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100 [@media(hover:none)]:opacity-100">
+              <Expand className="h-4 w-4" aria-hidden />
+            </span>
+          </button>
+          {viewing && (
+            <ImageLightbox image={image} locale={locale} onClose={closeViewer} />
+          )}
+        </>
       ) : (
         <img
           src={image.src}
@@ -519,15 +860,20 @@ export function LearnPublic() {
 
   return (
     <>
-      {/* ─── Hero header — matches the landing surveillance styling ── */}
+      {/* ─── Hero header — the Davao skyline, as on the landing page ───
+          The photo sits behind a gradient scrim rather than carrying the text
+          directly: the skyline's own sky is bright, and white type over an
+          unscrimmed photo loses contrast exactly where the buildings end.
+          The scrim is what lets the picture stay visible at full strength and
+          the wording stay readable over every part of it. */}
       <section className="relative overflow-hidden bg-brand-950">
         <div aria-hidden className="pointer-events-none absolute inset-0">
           <img
             src={heroImage}
             alt=""
-            className="h-full w-full object-cover object-center opacity-25"
+            className="h-full w-full object-cover object-center opacity-35"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-brand-950/70 via-brand-950/50 to-brand-950" />
+          <div className="absolute inset-0 bg-gradient-to-b from-brand-950/70 via-brand-950/55 to-brand-950" />
         </div>
         <div
           aria-hidden
@@ -545,7 +891,7 @@ export function LearnPublic() {
           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
             <div className="min-w-0">
               <div className="inline-flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-brand-300">
-                <Heart className="h-3 w-3 text-accent-400" />
+                <Heart className="h-3 w-3 text-accent-400" aria-hidden />
                 For patients &amp; families
               </div>
               <h1 className="font-display mt-1.5 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
@@ -555,16 +901,17 @@ export function LearnPublic() {
 
             {/* Language — segmented pill, mirrors the navbar */}
             <div className="flex items-center gap-1 rounded-full border border-white/15 bg-white/10 p-1 backdrop-blur-sm">
-              <Languages className="ml-2 h-4 w-4 text-white/50" />
+              <Languages className="ml-2 h-4 w-4 text-white/50" aria-hidden />
               {(Object.keys(LOCALE_LABEL) as Locale[]).map((l) => (
                 <button
                   key={l}
                   onClick={() => setLocale(l)}
+                  aria-pressed={locale === l}
                   className={cn(
-                    "rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-200",
+                    "rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
                     locale === l
                       ? "bg-white text-brand-950 shadow-soft"
-                      : "text-white/70 hover:bg-white/10 hover:text-white",
+                      : "text-white/80 hover:bg-white/10 hover:text-white",
                   )}
                 >
                   {LOCALE_LABEL[l]}
@@ -584,11 +931,19 @@ export function LearnPublic() {
                 <button
                   key={d}
                   onClick={() => setDisease(d)}
+                  aria-pressed={active}
                   className={cn(
-                    "inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-200",
+                    "inline-flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
                     active
-                      ? "bg-white text-brand-950 shadow-soft"
-                      : "border border-white/15 bg-white/5 text-slate-300 hover:bg-white/15 hover:text-white",
+                      ? "border-white bg-white text-brand-950 shadow-soft"
+                      : // A tinted dark fill rather than the old `bg-white/5`.
+                        // At 5% white the chip was effectively whatever the
+                        // photo behind it happened to be, so over the bright
+                        // part of the skyline the unselected chips read nearly
+                        // as light as the selected one. This keeps every
+                        // inactive chip on the same dark base, whatever it
+                        // happens to sit over.
+                        "border-white/20 bg-brand-950/55 text-slate-200 hover:bg-brand-900/70 hover:text-white",
                   )}
                 >
                   <Icon
@@ -596,6 +951,7 @@ export function LearnPublic() {
                       "h-4 w-4",
                       active ? "text-accent-600" : "text-accent-400",
                     )}
+                    aria-hidden
                   />
                   {DISEASE_LABEL[d][locale]}
                 </button>
@@ -619,7 +975,7 @@ export function LearnPublic() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8">
             {/* ── Left rail: what you're reading, and the section list ── */}
             <aside className="lg:sticky lg:top-20 lg:self-start">
-              <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-soft">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
                 <div className="p-5">
                   <div className="flex items-center gap-3">
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-950 text-accent-400">
@@ -691,10 +1047,11 @@ export function LearnPublic() {
                       <button
                         key={c}
                         onClick={() => setCategory(c)}
+                        aria-current={active ? "true" : undefined}
                         className={cn(
-                          "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition",
+                          "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60",
                           active
-                            ? "bg-brand-950 font-medium text-white shadow-soft"
+                            ? "bg-brand-950 font-medium text-white"
                             : "text-slate-700 hover:bg-slate-100",
                         )}
                       >
@@ -730,7 +1087,7 @@ export function LearnPublic() {
             <main className="min-w-0">
               <div
                 key={`${disease}-${category}-${locale}`}
-                className="learn-article-in overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 shadow-soft sm:p-8 lg:p-10"
+                className="learn-article-in overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-soft sm:p-8 lg:p-10"
               >
                 {article ? (
                   <article>
@@ -769,7 +1126,7 @@ export function LearnPublic() {
 
                     {articleImage && (
                       <div className="-mx-6 sm:-mx-8 lg:-mx-10">
-                        <ArticleImageFigure image={articleImage} />
+                        <ArticleImageFigure image={articleImage} locale={locale} />
                       </div>
                     )}
 
@@ -806,7 +1163,7 @@ export function LearnPublic() {
                           <button
                             type="button"
                             onClick={() => setCategory(prevCat)}
-                            className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lift"
+                            className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition-colors duration-150 hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
                           >
                             <ChevronLeft className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:-translate-x-0.5" />
                             <span className="min-w-0">
@@ -825,7 +1182,7 @@ export function LearnPublic() {
                           <button
                             type="button"
                             onClick={() => setCategory(nextCat)}
-                            className="group flex items-center justify-end gap-3 rounded-xl border border-brand-900 bg-brand-950 px-4 py-3 text-right shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift"
+                            className="group flex items-center justify-end gap-3 rounded-xl border border-brand-900 bg-brand-950 px-4 py-3 text-right transition-colors duration-150 hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
                           >
                             <span className="min-w-0">
                               <span className="block font-mono text-[10px] uppercase tracking-wider text-brand-300">
@@ -871,7 +1228,7 @@ export function LearnPublic() {
                 )}
               >
                 {related.length > 0 && (
-                  <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft">
+                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
                     <RailHeading icon={Waves}>
                       {t("related", locale)}
                     </RailHeading>
@@ -886,7 +1243,7 @@ export function LearnPublic() {
                             <button
                               type="button"
                               onClick={() => setDisease(a.disease)}
-                              className="group flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2.5 text-left transition hover:bg-slate-50"
+                              className="group flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2.5 text-left transition-colors duration-150 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
                             >
                               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500 transition-colors group-hover:bg-accent-50 group-hover:text-accent-700">
                                 <Icon className="h-3.5 w-3.5" aria-hidden />
@@ -910,7 +1267,7 @@ export function LearnPublic() {
                 {/* References — a reading list, not a grid of cards. */}
                 <section
                   aria-labelledby="sources-heading"
-                  className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft"
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft"
                 >
                   {/* Disclosure, not a checkbox or an icon-only affordance: the
                     whole header row is the hit target, and the count stays
@@ -922,7 +1279,7 @@ export function LearnPublic() {
                       onClick={() => setShowSources((v) => !v)}
                       aria-expanded={showSources}
                       aria-controls="sources-panel"
-                      className="-mx-2 flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left transition hover:bg-slate-50"
+                      className="-mx-2 flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left transition-colors duration-150 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
                     >
                       <BookOpen
                         className="h-4 w-4 shrink-0 text-accent-600"

@@ -22,6 +22,7 @@ import {
 } from "../../components/ui";
 import { ClaimSlip } from "../../components/ClaimSlip";
 import { supabase } from "../../lib/supabase";
+import { fetchAll } from "../../lib/fetchAll";
 import { useDebounce } from "../../hooks/useDebounce";
 import { claimState } from "../../lib/enrollment";
 import { formatDate } from "../../lib/utils";
@@ -120,15 +121,23 @@ export function PatientCodes() {
   const { data, isPending: loading } = useQuery({
     queryKey: ["patient-codes"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("cases")
-        .select(
-          "id, given_name, family_name, patient_code, facility_id, enrolled_at, patient_profile_id, patient_claims(code, expires_at, used_at, created_at)"
-        )
-        .not("enrolled_at", "is", null)
-        .order("enrolled_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as unknown as PatientRow[];
+      // Paged past Supabase's 1,000-row cap so no enrolled patient drops off.
+      const { data, error } = await fetchAll<PatientRow>((from, to) =>
+        supabase
+          .from("cases")
+          .select(
+            "id, given_name, family_name, patient_code, facility_id, enrolled_at, patient_profile_id, patient_claims(code, expires_at, used_at, created_at)"
+          )
+          .not("enrolled_at", "is", null)
+          .order("enrolled_at", { ascending: false })
+          .order("id")
+          .range(from, to) as unknown as PromiseLike<{
+          data: PatientRow[] | null;
+          error: { message: string } | null;
+        }>
+      );
+      if (error) throw new Error(error);
+      return data;
     },
   });
   // Stable identity across renders — `data ?? []` would mint a fresh array

@@ -5,6 +5,7 @@ import { Activity, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw } from "l
 import { Spinner } from "../../components/ui";
 import { OpenFreeMapLayer } from "../../components/OpenFreeMapLayer";
 import { supabase } from "../../lib/supabase";
+import { fetchAll } from "../../lib/fetchAll";
 import { dbscan, type DbscanPoint } from "../../lib/dbscan";
 import { loadDbscanSettings } from "../../lib/dbscanSettings";
 import { buildHotspotAlerts, isAlertingSeverity } from "../../lib/hotspotAlerts";
@@ -232,13 +233,20 @@ export function Hotspots() {
       setWindowDays(settings.window_days);
       const since = new Date();
       since.setDate(since.getDate() - settings.window_days);
-      const { data, error } = await supabase
-        .from("cases")
-        .select("id, barangay_psgc, jitter_lat, jitter_lon")
-        .gte("reported_at", since.toISOString())
-        .limit(20000);
-      if (error) throw error;
-      const points: DbscanPoint[] = (data ?? []).map(
+      type PointRow = { id: string; jitter_lat: number; jitter_lon: number };
+      const { data, error } = await fetchAll<PointRow>((from, to) =>
+        supabase
+          .from("cases")
+          .select("id, barangay_psgc, jitter_lat, jitter_lon")
+          .gte("reported_at", since.toISOString())
+          .order("id")
+          .range(from, to) as unknown as PromiseLike<{
+          data: PointRow[] | null;
+          error: { message: string } | null;
+        }>
+      );
+      if (error) throw new Error(error);
+      const points: DbscanPoint[] = data.map(
         (c: { id: string; jitter_lat: number; jitter_lon: number }) => ({
           id: c.id,
           lat: c.jitter_lat,

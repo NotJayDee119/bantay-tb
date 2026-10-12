@@ -30,6 +30,8 @@ export const Users = lazyWithPreload(() => import("../pages/app/Users").then(m =
 export const InviteCodes = lazyWithPreload(() => import("../pages/app/InviteCodes").then(m => ({ default: m.InviteCodes })));
 export const PatientCodes = lazyWithPreload(() => import("../pages/app/PatientCodes").then(m => ({ default: m.PatientCodes })));
 export const AdminDashboard = lazyWithPreload(() => import("../pages/app/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
+export const Interoperability = lazyWithPreload(() => import("../pages/app/Interoperability").then(m => ({ default: m.Interoperability })));
+export const AuditLog = lazyWithPreload(() => import("../pages/app/AuditLog").then(m => ({ default: m.AuditLog })));
 
 /**
  * Maps a nav-link `to` path to the chunk that route renders, so hovering a
@@ -66,6 +68,8 @@ const PRELOAD_BY_PATH: Record<string, () => Promise<unknown>> = {
   "/app/users": Users.preload,
   "/app/invites": InviteCodes.preload,
   "/app/patient-codes": PatientCodes.preload,
+  "/app/interoperability": Interoperability.preload,
+  "/app/audit-log": AuditLog.preload,
 };
 
 /**

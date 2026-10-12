@@ -23,17 +23,18 @@ const LENIS_OPTIONS = {
 // Header glass surface — barely-there at the top of the page, deeper and
 // more frosted once content scrolls beneath it. Animated as one GSAP tween
 // (not competing CSS transitions) so blur/tint/shadow settle in lockstep.
+// No WebkitBackdropFilter key: GSAP's CSSPlugin rejects it as an unknown
+// property, and already falls back to the -webkit- prefix on its own where
+// the unprefixed backdropFilter is unsupported.
 const HEADER_AT_TOP = {
   backgroundColor: "rgba(255, 255, 255, 0.7)",
   backdropFilter: "blur(14px)",
-  WebkitBackdropFilter: "blur(14px)",
   borderBottomColor: "rgba(226, 232, 240, 0)",
   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06)",
 };
 const HEADER_SCROLLED = {
   backgroundColor: "rgba(255, 255, 255, 0.92)",
   backdropFilter: "blur(28px)",
-  WebkitBackdropFilter: "blur(28px)",
   borderBottomColor: "rgba(226, 232, 240, 0.7)",
   boxShadow: "0 12px 30px rgba(15, 23, 42, 0.08), 0 2px 10px rgba(15, 23, 42, 0.05)",
 };
@@ -44,7 +45,6 @@ const HEADER_SCROLLED = {
 const HEADER_FLAT = {
   backgroundColor: "rgba(255, 255, 255, 0.7)",
   backdropFilter: "blur(14px)",
-  WebkitBackdropFilter: "blur(14px)",
   borderBottomColor: "rgba(226, 232, 240, 0)",
   boxShadow: "0 0 0 rgba(15, 23, 42, 0)",
 };
@@ -438,7 +438,7 @@ export function PublicLayout() {
           was here in the first place. */}
       <main className="flex-1 overflow-x-hidden supports-[overflow:clip]:overflow-x-clip">
         {/* Suspense lives *inside* the keyed transition container: a cold
-            page chunk falls back to the route-progress bar while the header,
+            page chunk falls back to the loading spinner while the header,
             nav and footer stay mounted, and pageRef stays stable so the GSAP
             enter/exit tweens keep owning the whole transition. */}
         <div key={pageKey} ref={pageRef}>

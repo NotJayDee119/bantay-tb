@@ -1,19 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Loader2 } from "lucide-react";
-import { supabase } from "../../lib/supabase";
 import {
   computeCasePins,
   computeFacilityFlows,
   computeHotspotInsights,
   type CasePin,
   type FacilityFlowStat,
-  type FacilityRow,
   type HotspotInsights,
-  type HotspotCaseRow,
 } from "../../lib/hotspotUtils";
 import { AdminHotspotMap } from "../../components/AdminHotspotMap";
 import { useAreaScope } from "../../hooks/useAreaScope";
 import { useCaseAttribution } from "../../hooks/useCaseAttribution";
+import { useDotsCenters, useTbCases } from "../../hooks/useTbCases";
 import barangays from "../../data/barangays.json";
 
 interface GISMapTabProps {
@@ -56,22 +54,42 @@ export function GISMapTab({ focusBarangay = null }: GISMapTabProps) {
     if (!assignedPsgc) return null;
     return barangays.find((b) => b.psgc === assignedPsgc)?.name ?? null;
   }, [focusBarangay, assignedPsgc]);
-  const [caseRows, setCaseRows] = useState<HotspotCaseRow[] | null>(null);
-  const [facilityRows, setFacilityRows] = useState<FacilityRow[]>([]);
-  const [facilityFlows, setFacilityFlows] = useState<FacilityFlowStat[]>([]);
-  const [casePins, setCasePins] = useState<CasePin[]>([]);
-  const [heatPoints, setHeatPoints] = useState<[number, number][]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Shared, cached copy of the register (same one the Dashboard reads), so
+  // opening the map after the Dashboard doesn't download every case again.
+  // No barangay filter on purpose: RLS scopes area staff to the union of
+  // "lives in my barangay" and "registered at a facility in my barangay", and
+  // re-filtering here would drop the second half.
+  const casesQuery = useTbCases();
+  const centersQuery = useDotsCenters();
+  const caseRows = casesQuery.data ?? null;
+  const facilityRows = useMemo(() => centersQuery.data ?? [], [centersQuery.data]);
+  const loading = casesQuery.isPending || centersQuery.isPending;
+  const error = casesQuery.isError
+    ? "Unable to load map data right now. Check your Supabase connection and row-level permissions."
+    : null;
 
-  // Which barangay a case is counted under. Defaults to the registering
-  // facility: a Mintal resident who registers at Talomo DOTS is Talomo's
-  // register entry and Talomo's notification, so that is where the case is
-  // recorded. Where the patient came from is never lost — every barangay
-  // carries both numbers, and the drill-down traces each case home.
-  //
-  // Shared with the Dashboard rather than local to this page, so its barangay
-  // ranking can't quietly disagree with the map's.
+  // Derived once per data change, not per render.
+  const facilityFlows = useMemo<FacilityFlowStat[]>(
+    () => (caseRows ? computeFacilityFlows(caseRows, facilityRows) : []),
+    [caseRows, facilityRows]
+  );
+  // Both drill-down directions read from this one per-case list, so a
+  // barangay total and a facility total can never disagree.
+  const casePins = useMemo<CasePin[]>(
+    () => (caseRows ? computeCasePins(caseRows, facilityRows) : []),
+    [caseRows, facilityRows]
+  );
+  // Individual jittered coordinates for the heatmap layer.
+  const heatPoints = useMemo<[number, number][]>(() => {
+    const pts: [number, number][] = [];
+    for (const c of caseRows ?? []) {
+      if (Number.isFinite(c.jitter_lat) && Number.isFinite(c.jitter_lon)) {
+        pts.push([c.jitter_lat as number, c.jitter_lon as number]);
+      }
+    }
+    return pts;
+  }, [caseRows]);
+
   const [attribution, setAttribution] = useCaseAttribution();
 
   // Recomputed on toggle rather than refetched: the axis is a way of counting
@@ -87,71 +105,6 @@ export function GISMapTab({ focusBarangay = null }: GISMapTabProps) {
     [caseRows, facilityRows, attribution]
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchMapData() {
-      setLoading(true);
-      setError(null);
-      // No barangay filter here on purpose. Area staff are scoped by RLS to
-      // the union of "lives in my barangay" and "registered at a facility in
-      // my barangay" (20261007000000). Re-applying an
-      // `eq("barangay_psgc", …)` filter here would drop the second half —
-      // which is exactly the bug where a Mintal worker saw an empty register
-      // beside a facility marker claiming five cases.
-      const query = supabase
-        .from("cases")
-        .select(
-          "barangay_psgc, facility_id, address, residence_lat, residence_lon, reported_at, created_at, tb_classification, jitter_lat, jitter_lon"
-        )
-        .eq("disease", "tb");
-      const [{ data: allCases, error }, { data: centers }] = await Promise.all([
-        query,
-        supabase.from("dots_centers").select("id, name, lat, lon, barangay_psgc"),
-      ]);
-
-      if (error || !allCases) {
-        console.error("Error fetching data:", error);
-        if (!cancelled) {
-          setError(
-            "Unable to load map data right now. Check your Supabase connection and row-level permissions."
-          );
-          setLoading(false);
-        }
-        return;
-      }
-
-      const rows = allCases as HotspotCaseRow[];
-      const centerRows = (centers ?? []) as FacilityRow[];
-      const flows = computeFacilityFlows(rows, centerRows);
-      // Both drill-down directions read from this one per-case list, so a
-      // barangay total and a facility total can never disagree.
-      const pins = computeCasePins(rows, centerRows);
-
-      // Extract individual jitter coordinates for the heatmap layer.
-      const pts: [number, number][] = (allCases as HotspotCaseRow[])
-        .filter(
-          (c) =>
-            typeof c.jitter_lat === "number" &&
-            typeof c.jitter_lon === "number" &&
-            Number.isFinite(c.jitter_lat) &&
-            Number.isFinite(c.jitter_lon)
-        )
-        .map((c) => [c.jitter_lat as number, c.jitter_lon as number]);
-
-      if (!cancelled) {
-        setCaseRows(rows);
-        setFacilityRows(centerRows);
-        setFacilityFlows(flows);
-        setCasePins(pins);
-        setHeatPoints(pts);
-        setLoading(false);
-      }
-    }
-    fetchMapData();
-    return () => {
-      cancelled = true;
-    };
-  }, [scope.scoped, scope.psgc]);
 
   // Full-bleed frame — AppLayout gives this route the whole content area;
   // `isolate` traps Leaflet's internal z-indexes inside the view.

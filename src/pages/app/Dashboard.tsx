@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Activity,
@@ -20,7 +20,6 @@ import {
   X,
 } from "lucide-react";
 import { Badge, Card, PageHeader, Skeleton } from "../../components/ui";
-import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useAreaScope } from "../../hooks/useAreaScope";
 import { areaSuffix, type AreaScope } from "../../lib/areaScope";
@@ -35,12 +34,33 @@ import {
   type HotspotInsights,
 } from "../../lib/hotspotUtils";
 import { useCaseAttribution } from "../../hooks/useCaseAttribution";
+import { useDotsCenters, useTbCases } from "../../hooks/useTbCases";
+import { HealthWorkerHome } from "./HealthWorkerHome";
+import { CoordinatorHome, type OutcomeStats } from "./CoordinatorHome";
+import { YearFilter } from "../../components/YearFilter";
+import {
+  useCaseYear,
+  yearOptions,
+  type CaseYear,
+} from "../../hooks/useCaseYear";
 
 const TOTAL_BARANGAYS = (barangays as { psgc: number }[]).length;
 
 interface DashboardCaseRow extends HotspotCaseRow {
   id: number | string;
+  treatment_outcome?: string | null;
 }
+
+// Outcomes that mean treatment has ended, one way or another. "Ongoing" is
+// left out so patients still mid-treatment don't drag the success rate down.
+const FINISHED = new Set([
+  "cured",
+  "completed",
+  "failed",
+  "died",
+  "lost_to_followup",
+  "not_evaluated",
+]);
 
 type IndicatorLevel =
   | "very-high"
@@ -118,6 +138,16 @@ interface DashboardStats {
   detectionRatePct: number;
   lastUpload: Date | null;
   rowCount: number;
+  /** Cases in the last `insights.recentWindowDays` days, ignoring the year filter. */
+  liveRecentCases: number;
+  /** Treatment outcomes of the counted (year-filtered) cases. */
+  outcomes: OutcomeStats;
+  /** Earliest year with any case, for the year filter's options. */
+  earliestYear: number | null;
+  /** Newest year with any case. */
+  latestYear: number | null;
+  /** The year `yoyChangePct` compares against. */
+  yoyBaseYear: number;
   insights: HotspotInsights;
   topBarangays: {
     psgc: number;
@@ -128,30 +158,70 @@ interface DashboardStats {
   }[];
 }
 
+function reportedYear(c: DashboardCaseRow): number | null {
+  const raw = c.reported_at ?? c.created_at;
+  const d = raw ? new Date(raw) : null;
+  return d && !Number.isNaN(d.getTime()) ? d.getFullYear() : null;
+}
+
 function buildStats(
   rows: DashboardCaseRow[],
   attribution: CaseAttribution,
-  facilities: FacilityRow[]
+  facilities: FacilityRow[],
+  year: CaseYear
 ): DashboardStats {
+  // The year filter narrows what is counted and ranked. Data freshness (last
+  // upload) and "new in the last 30 days" stay on the full set — they describe
+  // now, and would read as zero for any past year.
+  const counted =
+    year === "all" ? rows : rows.filter((c) => reportedYear(c) === year);
+
+  const outcomes: OutcomeStats = {
+    finished: 0,
+    favourable: 0,
+    lostToFollowUp: 0,
+    ongoing: 0,
+  };
+  for (const c of counted) {
+    const o = c.treatment_outcome ?? "";
+    if (FINISHED.has(o)) outcomes.finished += 1;
+    if (o === "cured" || o === "completed") outcomes.favourable += 1;
+    if (o === "lost_to_followup") outcomes.lostToFollowUp += 1;
+    if (o === "ongoing") outcomes.ongoing += 1;
+  }
+
   // Same axis the GIS map is drawing on. Without both arguments this silently
   // falls back to residence, which is what used to put the two pages' barangay
   // rankings out of step.
-  const insights = computeHotspotInsights(rows, { attribution, facilities });
+  const insights = computeHotspotInsights(counted, { attribution, facilities });
 
-  // Year-over-year change (current year vs previous year reported_at).
+  let earliestYear: number | null = null;
+  let latestYear: number | null = null;
+  for (const c of rows) {
+    const y = reportedYear(c);
+    if (y == null) continue;
+    if (earliestYear == null || y < earliestYear) earliestYear = y;
+    if (latestYear == null || y > latestYear) latestYear = y;
+  }
+
+  // Year-over-year change: the selected year vs the one before it. For "all"
+  // it is the newest year with data, not the calendar year — a dataset that
+  // ends in 2025 would otherwise read as "-100% in 2026".
   const now = new Date();
-  const currentYear = now.getFullYear();
+  const currentYear = year === "all" ? latestYear ?? now.getFullYear() : year;
   const lastYear = currentYear - 1;
+  const recentCutoff = now.getTime() - insights.recentWindowDays * 86_400_000;
   let thisYearCount = 0;
   let lastYearCount = 0;
   let latestUpload = 0;
+  let liveRecentCases = 0;
   for (const c of rows) {
-    const reportedRaw = c.reported_at ?? c.created_at;
-    const reported = reportedRaw ? new Date(reportedRaw) : null;
-    if (reported && !Number.isNaN(reported.getTime())) {
-      const y = reported.getFullYear();
+    const y = reportedYear(c);
+    if (y != null) {
       if (y === currentYear) thisYearCount += 1;
       else if (y === lastYear) lastYearCount += 1;
+      const t = new Date((c.reported_at ?? c.created_at)!).getTime();
+      if (t >= recentCutoff) liveRecentCases += 1;
     }
     const createdRaw = c.created_at ?? c.reported_at;
     if (createdRaw) {
@@ -185,6 +255,11 @@ function buildStats(
         : 0,
     lastUpload: latestUpload > 0 ? new Date(latestUpload) : null,
     rowCount: rows.length,
+    liveRecentCases,
+    outcomes,
+    earliestYear,
+    latestYear,
+    yoyBaseYear: lastYear,
     insights,
     topBarangays,
   };
@@ -214,102 +289,30 @@ export function Dashboard() {
   const role = profile?.role;
 
   const [attribution, setAttribution] = useCaseAttribution();
-  // The rows and the facility list, kept as fetched. Switching the axis is a
-  // different way of counting the same cases, not a different query — so the
-  // toggle recomputes rather than refetches.
-  const [caseRows, setCaseRows] = useState<DashboardCaseRow[] | null>(null);
-  const [facilities, setFacilities] = useState<FacilityRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [year, setYear] = useCaseYear();
+  // The rows and the facility list come from the shared, cached register
+  // (useTbCases) — the GIS map reads the same copy, so moving between the two
+  // doesn't download 7,000+ rows again. Switching the axis or the year is a
+  // different way of counting the same cases, not a different query.
+  const staff = !!role && role !== "patient";
+  const casesQuery = useTbCases(staff);
+  const centersQuery = useDotsCenters(staff);
+  const caseRows = casesQuery.data ?? null;
+  const facilities = useMemo(() => centersQuery.data ?? [], [centersQuery.data]);
+  const loading = staff && (casesQuery.isPending || centersQuery.isPending);
   const [showHotspotsModal, setShowHotspotsModal] = useState(false);
-  const cancelRef = useRef(false);
 
   const stats = useMemo(
-    () => (caseRows ? buildStats(caseRows, attribution, facilities) : null),
-    [caseRows, attribution, facilities]
+    () =>
+      caseRows ? buildStats(caseRows, attribution, facilities, year) : null,
+    [caseRows, attribution, facilities, year]
   );
+  // "Last 30 days" per barangay is only worth a column when something
+  // actually happened in the last 30 days and the view includes today.
+  const showRecent =
+    (year === "all" || year === new Date().getFullYear()) &&
+    (stats?.liveRecentCases ?? 0) > 0;
 
-  const fetchData = useCallback(async () => {
-    // Supabase imposes a default 1000-row response cap; page through it so we
-    // never undercount when the dataset grows past that limit.
-    const pageSize = 1000;
-    const all: DashboardCaseRow[] = [];
-    for (let from = 0; ; from += pageSize) {
-      // Scoping is left entirely to RLS, which since 20261007000000 returns
-      // the union of "lives in my barangay" and "registered at a facility in
-      // my barangay". A local `eq("barangay_psgc", …)` would drop the cases
-      // the local facility registered and put this total out of step with the
-      // map and the case register.
-      const query = supabase
-        .from("cases")
-        .select(
-          "id, barangay_psgc, facility_id, reported_at, created_at, tb_classification, jitter_lat, jitter_lon"
-        )
-        .eq("disease", "tb");
-      const { data, error } = await query
-        .order("created_at", { ascending: false })
-        .range(from, from + pageSize - 1);
-      if (cancelRef.current) return;
-      if (error || !data) {
-        if (all.length === 0) {
-          setCaseRows(null);
-          setLoading(false);
-          return;
-        }
-        break;
-      }
-      all.push(...(data as unknown as DashboardCaseRow[]));
-      if (data.length < pageSize) break;
-    }
-    // Needed to resolve a case's registering facility to a barangay. Without
-    // it the facility axis has nothing to map onto and every case falls back to
-    // residence — the map and the Dashboard would disagree again, silently.
-    const { data: centers } = await supabase
-      .from("dots_centers")
-      .select("id, name, lat, lon, barangay_psgc");
-    if (cancelRef.current) return;
-    setFacilities((centers ?? []) as FacilityRow[]);
-    setCaseRows(all);
-    setLoading(false);
-    // scope is deliberately a dependency even though the query never reads it:
-    // the filtering happens server-side in RLS, so a change of assigned area
-    // means the same query returns a different set of rows and has to be re-run.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope.scoped, scope.psgc]);
-
-  // Initial load + realtime refresh on changes to the `cases` table so the
-  // dashboard mirrors uploads and edits without a manual refresh.
-  useEffect(() => {
-    if (!role || role === "patient") {
-      setLoading(false);
-      return;
-    }
-    cancelRef.current = false;
-    setLoading(true);
-    fetchData();
-
-    const channel = supabase
-      .channel("dashboard-cases")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "cases" },
-        () => {
-          fetchData();
-        }
-      )
-      .subscribe();
-
-    // Polling fallback so the dashboard still refreshes even if Supabase
-    // realtime is not enabled for the `cases` table on this project.
-    const poll = window.setInterval(() => {
-      fetchData();
-    }, 60_000);
-
-    return () => {
-      cancelRef.current = true;
-      window.clearInterval(poll);
-      supabase.removeChannel(channel);
-    };
-  }, [role, fetchData]);
 
   // Lock body scroll while the hotspots modal is open.
   useEffect(() => {
@@ -330,14 +333,17 @@ export function Dashboard() {
 
   return (
     <>
-      {role !== "patient" && (
+      {/* Health workers get their own greeting inside HealthWorkerHome. */}
+      {role !== "patient" &&
+        role !== "health_worker" &&
+        role !== "tb_coordinator" && (
         <PageHeader
           title={`Welcome${profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}!`}
           subtitle={subtitle}
         />
       )}
 
-      {scope.scoped && assignedAreaName && (
+      {scope.scoped && assignedAreaName && role !== "health_worker" && (
           <div className="mb-4">
             <Card className="flex items-center gap-3 border-brand-100 bg-brand-50/40 p-4">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-brand-100 text-brand-700">
@@ -368,6 +374,15 @@ export function Dashboard() {
           </div>
         )}
 
+      {role !== "patient" && stats && (
+        <YearFilter
+          className="mb-5"
+          value={year}
+          years={yearOptions(stats.earliestYear, stats.latestYear, year)}
+          onChange={setYear}
+        />
+      )}
+
       {role === "patient" ? (
         <PatientDashboard name={profile?.full_name ?? null} />
       ) : loading ? (
@@ -379,14 +394,63 @@ export function Dashboard() {
             ))}
           </div>
         </div>
-      ) : !stats ? (
+      ) : !stats || casesQuery.isError ? (
         <Card className="p-6 text-sm text-slate-600">
           We couldn&apos;t load case data right now. Please refresh in a
           moment.
         </Card>
+      ) : role === "health_worker" && profile ? (
+        <HealthWorkerHome
+          year={year}
+          userId={profile.id}
+          firstName={profile.full_name?.trim().split(/\s+/)[0] ?? null}
+          scope={scope}
+          totalCases={stats.totalCases}
+          recentCases={stats.liveRecentCases}
+          recentWindowDays={stats.insights.recentWindowDays}
+          activeHotspots={stats.activeHotspots}
+          lastUpload={stats.lastUpload}
+          onOpenHotspots={() => setShowHotspotsModal(true)}
+          areaTable={
+            <BarangayTable
+              rows={stats.topBarangays}
+              scope={scope}
+              attribution={attribution}
+              onAttributionChange={setAttribution}
+              showRecent={showRecent}
+            />
+          }
+        />
+      ) : role === "tb_coordinator" && profile ? (
+        <CoordinatorHome
+          year={year}
+          outcomes={stats.outcomes}
+          yoyBaseYear={stats.yoyBaseYear}
+          userId={profile.id}
+          firstName={profile.full_name?.trim().split(/\s+/)[0] ?? null}
+          totalCases={stats.totalCases}
+          yoyChangePct={stats.yoyChangePct}
+          barangaysWithCases={stats.barangaysWithCases}
+          totalBarangays={TOTAL_BARANGAYS}
+          recentCases={stats.liveRecentCases}
+          recentWindowDays={stats.insights.recentWindowDays}
+          activeHotspots={stats.activeHotspots}
+          lastUpload={stats.lastUpload}
+          onOpenHotspots={() => setShowHotspotsModal(true)}
+          areaTable={
+            <BarangayTable
+              rows={stats.topBarangays}
+              scope={scope}
+              attribution={attribution}
+              onAttributionChange={setAttribution}
+              showRecent={showRecent}
+            />
+          }
+        />
       ) : (
         <SurveillanceDashboard
           stats={stats}
+          year={year}
           onOpenHotspots={() => setShowHotspotsModal(true)}
           scope={scope}
           attribution={attribution}
@@ -425,12 +489,14 @@ const QUICK_ACTIONS = [
 
 function SurveillanceDashboard({
   stats,
+  year,
   onOpenHotspots,
   scope,
   attribution,
   onAttributionChange,
 }: {
   stats: DashboardStats;
+  year: CaseYear;
   onOpenHotspots: () => void;
   scope: AreaScope;
   attribution: CaseAttribution;
@@ -544,14 +610,14 @@ function SurveillanceDashboard({
                   ) : (
                     <TrendingDown className="h-3.5 w-3.5" />
                   )}
-                  {yoy.text} vs {new Date().getFullYear() - 1}
+                  {yoy.text} vs {stats.yoyBaseYear}
                 </span>
               )}
             </div>
             <p className="mt-2 text-sm text-slate-400">
               {scope.scoped ? (
                 <>
-                  Total confirmed TB cases in{" "}
+                  TB cases {year === "all" ? "" : `in ${year} `}in{" "}
                   <span className="font-semibold text-slate-200">
                     {scope.name ?? "your assigned area"}
                   </span>
@@ -559,7 +625,7 @@ function SurveillanceDashboard({
                 </>
               ) : (
                 <>
-                  Total confirmed TB cases across{" "}
+                  TB cases {year === "all" ? "" : `in ${year} `}across{" "}
                   <span className="font-semibold text-slate-200">
                     {stats.barangaysWithCases}
                   </span>{" "}
@@ -607,7 +673,7 @@ function SurveillanceDashboard({
             iconClass="bg-accent-50 text-accent-600"
             accentClass="bg-accent-500"
             label={`Cases · last ${stats.insights.recentWindowDays}d`}
-            value={stats.insights.recentCases.toLocaleString()}
+            value={stats.liveRecentCases.toLocaleString()}
             footer={
               <span className="text-slate-500">
                 Within {scope.name ?? "your assigned area"}
@@ -650,6 +716,10 @@ function SurveillanceDashboard({
         scope={scope}
         attribution={attribution}
         onAttributionChange={onAttributionChange}
+        showRecent={
+          (year === "all" || year === new Date().getFullYear()) &&
+          stats.liveRecentCases > 0
+        }
       />
     </div>
   );
@@ -725,11 +795,14 @@ function BarangayTable({
   scope,
   attribution,
   onAttributionChange,
+  showRecent = true,
 }: {
   rows: DashboardStats["topBarangays"];
   scope: AreaScope;
   attribution: CaseAttribution;
   onAttributionChange: (next: CaseAttribution) => void;
+  /** Off for a past year, where "last 30 days" would be a column of zeros. */
+  showRecent?: boolean;
 }) {
   const maxCount = rows[0]?.caseCount ?? 0;
   // Share and Status are both measured against the worst-hit barangay in the
@@ -816,14 +889,16 @@ function BarangayTable({
                   </th>
                 )}
                 <th className="px-3 text-right font-semibold">Total</th>
-                <th
-                  className={
-                    "px-3 text-right font-semibold " +
-                    (comparative ? "" : "pr-5")
-                  }
-                >
-                  Last 30d
-                </th>
+                {showRecent && (
+                  <th
+                    className={
+                      "px-3 text-right font-semibold " +
+                      (comparative ? "" : "pr-5")
+                    }
+                  >
+                    Last 30 days
+                  </th>
+                )}
                 {comparative && (
                   <th className="py-2.5 pl-2 pr-5 text-right font-semibold">
                     Status
@@ -874,14 +949,16 @@ function BarangayTable({
                     <td className="px-3 text-right font-display font-bold tabular-nums text-slate-900">
                       {b.caseCount}
                     </td>
-                    <td
-                      className={
-                        "px-3 text-right tabular-nums text-slate-600 " +
-                        (comparative ? "" : "pr-5")
-                      }
-                    >
-                      {b.recentCases}
-                    </td>
+                    {showRecent && (
+                      <td
+                        className={
+                          "px-3 text-right tabular-nums text-slate-600 " +
+                          (comparative ? "" : "pr-5")
+                        }
+                      >
+                        {b.recentCases}
+                      </td>
+                    )}
                     {comparative && (
                       <td className="py-3 pl-2 pr-5 text-right">
                         <span

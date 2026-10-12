@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { Suspense } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -13,11 +13,30 @@ import {
   MessageSquare,
   CheckCircle2,
 } from "lucide-react";
-import gsap from "gsap";
 import { Button } from "../../components/ui";
-import { PublicCaseMap } from "../../components/PublicCaseMap";
+import { CaseMapHint } from "../../components/CaseMapHint";
+import { lazyWithPreload } from "../../lib/lazyWithPreload";
+import { LoadingSpinner } from "../../components/LazyFallback";
+import { usePublicDotsCenterCount } from "../../hooks/usePublicDotsCenterCount";
 import heroImage from "../../assets/davao-city-hero.webp";
-import ctaImage from "../../assets/dots1.jpg";
+import ctaImage from "../../assets/dots1.webp";
+
+// The map pulls in Leaflet and MapLibre (over 1 MB). Loading it as its own
+// chunk lets the rest of the page paint first instead of waiting on it.
+const PublicCaseMap = lazyWithPreload(() => import("../../components/PublicCaseMap"));
+
+const MAP_HEIGHT =
+  "h-[22rem] sm:h-[28rem] md:h-[60vh] lg:h-[78vh] lg:min-h-[30rem]";
+
+/** Holds the map's height while its chunk loads, so nothing below jumps.
+ *  No frame of its own — just the spinner over the hero background. */
+function MapPlaceholder() {
+  return (
+    <div className={"grid place-items-center " + MAP_HEIGHT}>
+      <LoadingSpinner tone="dark" label="Loading map…" />
+    </div>
+  );
+}
 
 /* ── Capabilities — labelled by module, not a numbered sequence ──────── */
 const CAPABILITIES = [
@@ -79,71 +98,46 @@ const WHY_IT_MATTERS = [
 ];
 
 export function Landing() {
-  const rootRef = useRef<HTMLDivElement>(null);
+  // No entrance choreography of its own. PublicLayout's page transition
+  // already fades every route in; this page used to run a second, longer
+  // timeline on top of it — background scaling down from 1.08 over 1.2s, the
+  // glow blooming, the map rising 32px, the caption trailing — so the hero
+  // arrived in staggered waves for over a second and a half, with the map
+  // (the thing a visitor came to look at) moving under a transform while
+  // Leaflet was still laying itself out. One fade is the whole entrance now.
 
-  useLayoutEffect(() => {
-    const ctx = gsap.context(() => {
-      const mm = gsap.matchMedia();
-
-      mm.add(
-        {
-          reduced: "(prefers-reduced-motion: reduce)",
-          full: "(prefers-reduced-motion: no-preference)",
-        },
-        (context) => {
-          const { reduced } = context.conditions as { reduced: boolean };
-
-          // Hero entrance — background settles, glow blooms, map rises in,
-          // caption trails behind it. clearProps hands inline styles back
-          // to Tailwind once each tween finishes, so nothing lingers to
-          // fight hover states later.
-          gsap
-            .timeline({ defaults: { ease: "power3.out", clearProps: "opacity,transform" } })
-            .from(".reveal-hero-bg", { opacity: 0, scale: 1.08, duration: reduced ? 0.01 : 1.2 })
-            .from(
-              ".reveal-hero-glow",
-              { opacity: 0, scale: 0.7, duration: reduced ? 0.01 : 1 },
-              "<0.15"
-            )
-            .from(
-              ".reveal-hero-map",
-              { opacity: 0, y: 32, duration: reduced ? 0.01 : 0.85 },
-              "-=0.65"
-            )
-            .from(
-              ".reveal-hero-caption",
-              { opacity: 0, y: 10, duration: reduced ? 0.01 : 0.5 },
-              "-=0.25"
-            );
-        }
-      );
-    }, rootRef);
-
-    return () => ctx.revert();
-  }, []);
+  // Live count of the public DOTS directory — the same list the locator shows.
+  const { count: centerCount, status: centerStatus } = usePublicDotsCenterCount();
 
   return (
-    <div ref={rootRef}>
+    <div>
       {/* ─── Hero — full-width live case map with barangay filter ──── */}
       <section className="relative overflow-hidden bg-brand-950 text-white">
         {/* midnight-blue city photo + monitoring grid + emerald glow */}
-        <div aria-hidden className="reveal-hero-bg pointer-events-none absolute inset-0">
+        <div aria-hidden className="pointer-events-none absolute inset-0">
           <img src={heroImage} alt="" className="h-full w-full object-cover opacity-30" />
           <div className="absolute inset-0 bg-gradient-to-b from-brand-950/70 via-brand-950/40 to-brand-950" />
         </div>
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-vigil-grid" />
         <div
           aria-hidden
-          className="reveal-hero-glow pointer-events-none absolute -left-40 top-[-10%] h-[36rem] w-[36rem] rounded-full bg-accent-500/15 blur-[120px]"
+          className="pointer-events-none absolute -left-40 top-[-10%] h-[36rem] w-[36rem] rounded-full bg-accent-500/15 blur-[120px]"
         />
 
         <div className="relative mx-auto max-w-screen-2xl px-3 py-6 sm:px-5 sm:py-8">
-          <PublicCaseMap className="reveal-hero-map h-[26rem] min-h-[24rem] sm:h-[32rem] md:h-[70vh] lg:h-[78vh] lg:min-h-[30rem]" />
-          <div className="reveal-hero-caption mt-3 flex flex-wrap items-center justify-between gap-3 px-1">
+          {/* The height goes on the map region, not the card: below lg the
+              side panel stacks underneath the map and brings its own height. */}
+          <Suspense fallback={<MapPlaceholder />}>
+            <PublicCaseMap mapClassName={MAP_HEIGHT} />
+          </Suspense>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 px-1">
             <p className="flex items-center gap-2 text-xs text-slate-400">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-400" />
-              Live TB case map of Davao City — counts are grouped per barangay, so no
-              patient is ever identifiable.
+              <span>
+                Live TB case map of Davao City — counts are grouped per barangay, so no
+                patient is ever identifiable.{" "}
+                <CaseMapHint className="text-slate-500" />.
+              </span>
             </p>
             <Link
               to="/dots-locator"
@@ -174,10 +168,10 @@ export function Landing() {
 
           <div className="mt-12 grid gap-5 lg:grid-cols-2">
             {/* residents */}
-            <div className="group relative flex flex-col overflow-hidden rounded-3xl border border-accent-200/70 bg-gradient-to-br from-white via-accent-50/50 to-accent-50 p-7 shadow-soft transition-shadow duration-300 hover:shadow-lift sm:p-9">
+            <div className="group relative flex flex-col overflow-hidden rounded-3xl border border-accent-200/70 bg-gradient-to-br from-white via-accent-50/50 to-accent-50 p-7 shadow-soft sm:p-9">
               <div
                 aria-hidden
-                className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent-100/80 blur-3xl transition-transform duration-500 group-hover:scale-125"
+                className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent-100/80 blur-3xl"
               />
               <div className="relative flex-1">
                 <div className="flex items-start justify-between gap-3">
@@ -198,7 +192,7 @@ export function Landing() {
                   {RESIDENT_POINTS.map((p) => (
                     <li
                       key={p.text}
-                      className="flex items-center gap-3 rounded-xl border border-accent-100 bg-white/80 px-3.5 py-2.5 backdrop-blur-sm"
+                      className="flex items-center gap-3 rounded-xl border border-accent-100 bg-white px-3.5 py-2.5"
                     >
                       <p.icon className="h-4 w-4 shrink-0 text-accent-600" />
                       <span className="text-sm leading-relaxed text-slate-700">{p.text}</span>
@@ -207,21 +201,21 @@ export function Landing() {
                 </ul>
               </div>
               <div className="relative mt-8">
-                <Link to="/dots-locator">
+                <Link to="/dots-locator" className="group/cta">
                   <Button variant="accent" className="w-full justify-center gap-2 sm:w-auto">
                     Find a DOTS center
-                    <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+                    <ArrowRight className="h-4 w-4 transition-transform duration-150 group-hover/cta:translate-x-0.5" />
                   </Button>
                 </Link>
               </div>
             </div>
 
             {/* workers */}
-            <div className="group relative flex flex-col overflow-hidden rounded-3xl border border-brand-900 bg-brand-950 p-7 text-white shadow-soft transition-shadow duration-300 hover:shadow-lift sm:p-9">
+            <div className="group relative flex flex-col overflow-hidden rounded-3xl border border-brand-900 bg-brand-950 p-7 text-white shadow-soft sm:p-9">
               <div aria-hidden className="pointer-events-none absolute inset-0 bg-vigil-grid opacity-60" />
               <div
                 aria-hidden
-                className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent-500/10 blur-3xl transition-transform duration-500 group-hover:scale-125"
+                className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent-500/10 blur-3xl"
               />
               <div className="relative flex-1">
                 <div className="flex items-start justify-between gap-3">
@@ -251,10 +245,10 @@ export function Landing() {
                 </ul>
               </div>
               <div className="relative mt-8 flex flex-wrap gap-3">
-                <Link to="/login">
+                <Link to="/login" className="group/cta">
                   <Button className="gap-2">
                     Sign in
-                    <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+                    <ArrowRight className="h-4 w-4 transition-transform duration-150 group-hover/cta:translate-x-0.5" />
                   </Button>
                 </Link>
                 <Link to="/claim">
@@ -311,7 +305,7 @@ export function Landing() {
             ].map((s, i, steps) => (
               <div
                 key={s.step}
-                className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-lift"
+                className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-soft"
               >
                 <div className="flex items-center justify-between">
                   <span
@@ -327,7 +321,7 @@ export function Landing() {
                   {i === steps.length - 1 ? (
                     <CheckCircle2 className="h-4 w-4 text-accent-500" />
                   ) : (
-                    <ArrowRight className="h-4 w-4 text-slate-300 transition-all duration-300 group-hover:translate-x-1 group-hover:text-brand-600" />
+                    <ArrowRight className="h-4 w-4 text-slate-300" />
                   )}
                 </div>
                 <h3 className="font-display mt-4 text-lg font-bold tracking-tight text-slate-900">
@@ -362,7 +356,7 @@ export function Landing() {
                 <div
                   key={c.title}
                   className={
-                    "group relative overflow-hidden border shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-lift " +
+                    "relative overflow-hidden border shadow-soft " +
                     (featured
                       ? "rounded-3xl border-brand-900 bg-brand-950 p-7 text-white lg:col-span-2 lg:row-span-2 lg:p-9"
                       : "rounded-2xl border-slate-200 bg-white p-6")
@@ -373,14 +367,14 @@ export function Landing() {
                       <div aria-hidden className="pointer-events-none absolute inset-0 bg-vigil-grid opacity-60" />
                       <div
                         aria-hidden
-                        className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent-500/10 blur-3xl transition-transform duration-500 group-hover:scale-125"
+                        className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent-500/10 blur-3xl"
                       />
                     </>
                   )}
                   <div className="relative flex items-start justify-between gap-3">
                     <span
                       className={
-                        "grid place-items-center transition-transform duration-300 group-hover:-translate-y-0.5 " +
+                        "grid place-items-center " +
                         (featured
                           ? "h-14 w-14 rounded-2xl bg-white/10 text-accent-400 ring-1 ring-white/15"
                           : "h-11 w-11 rounded-xl bg-brand-950 text-white")
@@ -422,7 +416,7 @@ export function Landing() {
         </div>
       </section>
 
-      {/* ─── Why it matters — 8,601 as the moment ──────────────────── */}
+      {/* ─── Why it matters — how many free DOTS centers are open ──── */}
       <section className="border-b border-slate-200 bg-white py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-12 lg:grid-cols-2 lg:gap-16 lg:items-center">
@@ -432,12 +426,16 @@ export function Landing() {
               </p>
               <div className="mt-4 flex items-end gap-4">
                 <span className="font-display text-6xl font-black leading-none tracking-tight text-brand-950 sm:text-7xl">
-                  8,601
+                  {centerCount !== null
+                    ? centerCount.toLocaleString("en-PH")
+                    : centerStatus === "loading"
+                      ? "…"
+                      : "—"}
                 </span>
                 <span className="mb-1.5 font-mono text-xs uppercase leading-tight tracking-wider text-slate-500">
-                  TB cases in
+                  Free DOTS centers
                   <br />
-                  Davao, 2024
+                  across Davao City
                 </span>
               </div>
               <div className="mt-3 h-1 w-24 rounded-full bg-vigil-400" />
@@ -450,11 +448,18 @@ export function Landing() {
                 awareness, proximity to care, and following through on the 6-month DOTS
                 protocol. BANTAY-TB is built to close all three.
               </p>
+              <Link
+                to="/dots-locator"
+                className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 transition hover:text-brand-900"
+              >
+                Find the nearest one
+                <ArrowRight className="h-4 w-4" />
+              </Link>
               <div className="mt-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                 {WHY_IT_MATTERS.map((text) => (
                   <div
                     key={text}
-                    className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 shadow-soft transition-shadow duration-300 hover:shadow-lift"
+                    className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 shadow-soft"
                   >
                     <CheckCircle2 className="h-4 w-4 shrink-0 text-accent-500" />
                     {text}
@@ -467,7 +472,9 @@ export function Landing() {
               <img
                 src={ctaImage}
                 alt="A DOTS treatment center in Davao City"
-                className="h-full w-full object-cover object-top transition-transform duration-700 group-hover:scale-[1.03]"
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover object-top"
                 style={{ maxHeight: 440 }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-brand-950/70 via-brand-950/10 to-transparent" />

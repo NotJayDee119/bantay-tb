@@ -28,6 +28,17 @@ function ScrollToTop() {
   return null;
 }
 
+// Production only: in dev a worker would serve stale modules over Vite's HMR.
+// Registered after load so it never competes with the first paint. See
+// public/sw.js for what it stores — app files and map tiles, never patient data.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => {
+      console.warn("Service worker registration failed:", err);
+    });
+  });
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
