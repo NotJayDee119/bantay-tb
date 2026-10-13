@@ -115,8 +115,8 @@ function barangayByPsgc(psgc: number): BarangayEntry | null {
  * The parser scatters rows ~75 m around their barangay's centroid so markers
  * don't stack on one point. A relocated row keeps its old centroid unless we
  * recompute, which would drop a Mintal-filed case onto Calinan's town centre —
- * a pin outside the barangay it is now counted under, and a phantom cluster for
- * DBSCAN to find. `index` reproduces the parser's own scatter.
+ * a pin outside the barangay it is now counted under. `index` reproduces the
+ * parser's own scatter.
  */
 function jitterFor(
   home: BarangayEntry,

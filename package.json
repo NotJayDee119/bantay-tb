@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "seed": "tsx scripts/seed-supabase.ts",
+    "kb:ingest": "tsx scripts/ingest-kb.ts",
     "fhir:sample": "tsx scripts/sample-fhir-payload.ts"
   },
   "dependencies": {

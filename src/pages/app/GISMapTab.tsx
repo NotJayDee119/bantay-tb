@@ -12,6 +12,7 @@ import { AdminHotspotMap } from "../../components/AdminHotspotMap";
 import { useAreaScope } from "../../hooks/useAreaScope";
 import { useCaseAttribution } from "../../hooks/useCaseAttribution";
 import { useDotsCenters, useTbCases } from "../../hooks/useTbCases";
+import { useCurrentHotspots } from "../../hooks/useCurrentHotspots";
 import barangays from "../../data/barangays.json";
 
 interface GISMapTabProps {
@@ -91,6 +92,10 @@ export function GISMapTab({ focusBarangay = null }: GISMapTabProps) {
   }, [caseRows]);
 
   const [attribution, setAttribution] = useCaseAttribution();
+  // Hotspots come from the citywide detection run, never from the cases this
+  // account can see — a barangay account would otherwise run Gi* on one
+  // barangay.
+  const { hotspots } = useCurrentHotspots();
 
   // Recomputed on toggle rather than refetched: the axis is a way of counting
   // the same rows, not a different query.
@@ -138,6 +143,8 @@ export function GISMapTab({ focusBarangay = null }: GISMapTabProps) {
     <div className={frame}>
       <AdminHotspotMap
         hotspotInsights={hotspotInsights}
+        hotspots={hotspots.clusters}
+        hotspotCaseCounts={hotspots.caseCounts}
         facilityFlows={facilityFlows}
         casePins={casePins}
         focusBarangay={resolvedFocus}

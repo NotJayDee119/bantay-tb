@@ -1,5 +1,9 @@
 // Who gets told about a hotspot.
 //
+// A hotspot is a barangay newly classified as a Getis-Ord Gi* hotspot at 95%
+// or more (severity high = 95%, urgent = 99%); the detect-hotspots function
+// passes only barangays that were not already hotspots in the previous run.
+//
 // Residence decides. A community account is alerted when one of *its own
 // residents* is in the cluster — never because a clinic in its barangay
 // happened to register somebody else's resident, and never merely because the

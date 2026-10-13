@@ -623,7 +623,7 @@ function buildInsights(d: AnalyticsData): string[] {
     if (prior > 0 && recent / prior >= 1.2) {
       const pct = Math.round(((recent - prior) / prior) * 100);
       out.push(
-        `Case load is up ${pct}% in the recent half vs the prior half — re-run DBSCAN with a tighter eps and notify barangay leaders.`
+        `Case load is up ${pct}% in the recent half vs the prior half — check the Hotspots page and notify barangay leaders.`
       );
     } else if (prior > 0 && recent / prior <= 0.8) {
       const pct = Math.round(((prior - recent) / prior) * 100);

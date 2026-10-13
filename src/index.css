@@ -319,6 +319,90 @@ body {
   animation: page-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Public chatbot panel — fades and rises in from the button on open, and
+   fades out a little faster on close. Visibility flips only after the
+   close fade ends, so the panel stays visible while it fades out and is
+   then removed from the tab order. */
+.chat-panel {
+  transform-origin: bottom right;
+  opacity: 0;
+  transform: translateY(12px) scale(0.97);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 200ms ease-in,
+    transform 200ms ease-in,
+    visibility 0s linear 200ms;
+}
+.chat-panel[data-open="true"] {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 380ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-panel,
+  .chat-panel[data-open="true"] {
+    transform: none;
+  }
+}
+
+/* Public chatbot — "assistant is typing" wave dots, and the caret that
+   trails a reply while it is being typed out. */
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #94a3b8;
+  animation: typing-wave 1.2s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes typing-wave {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+.typing-caret::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: currentColor;
+  animation: caret-blink 1s steps(1) infinite;
+}
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .typing-dot {
+    animation: none;
+    opacity: 0.6;
+  }
+  .typing-caret::after {
+    animation: none;
+  }
+}
+
 /* Health Education — modal backdrop fade + sheet slide-up (mobile) / pop (desktop). */
 @keyframes he-backdrop-in {
   from {

@@ -3,25 +3,28 @@ import { Save, RotateCcw, Settings2 } from "lucide-react";
 import { Button, Card, Input, PageHeader, Spinner } from "../../components/ui";
 import { useAuth } from "../../hooks/useAuth";
 import {
-  DBSCAN_DEFAULTS,
-  clampDbscan,
-  loadDbscanSettings,
-  saveDbscanSettings,
-  type DbscanSettings,
-} from "../../lib/dbscanSettings";
+  HOTSPOT_DEFAULTS,
+  clampHotspotSettings,
+  loadHotspotSettings,
+  saveHotspotSettings,
+  type HotspotSettings,
+} from "../../lib/hotspotSettings";
 import { toast } from "sonner";
 
 const MICRO_LABEL =
   "font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500";
 
+const SUBTITLE =
+  "Configure the Moran's I and Getis-Ord Gi* hotspot detection job.";
+
 export function SettingsPage() {
   const { profile } = useAuth();
-  const [settings, setSettings] = useState<DbscanSettings | null>(null);
-  const [draft, setDraft] = useState<DbscanSettings>(DBSCAN_DEFAULTS);
+  const [settings, setSettings] = useState<HotspotSettings | null>(null);
+  const [draft, setDraft] = useState<HotspotSettings>(HOTSPOT_DEFAULTS);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    loadDbscanSettings().then((s) => {
+    loadHotspotSettings().then((s) => {
       setSettings(s);
       setDraft(s);
     });
@@ -29,8 +32,8 @@ export function SettingsPage() {
 
   async function save() {
     setSaving(true);
-    const cleaned = clampDbscan(draft);
-    const { error } = await saveDbscanSettings(cleaned, profile?.id);
+    const cleaned = clampHotspotSettings(draft);
+    const { error } = await saveHotspotSettings(cleaned, profile?.id);
     setSaving(false);
     if (error) {
       toast.error(error);
@@ -38,20 +41,17 @@ export function SettingsPage() {
     }
     setSettings(cleaned);
     setDraft(cleaned);
-    toast.success("DBSCAN thresholds updated");
+    toast.success("Hotspot settings updated");
   }
 
   function resetDefaults() {
-    setDraft(DBSCAN_DEFAULTS);
+    setDraft(HOTSPOT_DEFAULTS);
   }
 
   if (!settings) {
     return (
       <>
-        <PageHeader
-          title="Settings"
-          subtitle="Configure DBSCAN thresholds used by the hotspot detection job."
-        />
+        <PageHeader title="Settings" subtitle={SUBTITLE} />
         <div className="flex h-32 items-center justify-center">
           <Spinner />
         </div>
@@ -60,22 +60,18 @@ export function SettingsPage() {
   }
 
   const dirty =
-    draft.eps_km !== settings.eps_km ||
-    draft.min_pts !== settings.min_pts ||
-    draft.window_days !== settings.window_days;
+    draft.window_days !== settings.window_days ||
+    draft.permutations !== settings.permutations;
 
   return (
     <>
-      <PageHeader
-        title="Settings"
-        subtitle="Configure DBSCAN thresholds used by the hotspot detection job."
-      />
+      <PageHeader title="Settings" subtitle={SUBTITLE} />
 
       <Card className="max-w-2xl overflow-hidden p-0">
         <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
           <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
             <Settings2 className="h-3.5 w-3.5 text-brand-600" />
-            Spatial clustering · DBSCAN
+            Spatial statistics · Moran&rsquo;s I + Gi*
           </div>
           {dirty && (
             <span className="inline-flex items-center rounded-full border border-vigil-400/50 bg-vigil-300/20 px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-vigil-600">
@@ -86,69 +82,50 @@ export function SettingsPage() {
 
         <div className="p-5">
           <p className="mb-5 text-xs leading-relaxed text-slate-500">
-            The hotspot job uses DBSCAN to find areas with a high concentration
-            of TB cases. Tighter <ParamName>eps_km</ParamName> or higher{" "}
-            <ParamName>min_pts</ParamName> require a tighter concentration, so
-            fewer areas qualify; a longer <ParamName>window_days</ParamName>{" "}
-            measures concentration over more historical cases.
+            Each run counts TB cases per barangay of residence over the last{" "}
+            <ParamName>window_days</ParamName>, tests citywide clustering with
+            Global Moran&rsquo;s I, then gives every barangay a Getis-Ord Gi*
+            z-score using queen-contiguity neighbours. A barangay is a hotspot
+            at z &ge; 1.96 (95%) or z &ge; 2.58 (99%). The confidence thresholds
+            are fixed by the method and are not configurable.
           </p>
 
           <div className="space-y-5">
             <Field
-              param="eps_km"
-              label="Neighbour radius (km)"
-              help="Two cases within this distance are considered neighbours. Typical: 0.8 – 2.0."
-            >
-              <Input
-                type="number"
-                step="0.1"
-                min={0.1}
-                max={10}
-                value={draft.eps_km}
-                onChange={(e) =>
-                  setDraft((d) => ({
-                    ...d,
-                    eps_km: Number(e.target.value),
-                  }))
-                }
-              />
-            </Field>
-
-            <Field
-              param="min_pts"
-              label="Minimum cluster size"
-              help="Smallest number of cases that forms a cluster. Typical: 5 – 12."
-            >
-              <Input
-                type="number"
-                step="1"
-                min={2}
-                max={50}
-                value={draft.min_pts}
-                onChange={(e) =>
-                  setDraft((d) => ({
-                    ...d,
-                    min_pts: Number(e.target.value),
-                  }))
-                }
-              />
-            </Field>
-
-            <Field
               param="window_days"
               label="Lookback (days)"
-              help="How far back to pull TB cases. Typical: 30 – 180."
+              help="Cases reported in this many days are counted. 365 gives an annual rate, the usual basis for TB notification rates."
             >
               <Input
                 type="number"
                 step="1"
-                min={7}
-                max={365}
+                min={30}
+                max={1825}
                 value={draft.window_days}
                 onChange={(e) =>
                   setDraft((d) => ({
                     ...d,
                     window_days: Number(e.target.value),
+                  }))
+                }
+              />
+            </Field>
+
+            <Field
+              param="permutations"
+              label="Moran's I permutations"
+              help="Random reshuffles used for the pseudo p-value. 999 is the standard; more gives a finer p-value but a slower run."
+            >
+              <Input
+                type="number"
+                step="1"
+                min={99}
+                max={9999}
+                value={draft.permutations}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    permutations: Number(e.target.value),
                   }))
                 }
               />
@@ -171,9 +148,8 @@ export function SettingsPage() {
         </div>
 
         <p className="border-t border-slate-100 bg-slate-50/40 px-5 py-3 font-mono text-[10px] uppercase tracking-wider text-slate-400">
-          Defaults: eps_km={DBSCAN_DEFAULTS.eps_km} · min_pts=
-          {DBSCAN_DEFAULTS.min_pts} · window_days=
-          {DBSCAN_DEFAULTS.window_days} — applied on the next DBSCAN run
+          Defaults: window_days={HOTSPOT_DEFAULTS.window_days} · permutations=
+          {HOTSPOT_DEFAULTS.permutations} — applied on the next detection run
         </p>
       </Card>
     </>

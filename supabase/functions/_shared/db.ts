@@ -45,6 +45,31 @@ export async function dbSelect<T = Record<string, unknown>>(
   return (await res.json()) as T[];
 }
 
+/**
+ * Every row matching `query`, fetched in pages. PostgREST caps a single
+ * response at its max_rows (1000 by default) no matter what `limit=` asks for,
+ * so a plain dbSelect over a large table silently returns the first page only.
+ * `query` must not carry its own limit/offset; include an `order=` so pages
+ * don't overlap.
+ */
+export async function dbSelectAll<T = Record<string, unknown>>(
+  cfg: DbConfig,
+  table: string,
+  query: string,
+  pageSize = 1000
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await dbSelect<T>(
+      cfg,
+      table,
+      `${query}&limit=${pageSize}&offset=${offset}`
+    );
+    out.push(...page);
+    if (page.length < pageSize) return out;
+  }
+}
+
 export async function dbInsert<T = Record<string, unknown>>(
   cfg: DbConfig,
   table: string,
@@ -61,6 +86,21 @@ export async function dbInsert<T = Record<string, unknown>>(
   if (!res.ok) throw new Error(`db insert ${table}: ${res.status} ${await res.text()}`);
   if (options.returning === false) return [];
   return (await res.json()) as T[];
+}
+
+/** Call a Postgres function through PostgREST (`/rest/v1/rpc/<fn>`). */
+export async function dbRpc<T = unknown>(
+  cfg: DbConfig,
+  fn: string,
+  args: Record<string, unknown>
+): Promise<T> {
+  const res = await fetch(`${cfg.url}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: headers(cfg),
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) throw new Error(`db rpc ${fn}: ${res.status} ${await res.text()}`);
+  return (await res.json()) as T;
 }
 
 export async function dbDelete(

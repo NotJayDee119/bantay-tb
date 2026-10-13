@@ -4,6 +4,14 @@ import { Button, Card, ListSkeleton, PageHeader } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useAreaScope } from "../../hooks/useAreaScope";
+import { useCurrentHotspots } from "../../hooks/useCurrentHotspots";
+import { HotspotReason } from "../../components/HotspotReason";
+import { ConfidenceExplainer } from "../../components/ConfidenceExplainer";
+import {
+  giDetail,
+  hotspotCertainty,
+  neighboursWithCases,
+} from "../../lib/hotspotUtils";
 import type { AreaScope } from "../../lib/areaScope";
 import { formatDateTime } from "../../lib/utils";
 import barangays from "../../data/barangays.json";
@@ -22,7 +30,7 @@ interface AlertRow {
     case_ids: string[] | null;
     case_count: number;
     severity: Severity;
-    radius_km: number;
+    gi_z: number | null;
     detected_at: string;
   } | null;
 }
@@ -70,6 +78,8 @@ function SeverityChip({ severity }: { severity: Severity }) {
 export function Alerts() {
   const { profile } = useAuth();
   const scope = useAreaScope();
+  // Neighbour case counts, to explain why each barangay is a hotspot.
+  const { hotspots } = useCurrentHotspots();
   const recipientId = profile?.id;
   const [list, setList] = useState<AlertRow[]>([]);
   const [caseById, setCaseById] = useState<Map<string, CaseRef>>(new Map());
@@ -87,7 +97,7 @@ export function Alerts() {
     const { data, error } = await supabase
       .from("hotspot_alerts")
       .select(
-        "id, read_at, created_at, hotspot_id, hotspots(barangay_psgc, barangay_psgcs, case_ids, case_count, severity, radius_km, detected_at)"
+        "id, read_at, created_at, hotspot_id, hotspots(barangay_psgc, barangay_psgcs, case_ids, case_count, severity, gi_z, detected_at)"
       )
       .eq("recipient_id", recipientId)
       .order("created_at", { ascending: false })
@@ -109,14 +119,24 @@ export function Alerts() {
       setLoading(false);
       return;
     }
-    const { data: caseRows, error: caseErr } = await supabase
-      .from("cases")
-      .select("id, barangay_psgc, address, facility_id, reported_at")
-      .in("id", ids);
-    if (caseErr) toast.error(`Could not load case addresses: ${caseErr.message}`);
-    setCaseById(
-      new Map(((caseRows ?? []) as CaseRef[]).map((c) => [c.id, c]))
+    // In batches: a Gi* hotspot is a whole barangay, so one alert can carry
+    // hundreds of case ids, and `.in()` puts every id in the request URL —
+    // a few thousand of them overflow it and the server answers 400.
+    const BATCH = 150;
+    const batches: string[][] = [];
+    for (let i = 0; i < ids.length; i += BATCH) batches.push(ids.slice(i, i + BATCH));
+    const results = await Promise.all(
+      batches.map((batch) =>
+        supabase
+          .from("cases")
+          .select("id, barangay_psgc, address, facility_id, reported_at")
+          .in("id", batch)
+      )
     );
+    const caseErr = results.find((r) => r.error)?.error;
+    if (caseErr) toast.error(`Could not load case addresses: ${caseErr.message}`);
+    const caseRows = results.flatMap((r) => (r.data ?? []) as CaseRef[]);
+    setCaseById(new Map(caseRows.map((c) => [c.id, c])));
 
     // dots_centers is small and world-readable — one fetch names every
     // registering facility referenced above.
@@ -187,7 +207,9 @@ export function Alerts() {
     const { error } = await supabase
       .from("hotspot_alerts")
       .update({ read_at: now })
-      .in("id", ids)
+      // "All my unread alerts" rather than a list of ids: no URL-length limit,
+      // and it also clears unread alerts beyond the 200 shown.
+      .is("read_at", null)
       .eq("recipient_id", recipientId);
     if (error) {
       setList(previous);
@@ -238,6 +260,8 @@ export function Alerts() {
             </p>
           </div>
         ) : (
+          <>
+          <ConfidenceExplainer className="border-b border-slate-100 px-4 py-2.5" />
           <ul className="divide-y divide-slate-100">
             {list.map((a) => {
               const unread = !a.read_at;
@@ -285,9 +309,22 @@ export function Alerts() {
                     </div>
                     {h && (
                       <div className="mt-0.5 text-xs text-slate-600">
-                        {h.case_count} cases · {h.radius_km.toFixed(1)} km
-                        radius · detected {formatDateTime(h.detected_at)}
+                        Became a hotspot {formatDateTime(h.detected_at)} ·{" "}
+                        <span title={giDetail(h.gi_z, null)}>
+                          {hotspotCertainty(h.severity).long}
+                        </span>
                       </div>
+                    )}
+                    {h && (
+                      <HotspotReason
+                        tone="light"
+                        name={barangayName(h.barangay_psgc)}
+                        ownCases={h.case_count}
+                        neighbours={neighboursWithCases(
+                          h.barangay_psgc,
+                          (p) => hotspots.caseCounts.get(p) ?? 0
+                        )}
+                      />
                     )}
                     {h && (
                       <Residences
@@ -315,6 +352,7 @@ export function Alerts() {
               );
             })}
           </ul>
+          </>
         )}
       </Card>
     </>
@@ -369,6 +407,7 @@ function Residences({
       : null;
 
   if (caseIds.length === 0) {
+    if (caseCount === 0) return null;
     return (
       <p className="mt-1.5 text-xs text-slate-500">
         No case addresses attached — this hotspot was recorded before alerts

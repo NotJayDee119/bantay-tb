@@ -37,7 +37,14 @@ import type {
   HotspotInsights,
   HotspotSeverity,
 } from "../lib/hotspotUtils";
-import { attributionPsgc } from "../lib/hotspotUtils";
+import { HotspotReason } from "./HotspotReason";
+import { ConfidenceExplainer } from "./ConfidenceExplainer";
+import {
+  attributionPsgc,
+  giDetail,
+  hotspotCertainty,
+  neighboursWithCases,
+} from "../lib/hotspotUtils";
 
 const BASE_STYLES: { name: OfmStyleName; label: string }[] = [
   { name: "positron", label: "Clean" },
@@ -47,6 +54,11 @@ const BASE_STYLES: { name: OfmStyleName; label: string }[] = [
 
 interface AdminHotspotMapProps {
   hotspotInsights: HotspotInsights | null;
+  /** Current Gi* hotspots from the detect-hotspots run (useCurrentHotspots). */
+  hotspots?: HotspotCluster[];
+  /** Cases per barangay in that run — explains which neighbours lifted a
+   *  barangay onto the hotspot list. */
+  hotspotCaseCounts?: Map<number, number>;
   /** Which barangay a case is counted under. */
   attribution?: CaseAttribution;
   onAttributionChange?: (next: CaseAttribution) => void;
@@ -95,15 +107,14 @@ const SEVERITY_COLOR: Record<HotspotSeverity, string> = {
 const SEVERITY_LABEL: Record<HotspotSeverity, string> = {
   watch: "Watch (routine)",
   moderate: "Moderate (monitor)",
-  high: "High (enhanced)",
-  urgent: "Urgent (intervene)",
+  high: "High — 95% confidence",
+  urgent: "Urgent — 99% confidence",
   low: "Watch (routine)",
   medium: "Moderate (monitor)",
 };
 
-// Canonical severities for the legend — the extra "low"/"medium" keys above
-// are DB aliases and would render as duplicate rows.
-const SEVERITY_ORDER: HotspotSeverity[] = ["watch", "moderate", "high", "urgent"];
+// Gi* only ever produces these two hotspot severities.
+const SEVERITY_ORDER: HotspotSeverity[] = ["high", "urgent"];
 
 const DENSITY_RAMP = ["#bae6fd", "#7dd3fc", "#0ea5e9", "#f97316", "#dc2626"];
 
@@ -222,6 +233,8 @@ function MarkerTooltip({
 
 export function AdminHotspotMap({
   hotspotInsights,
+  hotspots = [],
+  hotspotCaseCounts,
   attribution = "residence",
   onAttributionChange,
   facilityFlows = [],
@@ -264,10 +277,7 @@ export function AdminHotspotMap({
     () => hotspotInsights?.barangayStats ?? [],
     [hotspotInsights]
   );
-  const clusters: HotspotCluster[] = useMemo(
-    () => hotspotInsights?.clusters ?? [],
-    [hotspotInsights]
-  );
+  const clusters: HotspotCluster[] = hotspots;
   const maxCount = useMemo(
     () => barangayStats.reduce((m, s) => Math.max(m, s.caseCount), 0),
     [barangayStats]
@@ -585,7 +595,7 @@ export function AdminHotspotMap({
                     className="h-4 w-4"
                     style={{ color: SEVERITY_COLOR[cluster.severity] }}
                   />
-                  Hotspot #{cluster.id + 1}
+                  {cluster.name}
                   <span
                     className="ml-auto rounded-full border px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider"
                     style={{
@@ -594,38 +604,23 @@ export function AdminHotspotMap({
                       background: `${SEVERITY_COLOR[cluster.severity]}1a`,
                     }}
                   >
-                    {SEVERITY_LABEL[cluster.severity].split(" ")[0]}
+                    {cluster.severity === "urgent" ? "Urgent" : "High"}
                   </span>
                 </div>
-                <div className="mt-2">
-                  <span className="font-display text-xl font-extrabold tracking-tight text-white">
-                    {cluster.caseCount}
-                  </span>
-                  <span className="ml-1.5 font-mono text-[9px] uppercase tracking-wider text-slate-400">
-                    case{cluster.caseCount === 1 ? "" : "s"} · {SEVERITY_LABEL[cluster.severity]}
-                  </span>
-                </div>
-                <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-slate-500">
-                  Radius ~{cluster.radiusKm.toFixed(2)} km ·{" "}
-                  {cluster.centroid.lat.toFixed(4)}, {cluster.centroid.lon.toFixed(4)}
-                </div>
-                {cluster.barangays.length > 0 && (
-                  <div className="mt-2 border-t border-white/10 pt-2">
-                    <div className="font-mono text-[9px] font-semibold uppercase tracking-wider text-slate-400">
-                      Top barangays
-                    </div>
-                    <ul className="mt-1 space-y-0.5 text-xs">
-                      {cluster.barangays.slice(0, 5).map((b) => (
-                        <li key={b.psgc} className="flex justify-between gap-2">
-                          <span className="truncate text-slate-300">{b.name}</span>
-                          <span className="font-semibold tabular-nums text-white">
-                            {b.count}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <HotspotReason
+                  name={cluster.name}
+                  ownCases={cluster.caseCount}
+                  neighbours={neighboursWithCases(
+                    cluster.psgc,
+                    (p) => hotspotCaseCounts?.get(p) ?? 0
+                  )}
+                />
+                <p
+                  className="mt-2 text-[11px] leading-snug text-slate-400"
+                  title={giDetail(cluster.giZ, cluster.giP)}
+                >
+                  {hotspotCertainty(cluster.severity).long}
+                </p>
               </div>
             </Popup>
           </Circle>
@@ -1105,7 +1100,7 @@ export function AdminHotspotMap({
               </div>
               <div>
                 <div className="font-display text-xl font-extrabold leading-none tracking-tight text-white">
-                  {summary.clusters.length}
+                  {clusters.length}
                 </div>
                 <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-slate-400">
                   Hotspots
@@ -1309,7 +1304,7 @@ export function AdminHotspotMap({
             {/* States the term once, where the severity colours are read, so
                 "hotspot" always means the same thing across the app. */}
             <div className="mb-1.5 text-[10px] leading-snug text-slate-500">
-              Hotspot — an area with a high concentration of TB cases.
+              A hotspot is a barangay where TB is high in it and in the barangays around it — more than chance would explain.
             </div>
             <ul className="space-y-1">
               {SEVERITY_ORDER.map((sev) => (
@@ -1322,6 +1317,7 @@ export function AdminHotspotMap({
                 </li>
               ))}
             </ul>
+            <ConfidenceExplainer tone="dark" className="mt-1.5 max-w-[15rem]" />
             <div className="mt-2 border-t border-white/10 pt-2">
               <div className="font-mono text-[9px] font-semibold uppercase tracking-wider text-slate-400">
                 {attribution === "facility"

@@ -1,94 +1,56 @@
-// BANTAY-TB hotspot detection Edge Function.
+// BANTAY-TB hotspot detection Edge Function — Moran's I + Getis-Ord Gi*.
 //
-// A hotspot is an AREA with a high concentration of TB cases — not a batch of
-// newly recorded cases. Newness is the alerts' concern, not the definition's:
-// this function runs DBSCAN over the cases in the configured window, writes one
-// public.hotspots row per qualifying area, and raises a hotspot_alert when one
-// of those areas comes back at HIGH/URGENT severity.
+// A hotspot is a BARANGAY whose TB burden is statistically high together with
+// its neighbours' — not simply the barangay with the most cases, and not a
+// batch of newly recorded cases. Each run:
 //
-// Defaults: 90-day window, eps=1.2 km, minPts=8.
+//   1. Counts cases per barangay of RESIDENCE over the configured window
+//      (all 182 barangays; zero is an observation, not missing data).
+//   2. Uses cases per 100,000 when every barangay has a population, otherwise
+//      the case count, and records which.
+//   3. Global Moran's I (row-standardised queen weights, 999 permutations).
+//   4. Local Gi* per barangay (binary queen weights including self).
+//   5. Saves the run to hotspot_runs + hotspot_results, syncs the current
+//      `hotspots` list to the 95%/99% hotspots (sync_hotspots(), atomic and
+//      serialised), and alerts staff about each barangay that has NEWLY become
+//      a hotspot — one that was not already on the list.
+//
+// Triggered once per case save / import batch / page refresh — never per row.
 
 import { corsHeaders } from "../_shared/cors.ts";
-import { dbDelete, dbFromEnv, dbInsert, dbSelect } from "../_shared/db.ts";
+import {
+  dbFromEnv,
+  dbInsert,
+  dbRpc,
+  dbSelect,
+  dbSelectAll,
+} from "../_shared/db.ts";
+import { analyzeSpatial, isHotspotClass } from "../_shared/spatial.ts";
 
 interface Body {
   trigger?: string;
   window_days?: number;
-  eps_km?: number;
-  min_pts?: number;
+  permutations?: number;
+}
+
+interface GiSettings {
+  window_days: number;
+  permutations: number;
+}
+
+const SETTINGS_DEFAULTS: GiSettings = { window_days: 365, permutations: 999 };
+
+interface BarangayRow {
+  psgc: number;
+  centroid_lat: number;
+  centroid_lon: number;
+  area_km2: number | null;
+  population: number | null;
 }
 
 interface CaseRow {
   id: string;
   barangay_psgc: number;
-  jitter_lat: number;
-  jitter_lon: number;
-}
-
-function haversineKm(a: [number, number], b: [number, number]): number {
-  const R = 6371;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b[1] - a[1]);
-  const dLon = toRad(b[0] - a[0]);
-  const lat1 = toRad(a[1]);
-  const lat2 = toRad(b[1]);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
-interface DbPoint {
-  id: string;
-  barangay_psgc: number;
-  lat: number;
-  lon: number;
-}
-
-function dbscan(points: DbPoint[], epsKm: number, minPts: number) {
-  const labels = new Array<number>(points.length).fill(0);
-  let cid = 0;
-  const neighbours = (i: number) => {
-    const r: number[] = [];
-    for (let j = 0; j < points.length; j++) {
-      if (i === j) continue;
-      if (
-        haversineKm(
-          [points[i].lon, points[i].lat],
-          [points[j].lon, points[j].lat]
-        ) <= epsKm
-      )
-        r.push(j);
-    }
-    return r;
-  };
-  for (let i = 0; i < points.length; i++) {
-    if (labels[i] !== 0) continue;
-    const ns = neighbours(i);
-    if (ns.length + 1 < minPts) {
-      labels[i] = -1;
-      continue;
-    }
-    cid += 1;
-    labels[i] = cid;
-    const queue = [...ns];
-    while (queue.length) {
-      const k = queue.shift()!;
-      if (labels[k] === -1) labels[k] = cid;
-      if (labels[k] !== 0) continue;
-      labels[k] = cid;
-      const kn = neighbours(k);
-      if (kn.length + 1 >= minPts) queue.push(...kn);
-    }
-  }
-  const clusters = new Map<number, DbPoint[]>();
-  for (let i = 0; i < points.length; i++) {
-    const l = labels[i];
-    if (l <= 0) continue;
-    if (!clusters.has(l)) clusters.set(l, []);
-    clusters.get(l)!.push(points[i]);
-  }
-  return [...clusters.values()];
 }
 
 Deno.serve(async (req) => {
@@ -108,177 +70,231 @@ Deno.serve(async (req) => {
     body = {};
   }
 
-  // Resolve thresholds: explicit body overrides > app_settings.dbscan > defaults.
-  const defaults = { window_days: 90, eps_km: 5, min_pts: 2 };
-  let stored: typeof defaults = defaults;
+  const started = Date.now();
+
+  // Resolve settings: explicit body overrides > app_settings.hotspot_gi > defaults.
+  let stored: GiSettings = SETTINGS_DEFAULTS;
   try {
-    const rows = await dbSelect<{ value: typeof defaults }>(
+    const rows = await dbSelect<{ value: Partial<GiSettings> }>(
       cfg,
       "app_settings",
-      "select=value&key=eq.dbscan&limit=1"
+      "select=value&key=eq.hotspot_gi&limit=1"
     );
-    if (rows[0]?.value) stored = { ...defaults, ...rows[0].value };
+    if (rows[0]?.value) stored = { ...SETTINGS_DEFAULTS, ...rows[0].value };
   } catch (_err) {
-    // table may not exist on older deployments; fall back to defaults silently.
+    // Settings are optional; fall back to defaults.
   }
   const windowDays = body.window_days ?? stored.window_days;
-  const epsKm = body.eps_km ?? stored.eps_km;
-  const minPts = body.min_pts ?? stored.min_pts;
+  const permutations = body.permutations ?? stored.permutations;
 
-  const since = new Date();
+  const windowEnd = new Date();
+  const since = new Date(windowEnd);
   since.setDate(since.getDate() - windowDays);
 
+  let barangays: BarangayRow[];
+  let neighbourRows: { barangay_psgc: number; neighbor_psgc: number }[];
   let cases: CaseRow[];
   try {
-    cases = await dbSelect<CaseRow>(
+    [barangays, neighbourRows, cases] = await Promise.all([
+      dbSelectAll<BarangayRow>(
+        cfg,
+        "barangays",
+        "select=psgc,centroid_lat,centroid_lon,area_km2,population&order=psgc"
+      ),
+      dbSelectAll<{ barangay_psgc: number; neighbor_psgc: number }>(
+        cfg,
+        "barangay_neighbors",
+        "select=barangay_psgc,neighbor_psgc&order=barangay_psgc,neighbor_psgc"
+      ),
+      dbSelectAll<CaseRow>(
+        cfg,
+        "cases",
+        `select=id,barangay_psgc&disease=eq.tb&reported_at=gte.${since.toISOString()}&order=id`
+      ),
+    ]);
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+
+  if (neighbourRows.length === 0) {
+    return json(
+      { error: "barangay_neighbors is empty — apply 20261023000001_barangay_neighbors_seed.sql" },
+      500
+    );
+  }
+
+  const neighbours: Record<string, number[]> = {};
+  for (const r of neighbourRows) {
+    (neighbours[String(r.barangay_psgc)] ??= []).push(Number(r.neighbor_psgc));
+  }
+
+  const casesByBgy = new Map<number, string[]>();
+  for (const c of cases) {
+    const list = casesByBgy.get(Number(c.barangay_psgc));
+    if (list) list.push(c.id);
+    else casesByBgy.set(Number(c.barangay_psgc), [c.id]);
+  }
+
+  const analysis = analyzeSpatial(
+    barangays.map((b) => ({
+      psgc: Number(b.psgc),
+      cases: casesByBgy.get(Number(b.psgc))?.length ?? 0,
+      population: b.population,
+    })),
+    neighbours,
+    { permutations }
+  );
+
+  const hot = analysis.units.filter((u) => isHotspotClass(u.giClass));
+  const cold = analysis.units.filter(
+    (u) => u.giClass === "coldspot_95" || u.giClass === "coldspot_99"
+  );
+
+  let runId: string;
+  try {
+    const [run] = await dbInsert<{ id: string }>(cfg, "hotspot_runs", {
+      trigger: body.trigger ?? "manual",
+      window_start: since.toISOString(),
+      window_end: windowEnd.toISOString(),
+      metric: analysis.metric,
+      n_units: analysis.units.length,
+      cases_considered: cases.length,
+      moran_i: analysis.moran.I,
+      moran_expected: analysis.moran.expected,
+      moran_z: analysis.moran.z,
+      moran_p_norm: analysis.moran.pNorm,
+      moran_p_sim: analysis.moran.pSim,
+      permutations: analysis.moran.permutations,
+      hotspot_count: hot.length,
+      coldspot_count: cold.length,
+      duration_ms: Date.now() - started,
+    } as unknown as { id: string });
+    runId = run.id;
+
+    await dbInsert(
       cfg,
-      "cases",
-      `select=id,barangay_psgc,jitter_lat,jitter_lon&reported_at=gte.${since.toISOString()}&limit=20000`
+      "hotspot_results",
+      analysis.units.map((u) => ({
+        run_id: runId,
+        barangay_psgc: u.psgc,
+        case_count: u.cases,
+        population: u.population,
+        value: u.value,
+        gi_z: u.giZ,
+        gi_p: u.giP,
+        gi_class: u.giClass,
+        fdr_significant: u.fdrSignificant,
+      })),
+      { returning: false }
     );
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500);
   }
 
-  const points: DbPoint[] = cases.map((c: CaseRow) => ({
-    id: c.id,
-    barangay_psgc: c.barangay_psgc,
-    lat: c.jitter_lat,
-    lon: c.jitter_lon,
-  }));
-
-  const clusters = dbscan(points, epsKm, minPts);
-  const inserts = clusters.map((pts) => {
-    const counts = new Map<number, number>();
-    for (const p of pts)
-      counts.set(p.barangay_psgc, (counts.get(p.barangay_psgc) ?? 0) + 1);
-    const topBgy = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-    // Every barangay of residence in the cluster, not just the modal one:
-    // alerts route on this so a cluster straddling a boundary reaches both
-    // sides, and each recipient can resolve case_ids back to the addresses
-    // RLS lets them read.
-    const barangay_psgcs = [...counts.keys()];
-    const cLat = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
-    const cLon = pts.reduce((s, p) => s + p.lon, 0) / pts.length;
-    const radius_km = Math.max(
-      0.3,
-      ...pts.map((p) => haversineKm([cLon, cLat], [p.lon, p.lat]))
-    );
-    const density = pts.length / (Math.PI * radius_km * radius_km);
-    const severity =
-      pts.length >= 50 ? "urgent" : pts.length >= 20 ? "high" : pts.length >= 10 ? "moderate" : "watch";
+  const byPsgc = new Map(barangays.map((b) => [Number(b.psgc), b]));
+  const inserts = hot.map((u) => {
+    const b = byPsgc.get(u.psgc)!;
+    const area = b.area_km2 && b.area_km2 > 0 ? b.area_km2 : null;
     return {
-      barangay_psgc: topBgy ?? null,
-      barangay_psgcs,
-      case_ids: pts.map((p) => p.id),
+      barangay_psgc: u.psgc,
+      // A Gi* hotspot is one barangay; alerts route to its own residents.
+      barangay_psgcs: [u.psgc],
+      case_ids: casesByBgy.get(u.psgc) ?? [],
       disease: "tb" as const,
-      case_count: pts.length,
-      density,
-      severity,
+      case_count: u.cases,
+      density: area ? u.cases / area : 0,
+      severity: u.giClass === "hotspot_99" ? "urgent" : "high",
       window_start: since.toISOString(),
-      window_end: new Date().toISOString(),
-      centroid_lat: cLat,
-      centroid_lon: cLon,
-      radius_km,
+      window_end: windowEnd.toISOString(),
+      centroid_lat: b.centroid_lat,
+      centroid_lon: b.centroid_lon,
+      // Radius of a circle with the barangay's area — map display only.
+      radius_km: area ? Math.sqrt(area / Math.PI) : 0.5,
+      run_id: runId,
+      gi_z: u.giZ,
+      gi_p: u.giP,
+      gi_class: u.giClass,
     };
   });
 
-  // Replace the previous detection run instead of appending to it, so the
-  // Hotspots list reflects the current picture rather than a duplicate of
-  // every cluster on each run. Runs even when there are no clusters, so stale
-  // hotspots clear out. service_role bypasses RLS for the full citywide reset.
+  // Sync the current list in one locked transaction: still-hot barangays are
+  // updated in place so the alerts already raised for them survive, cooled
+  // ones are removed, and only barangays not already listed come back as new.
+  // Runs even with no hotspots so stale rows clear out.
+  type Synced = {
+    hotspot_id: string;
+    psgc: number;
+    psgcs: number[] | null;
+    sev: string;
+    is_new: boolean;
+  };
+  let synced: Synced[];
   try {
-    await dbDelete(cfg, "hotspots", "disease=eq.tb");
+    synced = await dbRpc<Synced[]>(cfg, "sync_hotspots", { p_rows: inserts });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500);
   }
 
-  if (inserts.length > 0) {
-    let inserted: {
-      id: string;
-      severity: string;
-      barangay_psgc: number | null;
-      barangay_psgcs: number[] | null;
-    }[];
+  const fresh = synced.filter((h) => h.is_new);
+  let alertsSent = 0;
+  if (fresh.length > 0) {
     try {
-      inserted = await dbInsert<{
+      // Per the BANTAY-TB framework + community-scoped RLS:
+      //   * system_admin / tb_coordinator get every new hotspot (citywide).
+      //   * barangay_admin / health_worker get one when the hotspot is their
+      //     own barangay of residence.
+      // Mirrors buildHotspotAlerts() in src/lib/hotspotAlerts.ts — this
+      // function deploys with --no-remote and cannot import it, so the two
+      // copies must be changed together.
+      const recipients = await dbSelect<{
         id: string;
-        severity: string;
+        role: string;
         barangay_psgc: number | null;
-        barangay_psgcs: number[] | null;
       }>(
         cfg,
-        "hotspots",
-        inserts as unknown as {
-          id: string;
-          severity: string;
-          barangay_psgc: number | null;
-          barangay_psgcs: number[] | null;
-        }[]
+        "profiles",
+        "select=id,role,barangay_psgc&role=in.(tb_coordinator,barangay_admin,health_worker,system_admin)"
       );
-    } catch (err) {
-      return json({ error: err instanceof Error ? err.message : String(err) }, 500);
-    }
 
-    // Notify staff about HIGH severity clusters.
-    const highHotspots = inserted.filter((h) => h.severity === "urgent" || h.severity === "high");
-    if (highHotspots.length > 0) {
-      try {
-        // Per the BANTAY-TB framework + community-scoped RLS:
-        //   * system_admin / tb_coordinator get every high-severity alert (citywide).
-        //   * barangay_admin / health_worker get an alert when the cluster
-        //     contains a resident of *their own* barangay — tested against
-        //     every barangay in the cluster, not just its modal one. Filing a
-        //     straddling cluster under the modal barangay alone alerted one
-        //     area for another area's residents and left the second area
-        //     unwarned about its own.
-        const recipients = await dbSelect<{
-          id: string;
-          role: string;
-          barangay_psgc: number | null;
-        }>(
-          cfg,
-          "profiles",
-          "select=id,role,barangay_psgc&role=in.(tb_coordinator,barangay_admin,health_worker,system_admin)"
-        );
-
-        const alerts: { hotspot_id: string; recipient_id: string }[] = [];
-        for (const h of highHotspots) {
-          for (const r of recipients) {
-            if (r.role === "tb_coordinator" || r.role === "system_admin") {
-              alerts.push({ hotspot_id: h.id, recipient_id: r.id });
-              continue;
-            }
-            // BA / HW: notify when one of their own residents is in the
-            // cluster. Mirrors buildHotspotAlerts() in src/lib/hotspotAlerts.ts
-            // — this function deploys with --no-remote and cannot import it,
-            // so the two copies must be changed together.
-            if (r.barangay_psgc === null) continue;
-            const members = h.barangay_psgcs;
-            const covers =
-              members && members.length > 0
-                ? members.includes(r.barangay_psgc)
-                : h.barangay_psgc === r.barangay_psgc;
-            if (covers) {
-              alerts.push({ hotspot_id: h.id, recipient_id: r.id });
-            }
+      const alerts: { hotspot_id: string; recipient_id: string }[] = [];
+      for (const h of fresh) {
+        for (const r of recipients) {
+          if (r.role === "tb_coordinator" || r.role === "system_admin") {
+            alerts.push({ hotspot_id: h.hotspot_id, recipient_id: r.id });
+            continue;
           }
+          if (r.barangay_psgc === null) continue;
+          const members = h.psgcs;
+          const covers =
+            members && members.length > 0
+              ? members.map(Number).includes(Number(r.barangay_psgc))
+              : Number(h.psgc) === Number(r.barangay_psgc);
+          if (covers) alerts.push({ hotspot_id: h.hotspot_id, recipient_id: r.id });
         }
-
-        if (alerts.length > 0) {
-          await dbInsert(cfg, "hotspot_alerts", alerts, { returning: false });
-        }
-      } catch (err) {
-        // Best-effort fan-out; hotspots already inserted, don't fail the request.
-        console.error("hotspot alert notification failed:", err);
       }
+
+      if (alerts.length > 0) {
+        await dbInsert(cfg, "hotspot_alerts", alerts, { returning: false });
+        alertsSent = alerts.length;
+      }
+    } catch (err) {
+      // Best-effort fan-out; the run is already saved, don't fail the request.
+      console.error("hotspot alert notification failed:", err);
     }
   }
 
   return json({
     trigger: body.trigger ?? "manual",
-    cases_considered: points.length,
-    clusters_detected: inserts.length,
-    inserted: inserts,
+    run_id: runId,
+    metric: analysis.metric,
+    window_days: windowDays,
+    cases_considered: cases.length,
+    moran: analysis.moran,
+    hotspots: hot.map((u) => ({ psgc: u.psgc, z: u.giZ, p: u.giP, class: u.giClass })),
+    coldspots: cold.length,
+    new_hotspots: fresh.length,
+    alerts_sent: alertsSent,
+    duration_ms: Date.now() - started,
   });
 });
 

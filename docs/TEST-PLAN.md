@@ -83,15 +83,15 @@
 - **Assignee:** Member 3 (GIS/Analytics)
 - **Risk Analysis:** *Medium-High.* A mis-resolved address moves a case into the wrong barangay and quietly skews hotspot output. Patient privacy is at stake on the public map, where only aggregates may appear. Residual risk: tile and geocode provider rate limits during the demo — mitigated by a cached fallback basemap.
 
-### TI-06 — Hotspot Detection (DBSCAN) & Alert Generation
+### TI-06 — Hotspot Detection (Moran's I + Getis-Ord Gi*) & Alert Generation
 
-- **Test Strategy:** Algorithm testing against hand-computed expected clusters on fixed synthetic datasets; parameter sweeps over ε and minPts; `dbscan.test.ts`, `hotspotAlerts.test.ts`, `hotspotRefresh.test.ts`.
+- **Test Strategy:** Algorithm testing against PySAL `esda` (`Moran(rates, w_rowstd, permutations=999)`, `G_Local(rates, w_binary, transform="B", star=True)`) on the same values and queen weights; planted-hotspot detection on a synthetic barangay dataset; hand-computed Gi* on toy maps; `spatialStats.test.ts`, `hotspotAlerts.test.ts`, `hotspotRefresh.test.ts`.
 - **Test Type:** Functional, Algorithmic correctness, Integration (Edge Function), Performance
-- **Features To Be Tested:** DBSCAN clustering (`dbscan.ts`) with configurable settings (`dbscanSettings.ts`); `detect-hotspots` Edge Function invocation and scheduled refresh; hotspot persistence and recomputation idempotency; hotspot list and detail (`/app/hotspots`); alert creation, acknowledgement, and resolution (`/app/alerts`); residence barangay carried onto each alert; hotspot deletion policy.
-- **Features Not To Be Tested:** Epidemiological validity of the chosen ε/minPts for declaring a real outbreak (clinical judgment, not software); predictive forecasting (not implemented).
-- **Entry Criteria:** TI-05 passed; three fixed synthetic datasets with hand-computed cluster assignments prepared; Edge Function deployed to staging; baseline parameters documented.
-- **Exit Criteria:** Algorithm output matches the hand-computed clusters for all three datasets; no duplicate hotspots after repeated refresh; every hotspot raises exactly one alert carrying the correct residence barangay; a refresh over 1,000 cases completes within the documented time budget.
-- **Deliverables:** Expected-versus-actual cluster comparison sheet; parameter-sensitivity table; Edge Function logs; defect report.
+- **Features To Be Tested:** Queen-contiguity weights (`barangayNeighbors.json` / `barangay_neighbors`, built by `scripts/build-barangay-neighbors.ts`); Global Moran's I and Local Gi* (`supabase/functions/_shared/spatial.ts`); Gi* z-score classification (±1.96 / ±2.58); rate-per-100,000 input when population is loaded, case-count fallback otherwise; `detect-hotspots` Edge Function run storage (`hotspot_runs`, `hotspot_results`) and current-hotspot replacement (`hotspots`); Gi* choropleth and Moran's I card (`/app/hotspots`); hotspot settings (`hotspotSettings.ts`); alert on a barangay newly classified as a 95% hotspot, routed by residence barangay.
+- **Features Not To Be Tested:** Epidemiological validity of a hotspot for declaring a real outbreak (clinical judgment, not software); predictive forecasting (not implemented).
+- **Entry Criteria:** TI-05 passed; synthetic barangay dataset with planted hotspots prepared; PySAL environment available; Edge Function deployed to staging.
+- **Exit Criteria:** Moran's I, E[I] and z match PySAL to 1e-6; Gi* z-scores match PySAL to 1e-6 with 100% class agreement; planted hotspots detected with false positives only adjacent to the planted area; no duplicate hotspots after repeated refresh; a barangay that stays a hotspot across runs raises no repeat alert; a run over 182 barangays completes within the documented time budget.
+- **Deliverables:** PySAL agreement table (max |Δz|, % class agreement); planted-vs-detected table (sensitivity, precision); Edge Function logs with run durations; defect report.
 - **Start Date:** Oct 22, 2026 — **End Date:** Oct 28, 2026
 - **Assignee:** Member 3 (GIS/Analytics)
 - **Risk Analysis:** *High.* A false negative hides a real cluster from health workers; a false positive wastes scarce field resources. Output is only as good as TI-05's geocoding, so defects can originate upstream. Residual risk: no ground-truth outbreak data is available for validation — mitigated by synthetic datasets with known answers plus adviser review of the parameters.

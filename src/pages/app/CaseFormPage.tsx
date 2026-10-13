@@ -285,7 +285,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <fieldset className="sm:col-span-2 rounded-xl border border-slate-200">
+    <fieldset className="min-w-0 sm:col-span-2 rounded-xl border border-slate-200">
       <legend className="ml-3 px-1.5">
         <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500">
           {title}
@@ -782,7 +782,32 @@ export function CaseFormPage() {
                   disabled={lockClinicalDetail}
                   value={form.treatment_start_date}
                   onChange={(e) => set("treatment_start_date", e.target.value)}
+                  aria-describedby={
+                    lockClinicalDetail ? "treatment_start_date_hint" : undefined
+                  }
                 />
+                {/* The lock is decided by column (14) far below; without a
+                    note here the field just looks broken. */}
+                {lockClinicalDetail && (
+                  <p
+                    id="treatment_start_date_hint"
+                    className="text-xs text-slate-500"
+                  >
+                    Locked while the patient is still presumptive. Set{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById("diagnosis_status");
+                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el?.focus({ preventScroll: true });
+                      }}
+                      className="font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800"
+                    >
+                      (14) Bacteriological status
+                    </button>{" "}
+                    to BC or CD to enter it.
+                  </p>
+                )}
               </div>
             )}
           </Section>
@@ -1159,8 +1184,17 @@ export function CaseFormPage() {
                     <Col n={16} />
                     Number of contacts
                   </div>
+                  {/* Fixed layout fills the form width exactly on a desktop;
+                      below ~56rem the table scrolls inside this box (with the
+                      row labels pinned) instead of widening the page. */}
                   <div className="overflow-x-auto rounded-lg border border-slate-200">
-                    <table className="min-w-full text-sm">
+                    <table className="w-full min-w-[56rem] table-fixed text-sm">
+                      <colgroup>
+                        <col className="w-28" />
+                        {LAB_COLUMNS.map((c) => (
+                          <col key={c.key} />
+                        ))}
+                      </colgroup>
                       <thead className="bg-slate-50">
                         <tr className="font-mono text-[10px] uppercase tracking-wider text-slate-500">
                           <th scope="col" className="px-3 py-2 text-left font-semibold">
@@ -1182,7 +1216,7 @@ export function CaseFormPage() {
                           <tr key={g.key}>
                             <th
                               scope="row"
-                              className="whitespace-nowrap px-3 py-2 text-left text-xs font-medium text-slate-600"
+                              className="sticky left-0 z-10 whitespace-nowrap bg-white px-3 py-2 text-left text-xs font-medium text-slate-600"
                             >
                               {g.label}
                             </th>
@@ -1315,7 +1349,7 @@ export function CaseFormPage() {
               </Section>
 
               {/* ── (21) ────────────────────────────────────────────── */}
-              <fieldset className="sm:col-span-2 rounded-xl border border-slate-200">
+              <fieldset className="min-w-0 sm:col-span-2 rounded-xl border border-slate-200">
                 <legend className="ml-3 px-1.5">
                   <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                     Xpert MTB/RIF (X) &amp; TB smear microscopy (S)
@@ -1333,7 +1367,10 @@ export function CaseFormPage() {
                     <table className="min-w-full text-sm">
                       <thead className="bg-slate-50">
                         <tr className="font-mono text-[10px] uppercase tracking-wider text-slate-500">
-                          <th scope="col" className="px-3 py-2 text-left font-semibold">
+                          <th
+                            scope="col"
+                            className="sticky left-0 z-10 bg-slate-50 px-3 py-2 text-left font-semibold"
+                          >
                             <span className="sr-only">Field</span>
                           </th>
                           {LAB_COLUMNS.map((c) => (
@@ -1341,7 +1378,7 @@ export function CaseFormPage() {
                               key={c.key}
                               scope="col"
                               title={c.title}
-                              className="px-1.5 py-2 text-left font-semibold"
+                              className="truncate px-1 py-2 text-left font-semibold"
                             >
                               {c.label}
                             </th>
@@ -1358,7 +1395,7 @@ export function CaseFormPage() {
                               {field === "result" ? "Result" : "Date collected"}
                             </th>
                             {LAB_COLUMNS.map((c) => (
-                              <td key={c.key} className="px-1.5 py-1.5">
+                              <td key={c.key} className="px-1 py-1.5">
                                 <Input
                                   type={field === "date" ? "date" : "text"}
                                   max={field === "date" ? today : undefined}
@@ -1368,8 +1405,8 @@ export function CaseFormPage() {
                                   }
                                   className={
                                     field === "date"
-                                      ? "h-9 min-w-[8.5rem] px-2 text-xs"
-                                      : "h-9 min-w-[6rem] px-2"
+                                      ? "h-9 w-full min-w-0 px-1.5 text-xs"
+                                      : "h-9 w-full min-w-0 px-2"
                                   }
                                   value={labs[c.key][field]}
                                   onChange={(e) =>

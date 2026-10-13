@@ -219,7 +219,7 @@ export function HealthWorkerHome({
             count={activeHotspots}
             one="area with many cases"
             many="areas with many cases"
-            sub="Cases close together (hotspots)"
+            sub="Barangays flagged as TB hotspots"
             clear="No hotspot areas"
             action="See the areas"
             onClick={onOpenHotspots}

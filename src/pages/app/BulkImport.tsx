@@ -192,7 +192,8 @@ export function BulkImport() {
         }
       }
 
-      // Step 4: Trigger DBSCAN re-execution server-side.
+      // Step 4: Re-run Moran's I + Gi* hotspot detection server-side, once
+      // for the whole batch rather than once per inserted row.
       try {
         const { error } = await supabase.functions.invoke("detect-hotspots", {
           body: { trigger: "bulk_import" },

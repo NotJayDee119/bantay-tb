@@ -1,14 +1,26 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { CircleMarker, MapContainer, Popup, Tooltip, ZoomControl } from "react-leaflet";
-import type { Map as LeafletMap } from "leaflet";
+import {
+  CircleMarker,
+  GeoJSON,
+  MapContainer,
+  Popup,
+  Tooltip,
+  ZoomControl,
+} from "react-leaflet";
+import type { Map as LeafletMap, PathOptions } from "leaflet";
 import { Activity, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { Spinner } from "../../components/ui";
 import { OpenFreeMapLayer } from "../../components/OpenFreeMapLayer";
 import { supabase } from "../../lib/supabase";
-import { fetchAll } from "../../lib/fetchAll";
-import { dbscan, type DbscanPoint } from "../../lib/dbscan";
-import { loadDbscanSettings } from "../../lib/dbscanSettings";
-import { buildHotspotAlerts, isAlertingSeverity } from "../../lib/hotspotAlerts";
+import { loadHotspotSettings } from "../../lib/hotspotSettings";
+import type { GiClass } from "../../lib/spatialStats";
+import {
+  giDetail,
+  hotspotCertainty,
+  neighboursWithCases,
+} from "../../lib/hotspotUtils";
+import { HotspotReason } from "../../components/HotspotReason";
+import { ConfidenceExplainer } from "../../components/ConfidenceExplainer";
 import {
   DEBOUNCE_MS,
   RELOAD_DEBOUNCE_MS,
@@ -33,6 +45,68 @@ interface Hotspot {
   centroid_lat: number;
   centroid_lon: number;
   radius_km: number;
+  gi_z: number | null;
+  gi_p: number | null;
+  gi_class: GiClass | null;
+}
+
+/** Latest detection run — the citywide Moran's I. */
+interface HotspotRun {
+  id: string;
+  run_at: string;
+  metric: "rate_per_100k" | "case_count";
+  n_units: number;
+  cases_considered: number;
+  moran_i: number;
+  moran_expected: number;
+  moran_z: number;
+  moran_p_sim: number;
+  permutations: number;
+  hotspot_count: number;
+  coldspot_count: number;
+}
+
+interface GiResultRow {
+  barangay_psgc: number;
+  case_count: number;
+  value: number;
+  gi_z: number;
+  gi_p: number;
+  gi_class: GiClass;
+}
+
+type BarangayGeo = GeoJSON.FeatureCollection<
+  GeoJSON.Geometry,
+  { psgc: number; ADM4_EN: string }
+>;
+
+// Choropleth fill per Gi* class — warm for hot, cool for cold, none otherwise.
+const GI_FILL: Record<GiClass, string | null> = {
+  hotspot_99: "#dc2626",
+  hotspot_95: "#f97316",
+  not_significant: null,
+  coldspot_95: "#60a5fa",
+  coldspot_99: "#2563eb",
+};
+
+const GI_LABEL: Record<GiClass, string> = {
+  hotspot_99: "Hotspot — 99% confidence",
+  hotspot_95: "Hotspot — 95% confidence",
+  not_significant: "No clear pattern",
+  coldspot_95: "Low-TB area — 95% confidence",
+  coldspot_99: "Low-TB area — 99% confidence",
+};
+
+const GI_ORDER: GiClass[] = [
+  "hotspot_99",
+  "hotspot_95",
+  "coldspot_95",
+  "coldspot_99",
+];
+
+function formatP(p: number | null | undefined): string {
+  if (p === null || p === undefined) return "—";
+  return p < 0.001 ? "< 0.001" : p.toFixed(3);
 }
 
 const SEVERITY_COLOR: Record<Severity, string> = {
@@ -44,10 +118,7 @@ const SEVERITY_COLOR: Record<Severity, string> = {
   medium: "#fbbf24",
 };
 
-// Canonical severities for the legend — "low"/"medium" are DB aliases.
-const SEVERITY_ORDER: Severity[] = ["watch", "moderate", "high", "urgent"];
-
-// Plain-language names shown to health workers instead of the raw DB values.
+// Gi* hotspots are high (95%) or urgent (99%); the rest are legacy values.
 const SEVERITY_LABEL: Record<Severity, string> = {
   watch: "Watch",
   moderate: "Moderate",
@@ -61,8 +132,8 @@ const SEVERITY_LABEL: Record<Severity, string> = {
 const SEVERITY_MEANING: Record<Severity, string> = {
   watch: "A few cases nearby. Keep an eye on it.",
   moderate: "Several cases grouped together.",
-  high: "Many cases close together. Needs attention.",
-  urgent: "A large group of cases. Act right away.",
+  high: "Strong pattern (95% confidence). Start outreach here.",
+  urgent: "Very strong pattern (99% confidence). Act right away.",
   low: "A few cases nearby. Keep an eye on it.",
   medium: "Several cases grouped together.",
 };
@@ -102,8 +173,18 @@ export function Hotspots() {
   const [autoChecking, setAutoChecking] = useState(false);
   // How many days of recent cases the detection considers (from Settings).
   // Shown to users so it's clear older cases aren't counted.
-  const [windowDays, setWindowDays] = useState(90);
+  const [windowDays, setWindowDays] = useState(365);
+  const [run, setRun] = useState<HotspotRun | null>(null);
+  const [results, setResults] = useState<Map<number, GiResultRow>>(new Map());
+  const [geo, setGeo] = useState<BarangayGeo | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
+
+  useEffect(() => {
+    fetch("/data/davao-city-barangays.geojson")
+      .then((r) => r.json())
+      .then((d: BarangayGeo) => setGeo(d))
+      .catch(() => {});
+  }, []);
 
   async function load() {
     setLoading(true);
@@ -114,6 +195,29 @@ export function Hotspots() {
       .limit(100);
     if (error) toast.error(error.message);
     setList((data ?? []) as Hotspot[]);
+
+    const { data: runs } = await supabase
+      .from("hotspot_runs")
+      .select(
+        "id, run_at, metric, n_units, cases_considered, moran_i, moran_expected, moran_z, moran_p_sim, permutations, hotspot_count, coldspot_count"
+      )
+      .order("run_at", { ascending: false })
+      .limit(1);
+    const latest = (runs?.[0] ?? null) as HotspotRun | null;
+    setRun(latest);
+    if (latest) {
+      const { data: rows } = await supabase
+        .from("hotspot_results")
+        .select("barangay_psgc, case_count, value, gi_z, gi_p, gi_class")
+        .eq("run_id", latest.id);
+      setResults(
+        new Map(
+          ((rows ?? []) as GiResultRow[]).map((r) => [Number(r.barangay_psgc), r])
+        )
+      );
+    } else {
+      setResults(new Map());
+    }
     setLoading(false);
   }
 
@@ -139,23 +243,24 @@ export function Hotspots() {
   }
 
   /**
-   * Ask the Edge Function to recompute. Deliberately not the client-side
-   * `recompute()` below: that reads through the caller's RLS, so a scoped
-   * account would cluster only its own barangay's cases and overwrite the
-   * citywide picture with a partial one. The function runs as service_role and
-   * sees every case, which is why it is safe to let any role trigger it.
+   * Ask the Edge Function to recompute. Detection only ever runs there: it
+   * runs as service_role and sees every case, so Gi* is computed on the whole
+   * city whichever role triggered it — a scoped account's RLS view would
+   * otherwise feed the statistic a partial map.
    */
   async function runDetection(reason: DetectReason) {
     if (detectInFlight.current || disposed.current) return;
 
-    // The floor is checked against the table, not a local timestamp, so open
-    // dashboards don't each fire a run for the same case.
+    // The floor is checked against the latest stored run, not a local
+    // timestamp, so open dashboards don't each fire a run for the same case.
+    // (Not hotspots.detected_at: a hotspot row keeps the time it was FIRST
+    // detected, and a run with no hotspots writes no row at all.)
     const { data: latest } = await supabase
-      .from("hotspots")
-      .select("detected_at")
-      .order("detected_at", { ascending: false })
+      .from("hotspot_runs")
+      .select("run_at")
+      .order("run_at", { ascending: false })
       .limit(1);
-    const lastRun = latest?.[0]?.detected_at ?? null;
+    const lastRun = latest?.[0]?.run_at ?? null;
     const decision = shouldDetect(lastRun, reason);
     if (!decision.run) {
       // Somebody else recomputed for this same change — the case form fires a
@@ -194,7 +299,7 @@ export function Hotspots() {
   useEffect(() => {
     disposed.current = false;
     load();
-    loadDbscanSettings().then((s) => setWindowDays(s.window_days));
+    loadHotspotSettings().then((s) => setWindowDays(s.window_days));
 
     // On open: refresh anything gone stale. The detection window slides, so a
     // result can go out of date without a single new case being recorded.
@@ -226,121 +331,21 @@ export function Hotspots() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Manual "check again" — always runs, citywide, in the Edge Function. */
   async function recompute() {
     setRunning(true);
     try {
-      const settings = await loadDbscanSettings();
+      const settings = await loadHotspotSettings();
       setWindowDays(settings.window_days);
-      const since = new Date();
-      since.setDate(since.getDate() - settings.window_days);
-      type PointRow = { id: string; jitter_lat: number; jitter_lon: number };
-      const { data, error } = await fetchAll<PointRow>((from, to) =>
-        supabase
-          .from("cases")
-          .select("id, barangay_psgc, jitter_lat, jitter_lon")
-          .gte("reported_at", since.toISOString())
-          .order("id")
-          .range(from, to) as unknown as PromiseLike<{
-          data: PointRow[] | null;
-          error: { message: string } | null;
-        }>
-      );
-      if (error) throw new Error(error);
-      const points: DbscanPoint[] = data.map(
-        (c: { id: string; jitter_lat: number; jitter_lon: number }) => ({
-          id: c.id,
-          lat: c.jitter_lat,
-          lon: c.jitter_lon,
-        })
-      );
-      const clusters = dbscan(points, settings.eps_km, settings.min_pts);
-
-      const inserts = clusters.map((cl) => {
-        // Most-represented barangay in the cluster
-        const counts = new Map<number, number>();
-        for (const p of cl.points) {
-          const cs = (data ?? []).find(
-            (c: { id: string }) => c.id === p.id
-          ) as { barangay_psgc: number } | undefined;
-          if (!cs) continue;
-          counts.set(cs.barangay_psgc, (counts.get(cs.barangay_psgc) ?? 0) + 1);
-        }
-        const topBgy = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-        // Same membership record the Edge Function writes: every barangay of
-        // residence in the cluster, plus the cases themselves so an alert can
-        // show its recipient the addresses behind the count.
-        const barangay_psgcs = [...counts.keys()];
-        const case_ids = cl.points.map((p) => p.id);
-        const radii = cl.points.map((p) => {
-          const dLat = p.lat - cl.centroid.lat;
-          const dLon = p.lon - cl.centroid.lon;
-          return Math.sqrt(dLat * dLat + dLon * dLon) * 111;
-        });
-        const radius_km = Math.max(0.3, Math.max(...radii));
-        const density = cl.points.length / (Math.PI * radius_km * radius_km);
-        const severity: Severity =
-          cl.points.length >= 50 ? "urgent" : cl.points.length >= 20 ? "high" : cl.points.length >= 10 ? "moderate" : "watch";
-        return {
-          barangay_psgc: topBgy ?? barangays[0].psgc,
-          barangay_psgcs,
-          case_ids,
-          disease: "tb" as const,
-          case_count: cl.points.length,
-          density,
-          severity,
-          window_start: since.toISOString(),
-          window_end: new Date().toISOString(),
-          centroid_lat: cl.centroid.lat,
-          centroid_lon: cl.centroid.lon,
-          radius_km,
-        };
+      const { data, error } = await supabase.functions.invoke("detect-hotspots", {
+        body: { trigger: "manual" },
       });
-
-      // Replace the previous run's hotspots so the list shows the current
-      // picture instead of stacking a fresh copy of every cluster each time.
-      const { error: delErr } = await supabase
-        .from("hotspots")
-        .delete()
-        .eq("disease", "tb");
-      if (delErr) throw delErr;
-
-      let insertedHotspots:
-        | {
-            id: string;
-            severity: string;
-            barangay_psgc: number | null;
-            barangay_psgcs: number[] | null;
-          }[]
-        | null = [];
-      if (inserts.length > 0) {
-        const { data, error: insErr } = await supabase
-          .from("hotspots")
-          .insert(inserts)
-          .select("id, severity, barangay_psgc, barangay_psgcs");
-        if (insErr) throw insErr;
-        insertedHotspots = data;
-      }
-
-      // Fan-out alerts — mirrors the Edge Function, which keeps its own copy
-      // of the same rule (it deploys without remote imports).
-      const alertable = (insertedHotspots ?? []).filter((h) =>
-        isAlertingSeverity(h.severity)
-      );
-      if (alertable.length > 0) {
-        const { data: staff } = await supabase
-          .from("profiles")
-          .select("id, role, barangay_psgc")
-          .in("role", ["tb_coordinator", "barangay_admin", "health_worker", "system_admin"]);
-        const alerts = buildHotspotAlerts(alertable, staff ?? []);
-        if (alerts.length > 0) {
-          await supabase.from("hotspot_alerts").insert(alerts);
-        }
-      }
-
+      if (error) throw error;
+      const count = (data as { hotspots?: unknown[] } | null)?.hotspots?.length ?? 0;
       toast.success(
-        inserts.length === 0
-          ? "No hotspot areas right now."
-          : `${inserts.length} hotspot area${inserts.length === 1 ? "" : "s"}.`
+        count === 0
+          ? "No hotspot barangays right now."
+          : `${count} hotspot barangay${count === 1 ? "" : "s"}.`
       );
       await load();
     } catch (err) {
@@ -364,8 +369,22 @@ export function Hotspots() {
     () => list.filter((h) => h.severity === "urgent" || h.severity === "high").length,
     [list]
   );
-  // List is ordered newest-first, so the first row carries the latest run time.
-  const lastChecked = list.length > 0 ? list[0].detected_at : null;
+  // The run row is written even when no barangay qualifies, so it is the
+  // honest "last checked" time; the newest hotspot row is the fallback.
+  const lastChecked = run?.run_at ?? (list.length > 0 ? list[0].detected_at : null);
+
+  const geoStyle = (feature?: GeoJSON.Feature): PathOptions => {
+    const psgc = Number(feature?.properties?.psgc);
+    const r = results.get(psgc);
+    const fill = r ? GI_FILL[r.gi_class] : null;
+    return {
+      color: "#94a3b8",
+      weight: 0.6,
+      opacity: 0.35,
+      fillColor: fill ?? "#0f172a",
+      fillOpacity: fill ? 0.38 : 0,
+    };
+  };
 
   function flyTo(h: Hotspot) {
     mapRef.current?.flyTo([h.centroid_lat, h.centroid_lon], 13.5, {
@@ -387,9 +406,37 @@ export function Hotspots() {
       >
             <OpenFreeMapLayer styleName="dark" />
             <ZoomControl position="bottomleft" />
+            {geo && (
+              // Keyed on the run so Leaflet restyles when a new run lands.
+              <GeoJSON
+                key={run?.id ?? "no-run"}
+                data={geo}
+                style={geoStyle}
+                onEachFeature={(feature, layer) => {
+                  const r = results.get(Number(feature.properties?.psgc));
+                  if (!r) return;
+                  // pcm-tooltip is transparent by design and expects its own
+                  // dark card inside — bare text would sit dark-on-dark.
+                  const name = escapeHtml(String(feature.properties?.ADM4_EN ?? ""));
+                  const dot = GI_FILL[r.gi_class] ?? "#94a3b8";
+                  const cases = r.case_count;
+                  layer.bindTooltip(
+                    `<div class="pcm-tooltip-inner">` +
+                      `<div style="font-size:12px;font-weight:600;color:#fff">${name}</div>` +
+                      `<div style="margin-top:2px;display:flex;align-items:center;gap:6px;font-size:11px;color:#cbd5e1">` +
+                      `<span style="width:8px;height:8px;border-radius:9999px;background:${dot};flex-shrink:0"></span>` +
+                      `${GI_LABEL[r.gi_class]}</div>` +
+                      `<div style="margin-top:2px;font-size:10px;color:#94a3b8">` +
+                      `${cases.toLocaleString()} TB patient${cases === 1 ? "" : "s"} living here</div>` +
+                      `</div>`,
+                    { sticky: true, className: "pcm-tooltip" }
+                  );
+                }}
+              />
+            )}
             {list.map((h) => {
               const color = SEVERITY_COLOR[h.severity];
-              const r = Math.min(40, 8 + h.case_count * 0.6);
+              const r = Math.min(30, 10 + Math.max(0, h.gi_z ?? 0) * 3);
               return (
                 <Fragment key={h.id}>
                   {/* Soft halo — blurred via CSS so the cluster melts into
@@ -443,7 +490,7 @@ export function Hotspots() {
                           {SEVERITY_LABEL[h.severity]}
                         </div>
                         <div className="text-[10px] text-slate-300">
-                          TB case{h.case_count === 1 ? "" : "s"} here
+                          TB patient{h.case_count === 1 ? "" : "s"} living here
                         </div>
                       </div>
                     </Tooltip>
@@ -461,20 +508,22 @@ export function Hotspots() {
                             <SeverityChip severity={h.severity} />
                           </span>
                         </div>
-                        <div className="mt-2">
-                          <span className="font-display text-xl font-extrabold tracking-tight text-white">
-                            {h.case_count}
-                          </span>
-                          <span className="ml-1.5 text-[11px] text-slate-300">
-                            TB case{h.case_count === 1 ? "" : "s"} in this area
-                          </span>
-                        </div>
-                        <p className="mt-1 text-[11px] leading-snug text-slate-400">
-                          {SEVERITY_MEANING[h.severity]} Covers about{" "}
-                          {h.radius_km.toFixed(1)} km across.
+                        <HotspotReason
+                          name={barangayName(h.barangay_psgc)}
+                          ownCases={h.case_count}
+                          neighbours={neighboursWithCases(
+                            h.barangay_psgc,
+                            (p) => results.get(p)?.case_count ?? 0
+                          )}
+                        />
+                        <p
+                          className="mt-2 text-[11px] leading-snug text-slate-400"
+                          title={giDetail(h.gi_z, h.gi_p)}
+                        >
+                          {SEVERITY_MEANING[h.severity]}
                         </p>
                         <div className="mt-2 border-t border-white/10 pt-1.5 text-[11px] text-slate-500">
-                          Last updated {formatDateTime(h.detected_at)}
+                          Hotspot since {formatDateTime(h.detected_at)}
                         </div>
                       </div>
                     </Popup>
@@ -491,14 +540,17 @@ export function Hotspots() {
           TB hotspots
         </div>
         <p className="mt-1.5 text-[12px] leading-relaxed text-slate-300">
-          A hotspot is an area with a high concentration of TB cases. Bigger,
-          brighter circles mean a higher concentration.
+          A hotspot is an area where TB is higher than normal &mdash; in the
+          barangay and the barangays around it. A hotspot can have only a few
+          cases of its own if the barangays next to it have many.
         </p>
         <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
-          Concentration is measured over the last {windowDays} days of cases, so
-          the map shows where TB is concentrated now rather than over the whole
-          record.
+          Based on TB cases from the last{" "}
+          {windowDays === 365 ? "12 months" : `${windowDays} days`}, counted
+          where the patients live.
         </p>
+
+        {run && canRecompute && <MoranCard run={run} />}
 
         {/* Live status. This panel used to claim detection ran "on a schedule",
             which was not true — there is no cron job. Now it says what is
@@ -556,8 +608,8 @@ export function Hotspots() {
             <span className="font-semibold text-slate-300">
               {scope.name ?? "your assigned area"}
             </span>
-            . Detection itself runs city-wide, so a cluster straddling your
-            boundary still counts.
+            . Detection itself runs city-wide, so your barangay is always
+            compared against its real neighbours.
           </p>
         )}
       </div>
@@ -609,8 +661,8 @@ export function Hotspots() {
         </div>
         <div className="border-b border-white/10 px-4 py-2">
           <p className="text-[11px] leading-snug text-slate-400">
-            Areas with a high concentration of TB cases over the last{" "}
-            {windowDays} days. Tap one to find it on the map.
+            Hotspot barangays over the last {windowDays} days, strongest
+            first. Tap one to find it on the map.
           </p>
           {lastChecked && (
             <p className="mt-1 text-[10px] text-slate-500">
@@ -624,13 +676,15 @@ export function Hotspots() {
           </div>
         ) : list.length === 0 ? (
           <p className="px-4 py-10 text-center text-sm leading-relaxed text-slate-400">
-            No hotspot areas right now. That’s good news — no area has a high
-            concentration of TB cases. This list updates on its own as cases are
-            recorded.
+            No hotspot barangays right now — no area of the city has more TB
+            than chance would explain. This list updates on its own as cases
+            are recorded.
           </p>
         ) : (
           <ul className="flex-1 divide-y divide-white/5 overflow-y-auto">
-            {list.map((h) => (
+            {[...list]
+              .sort((a, b) => (b.gi_z ?? 0) - (a.gi_z ?? 0))
+              .map((h) => (
               <li key={h.id}>
                 <button
                   type="button"
@@ -653,8 +707,10 @@ export function Hotspots() {
                     <SeverityChip severity={h.severity} />
                   </div>
                   <div className="mt-1 pl-4 text-[11px] text-slate-400">
-                    {h.case_count} TB case{h.case_count === 1 ? "" : "s"} · about{" "}
-                    {h.radius_km.toFixed(1)} km wide
+                    <span title={giDetail(h.gi_z, h.gi_p)}>
+                      {h.case_count} TB patient{h.case_count === 1 ? "" : "s"} living
+                      here · {hotspotCertainty(h.severity).short}
+                    </span>
                   </div>
                 </button>
               </li>
@@ -682,26 +738,26 @@ export function Hotspots() {
       {/* ── Severity legend — bottom-left, clear of the zoom control ── */}
       <div className={"absolute bottom-3 left-14 z-[500] px-3 py-2 sm:bottom-4 sm:left-16 " + GLASS}>
         <div className="text-[11px] font-semibold text-slate-200">
-          How serious is it?
+          What the colours mean
         </div>
-        <div className="mt-1.5 flex items-center gap-3">
-          {SEVERITY_ORDER.map((sev) => (
+        <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
+          {GI_ORDER.map((c) => (
             <span
-              key={sev}
+              key={c}
               className="inline-flex items-center gap-1 text-[11px] text-slate-300"
-              title={SEVERITY_MEANING[sev]}
             >
               <span
-                className="inline-block h-2.5 w-2.5 rounded-full"
-                style={{ background: SEVERITY_COLOR[sev] }}
+                className="inline-block h-2.5 w-2.5 rounded-sm"
+                style={{ background: GI_FILL[c] ?? undefined }}
               />
-              {SEVERITY_LABEL[sev]}
+              {GI_LABEL[c]}
             </span>
           ))}
         </div>
         <div className="mt-1 text-[10px] text-slate-500">
-          Lower concentration → higher concentration
+          Barangays with no colour show no clear pattern.
         </div>
+        <ConfidenceExplainer tone="dark" className="mt-1.5 max-w-xs" />
       </div>
 
       {/* ── Empty overlay — map stays visible behind ────────────────── */}
@@ -712,15 +768,94 @@ export function Hotspots() {
               <>Checking for areas with a high concentration of TB cases…</>
             ) : (
               <>
-                No hotspots to show. No area currently has enough TB cases close
-                together to count as one — this map will fill in by itself if
-                that changes.
+                No hotspots to show. No area of the city has more TB than
+                chance would explain — this map will fill in by itself if that
+                changes.
               </>
             )}
           </p>
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Citywide clustering test for coordinators: Global Moran's I is run before
+ * Gi*, and a Gi* hotspot reads differently when the city as a whole shows no
+ * significant clustering.
+ */
+function MoranCard({ run }: { run: HotspotRun }) {
+  const significant = run.moran_p_sim < 0.05;
+  const verdict =
+    significant && run.moran_i > run.moran_expected
+      ? {
+          answer: "Yes",
+          text: "Barangays with many TB cases are grouped together in one part of the city.",
+        }
+      : significant
+        ? {
+            answer: "No",
+            text: "Barangays with many TB cases are spread out across the city.",
+          }
+        : {
+            answer: "Not clearly",
+            text: "TB is not grouped in one part of the city. Visit each hotspot to check the situation on the ground.",
+          };
+  return (
+    <div className="mt-3 border-t border-white/10 pt-2.5">
+      <div className="text-[11px] font-semibold text-slate-200">
+        Is TB grouped in one part of the city?
+      </div>
+      <p className="mt-1 text-[12px] leading-snug text-slate-300">
+        <span className="font-semibold text-white">{verdict.answer}.</span>{" "}
+        {verdict.text}
+      </p>
+      {run.metric === "case_count" && (
+        <p className="mt-1.5 text-[10px] leading-snug text-slate-400">
+          Note: this compares numbers of cases only. Barangay population numbers
+          have not been added yet.
+        </p>
+      )}
+      {/* The statistics stay available for reports and the manuscript,
+          folded away so they never confuse a health worker. */}
+      <details className="mt-1.5 text-[10px] text-slate-500">
+        <summary className="cursor-pointer select-none font-semibold text-slate-400 underline underline-offset-2 hover:text-slate-200">
+          Show the numbers
+        </summary>
+        <dl className="mt-1.5 grid grid-cols-3 gap-2 text-center">
+          {[
+            ["I", run.moran_i.toFixed(3)],
+            ["z", run.moran_z.toFixed(2)],
+            ["p", formatP(run.moran_p_sim)],
+          ].map(([k, v]) => (
+            <div key={k} className="rounded-md bg-white/5 px-1 py-1">
+              <dt className="font-mono text-[9px] uppercase tracking-wider text-slate-500">
+                {k}
+              </dt>
+              <dd className="font-display text-sm font-bold tabular-nums text-white">
+                {v}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-1 leading-snug">
+          Global Moran&rsquo;s I · E[I] = {run.moran_expected.toFixed(4)} ·{" "}
+          {run.permutations} permutations · {run.n_units} barangays ·{" "}
+          {run.cases_considered.toLocaleString()} cases
+          {run.metric === "case_count" ? " · case counts, not rates per 100,000" : ""}
+        </p>
+      </details>
+    </div>
+  );
+}
+
+/** For text placed into Leaflet's HTML tooltips. */
+function escapeHtml(s: string): string {
+  return s.replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c
   );
 }
 

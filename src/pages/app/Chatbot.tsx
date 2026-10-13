@@ -230,7 +230,7 @@ export function Chatbot() {
       `- Data coverage: ${coverage}`,
       `- TB cases (all-time) in ${coverage}: ${totalCount}`,
       `- TB cases in the last 30 days: ${recentCount}`,
-      `- Active hotspot clusters on record: ${hotspotCount}`,
+      `- Barangays currently flagged as TB hotspots (Getis-Ord Gi*): ${hotspotCount}`,
     ];
     if (scope.scoped) {
       lines.push(
@@ -417,7 +417,7 @@ export function Chatbot() {
           .maybeSingle();
         if (hs) {
           lines.push(
-            `- ${bgy.name} hotspot (area with a high concentration of TB cases): ${hs.severity} severity, ${hs.case_count} cases concentrated there (last updated ${new Date(hs.detected_at).toLocaleDateString("en-PH")})`
+            `- ${bgy.name} is a TB hotspot: TB is high in ${bgy.name} and in the barangays around it, more than chance would explain (${hs.severity === "urgent" ? "very strong pattern at 99% confidence: if cases were spread randomly, a pattern this strong would happen less than 1 time in 100" : "strong pattern at 95% confidence: if cases were spread randomly, a pattern this strong would happen less than 1 time in 20"}). ${hs.case_count} TB patients are recorded as living in ${bgy.name}; a barangay can be a hotspot with few or no cases of its own when the barangays next to it have many. Hotspot since ${new Date(hs.detected_at).toLocaleDateString("en-PH")}. Explain this in plain words — do not quote z-scores or p-values.`
           );
         } else {
           lines.push(`- ${bgy.name}: no hotspot on record`);

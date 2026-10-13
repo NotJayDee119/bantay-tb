@@ -7,7 +7,6 @@ import {
   BarChart3,
   BookOpen,
   Bot,
-  CalendarClock,
   ClipboardList,
   Flame,
   MapPin,
@@ -30,11 +29,17 @@ import {
   type CaseAttribution,
   type FacilityRow,
   type HotspotCaseRow,
+  giDetail,
+  hotspotCertainty,
+  neighboursWithCases,
   type HotspotCluster,
   type HotspotInsights,
 } from "../../lib/hotspotUtils";
 import { useCaseAttribution } from "../../hooks/useCaseAttribution";
 import { useDotsCenters, useTbCases } from "../../hooks/useTbCases";
+import { useCurrentHotspots } from "../../hooks/useCurrentHotspots";
+import { HotspotReason } from "../../components/HotspotReason";
+import { ConfidenceExplainer } from "../../components/ConfidenceExplainer";
 import { HealthWorkerHome } from "./HealthWorkerHome";
 import { CoordinatorHome, type OutcomeStats } from "./CoordinatorHome";
 import { YearFilter } from "../../components/YearFilter";
@@ -133,7 +138,6 @@ function indicatorFor(caseCount: number, maxCount: number): IndicatorMeta {
 interface DashboardStats {
   totalCases: number;
   yoyChangePct: number | null;
-  activeHotspots: number;
   barangaysWithCases: number;
   detectionRatePct: number;
   lastUpload: Date | null;
@@ -247,7 +251,6 @@ function buildStats(
   return {
     totalCases: insights.totalCases,
     yoyChangePct,
-    activeHotspots: insights.clusters.length,
     barangaysWithCases: insights.barangayStats.length,
     detectionRatePct:
       TOTAL_BARANGAYS > 0
@@ -301,6 +304,9 @@ export function Dashboard() {
   const facilities = useMemo(() => centersQuery.data ?? [], [centersQuery.data]);
   const loading = staff && (casesQuery.isPending || centersQuery.isPending);
   const [showHotspotsModal, setShowHotspotsModal] = useState(false);
+  // The same citywide Gi* list the Hotspots page and the alerts use.
+  const { hotspots } = useCurrentHotspots(staff);
+  const activeHotspots = hotspots.clusters.length;
 
   const stats = useMemo(
     () =>
@@ -408,7 +414,7 @@ export function Dashboard() {
           totalCases={stats.totalCases}
           recentCases={stats.liveRecentCases}
           recentWindowDays={stats.insights.recentWindowDays}
-          activeHotspots={stats.activeHotspots}
+          activeHotspots={activeHotspots}
           lastUpload={stats.lastUpload}
           onOpenHotspots={() => setShowHotspotsModal(true)}
           areaTable={
@@ -434,7 +440,7 @@ export function Dashboard() {
           totalBarangays={TOTAL_BARANGAYS}
           recentCases={stats.liveRecentCases}
           recentWindowDays={stats.insights.recentWindowDays}
-          activeHotspots={stats.activeHotspots}
+          activeHotspots={activeHotspots}
           lastUpload={stats.lastUpload}
           onOpenHotspots={() => setShowHotspotsModal(true)}
           areaTable={
@@ -450,6 +456,7 @@ export function Dashboard() {
       ) : (
         <SurveillanceDashboard
           stats={stats}
+          activeHotspots={activeHotspots}
           year={year}
           onOpenHotspots={() => setShowHotspotsModal(true)}
           scope={scope}
@@ -460,7 +467,8 @@ export function Dashboard() {
 
       {stats && showHotspotsModal && (
         <HotspotsModal
-          clusters={stats.insights.clusters}
+          clusters={hotspots.clusters}
+          caseCounts={hotspots.caseCounts}
           onClose={() => setShowHotspotsModal(false)}
         />
       )}
@@ -489,6 +497,7 @@ const QUICK_ACTIONS = [
 
 function SurveillanceDashboard({
   stats,
+  activeHotspots,
   year,
   onOpenHotspots,
   scope,
@@ -496,6 +505,7 @@ function SurveillanceDashboard({
   onAttributionChange,
 }: {
   stats: DashboardStats;
+  activeHotspots: number;
   year: CaseYear;
   onOpenHotspots: () => void;
   scope: AreaScope;
@@ -645,18 +655,18 @@ function SurveillanceDashboard({
           type="button"
           onClick={onOpenHotspots}
           className="text-left"
-          aria-label={`View ${stats.activeHotspots} active hotspot${stats.activeHotspots === 1 ? "" : "s"}`}
+          aria-label={`View ${activeHotspots} active hotspot${activeHotspots === 1 ? "" : "s"}`}
         >
           <StatTile
             icon={<Flame className="h-5 w-5" />}
             iconClass="bg-red-50 text-red-600"
             accentClass="bg-red-500"
             label="Active hotspots"
-            value={stats.activeHotspots.toLocaleString()}
+            value={activeHotspots.toLocaleString()}
             footer={
               <span className="inline-flex items-center gap-1 font-medium text-red-600">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                Areas with concentrated cases — click to inspect
+                Areas with more TB than usual — click to see why
               </span>
             }
             interactive
@@ -989,9 +999,11 @@ function BarangayTable({
 
 function HotspotsModal({
   clusters,
+  caseCounts,
   onClose,
 }: {
   clusters: HotspotCluster[];
+  caseCounts: Map<number, number>;
   onClose: () => void;
 }) {
   // Close on Escape.
@@ -1004,7 +1016,7 @@ function HotspotsModal({
   }, [onClose]);
 
   const sorted = useMemo(
-    () => [...clusters].sort((a, b) => b.caseCount - a.caseCount),
+    () => [...clusters].sort((a, b) => b.giZ - a.giZ),
     [clusters]
   );
 
@@ -1029,9 +1041,11 @@ function HotspotsModal({
               Active hotspots
             </h2>
             <p className="mt-0.5 text-sm text-slate-600">
-              {sorted.length} area{sorted.length === 1 ? "" : "s"} with a high
-              concentration of TB cases, grouped by DBSCAN.
+              {sorted.length} barangay{sorted.length === 1 ? "" : "s"} where TB
+              is high in the barangay and the barangays around it — more than
+              chance would explain.
             </p>
+            <ConfidenceExplainer className="mt-1.5" />
           </div>
           <button
             type="button"
@@ -1046,8 +1060,8 @@ function HotspotsModal({
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {sorted.length === 0 ? (
             <p className="py-12 text-center text-sm text-slate-500">
-              No active hotspots. Cases are spread out enough that no area
-              reaches the concentration threshold DBSCAN looks for.
+              No active hotspots. No area of the city has more TB than chance
+              would explain right now.
             </p>
           ) : (
             <ul className="space-y-3">
@@ -1060,24 +1074,22 @@ function HotspotsModal({
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-display text-base font-semibold text-slate-900">
-                          Hotspot #{cluster.id + 1}
+                          {cluster.name}
                         </span>
                         <SeverityBadge severity={cluster.severity} />
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
                         <span className="inline-flex items-center gap-1">
                           <ClipboardList className="h-3.5 w-3.5" />
-                          {cluster.caseCount} case
+                          {cluster.caseCount} resident case
                           {cluster.caseCount === 1 ? "" : "s"}
                         </span>
-                        <span className="inline-flex items-center gap-1">
+                        <span
+                          className="inline-flex items-center gap-1"
+                          title={giDetail(cluster.giZ, cluster.giP)}
+                        >
                           <MapPin className="h-3.5 w-3.5" />
-                          {cluster.radiusKm.toFixed(2)} km radius
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                          <CalendarClock className="h-3.5 w-3.5" />
-                          {cluster.centroid.lat.toFixed(4)},{" "}
-                          {cluster.centroid.lon.toFixed(4)}
+                          {hotspotCertainty(cluster.severity).long}
                         </span>
                       </div>
                     </div>
@@ -1090,23 +1102,15 @@ function HotspotsModal({
                       </Link>
                     )}
                   </div>
-                  {cluster.barangays.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {cluster.barangays.slice(0, 6).map((b) => (
-                        <span
-                          key={b.psgc}
-                          className="rounded-full bg-white px-2.5 py-0.5 text-xs text-slate-700 ring-1 ring-inset ring-slate-200"
-                        >
-                          {b.name} · {b.count}
-                        </span>
-                      ))}
-                      {cluster.barangays.length > 6 && (
-                        <span className="rounded-full bg-white px-2.5 py-0.5 text-xs text-slate-500 ring-1 ring-inset ring-slate-200">
-                          +{cluster.barangays.length - 6} more
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  <HotspotReason
+                    tone="light"
+                    name={cluster.name}
+                    ownCases={cluster.caseCount}
+                    neighbours={neighboursWithCases(
+                      cluster.psgc,
+                      (p) => caseCounts.get(p) ?? 0
+                    )}
+                  />
                 </li>
               ))}
             </ul>

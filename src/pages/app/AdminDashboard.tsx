@@ -211,7 +211,7 @@ export function AdminDashboard() {
           accentClass="bg-red-500"
           label="Active hotspots · 30d"
           value={stats.activeHotspots.toLocaleString()}
-          footer="DBSCAN clusters in the last 30 days"
+          footer="Areas with more TB than chance would explain"
         />
         <StatTile
           icon={MapPinned}

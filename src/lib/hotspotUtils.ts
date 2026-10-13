@@ -1,16 +1,16 @@
-// Hotspot analytics built on top of the existing DBSCAN clustering helper
-// (`src/lib/dbscan.ts`). A hotspot is an AREA with a high concentration of TB
-// cases; a cluster here is the geometry of one such area, never "the new
-// cases". Given a stream of TB case rows from `public.cases`, computes
-// barangay-level counts, recent-activity tallies, and DBSCAN-derived spatial
-// clusters. Each case is positioned at the
-// centroid of its barangay (looked up via `src/data/barangays.json`) so we
-// do not need per-case jittered coordinates for the high-level admin map.
+// Barangay-level case analytics, plus the shape every page uses for a hotspot.
+//
+// A hotspot is a BARANGAY whose TB burden is statistically high together with
+// its neighbours' — Local Getis-Ord Gi* over queen-contiguity weights, after
+// Global Moran's I (src/lib/spatialStats.ts). Hotspots are computed ONLY by
+// the detect-hotspots Edge Function, over every case in the city, and read
+// back through useCurrentHotspots(); pages never recompute them from the
+// cases they happen to have loaded, which differ by role and date filter.
 
 import type { TBClassification } from "./database.types";
-import { dbscan, type DbscanPoint } from "./dbscan";
-import { haversineKm } from "./utils";
+import type { GiClass } from "./spatialStats";
 import barangaysData from "../data/barangays.json";
+import barangayNeighbors from "../data/barangayNeighbors.json";
 
 export interface HotspotCaseRow {
   /** Barangay of the patient's residence — not the facility's barangay. */
@@ -18,9 +18,8 @@ export interface HotspotCaseRow {
   reported_at: string | null;
   created_at: string | null;
   tb_classification: TBClassification | null;
-  // Optional per-case jittered coordinates (preferred when available so DBSCAN
-  // produces precise clusters instead of stacking every case at the
-  // barangay centroid).
+  // Optional per-case jittered coordinates — used by the case-pin views,
+  // not by hotspot detection, which works on barangay totals.
   jitter_lat?: number | null;
   jitter_lon?: number | null;
   /** DOTS facility this case is registered/notified at. */
@@ -37,6 +36,7 @@ interface BarangayMeta {
   name: string;
   lat: number;
   lon: number;
+  area_km2?: number;
 }
 
 /**
@@ -73,13 +73,54 @@ export interface BarangayStat {
 
 export type HotspotSeverity = "watch" | "moderate" | "high" | "urgent" | "low" | "medium";
 
+/** One barangay classified as a Gi* hotspot (95% or 99%). */
 export interface HotspotCluster {
   id: number;
+  psgc: number;
+  name: string;
   caseCount: number;
+  /** high = 95% hotspot, urgent = 99% hotspot. */
   severity: HotspotSeverity;
+  giZ: number;
+  giP: number;
+  giClass: GiClass;
+  /** Barangay centroid. */
   centroid: { lat: number; lon: number };
+  /** Radius of a circle with the barangay's area — map display only. */
   radiusKm: number;
   barangays: { psgc: number; name: string; count: number }[];
+}
+
+/** A row of `public.hotspots` as written by detect-hotspots. */
+export interface CurrentHotspotRow {
+  id: string;
+  barangay_psgc: number;
+  case_count: number;
+  severity: HotspotSeverity;
+  gi_z: number;
+  gi_p: number;
+  gi_class: GiClass;
+  centroid_lat: number;
+  centroid_lon: number;
+  radius_km: number;
+}
+
+export function hotspotRowToCluster(row: CurrentHotspotRow): HotspotCluster {
+  const psgc = Number(row.barangay_psgc);
+  const name = BARANGAY_INDEX.get(psgc)?.name ?? `PSGC ${psgc}`;
+  return {
+    id: 0,
+    psgc,
+    name,
+    caseCount: row.case_count,
+    severity: row.severity,
+    giZ: row.gi_z,
+    giP: row.gi_p,
+    giClass: row.gi_class,
+    centroid: { lat: row.centroid_lat, lon: row.centroid_lon },
+    radiusKm: row.radius_km,
+    barangays: [{ psgc, name, count: row.case_count }],
+  };
 }
 
 export interface HotspotInsights {
@@ -90,31 +131,79 @@ export interface HotspotInsights {
   attribution: CaseAttribution;
   barangayStats: BarangayStat[];
   topBarangays: BarangayStat[];
-  /** Always residence-based — see the note at the DBSCAN input below. */
-  clusters: HotspotCluster[];
   classificationBreakdown: Record<string, number>;
 }
 
 const RECENT_WINDOW_DAYS = 30;
-// DBSCAN parameters: ~1.5 km neighbourhood and 3+ cases to form a hotspot.
-// These values are chosen so that adjacent dense barangays merge into a
-// single cluster while isolated cases stay as noise.
-const DBSCAN_EPS_KM = 5;
-const DBSCAN_MIN_PTS = 2;
 
 const BARANGAY_INDEX: Map<number, BarangayMeta> = new Map(
   (barangaysData as BarangayMeta[]).map((b) => [
     b.psgc,
-    { psgc: b.psgc, name: b.name, lat: b.lat, lon: b.lon },
+    { psgc: b.psgc, name: b.name, lat: b.lat, lon: b.lon, area_km2: b.area_km2 },
   ])
 );
 
-function severityFor(caseCount: number): HotspotSeverity {
-  if (caseCount >= 50) return "urgent";
-  if (caseCount >= 20) return "high";
-  if (caseCount >= 10) return "moderate";
-  return "watch";
+const NEIGHBORS = barangayNeighbors as Record<string, number[]>;
+
+/**
+ * How strong the hotspot is, in words a health worker reads without
+ * statistics — and that stay statistically correct for a reviewer.
+ *
+ * Gi* z ≥ 2.58 is the 99% confidence level (severity "urgent"), z ≥ 1.96 the
+ * 95% level ("high"); there are only these two. The correct reading of a
+ * confidence level is about chance under random placement: "if cases were
+ * spread randomly, a pattern this strong would appear less than 1 time in
+ * 100". It is NOT "99% probability this is a real hotspot" — that is the
+ * classic misreading of a p-value, so the wording avoids it.
+ * The raw z / p stay available as a hover title for coordinators.
+ */
+export function hotspotCertainty(severity: string | null | undefined): {
+  short: string;
+  long: string;
+} {
+  return severity === "urgent"
+    ? {
+        short: "99% confidence",
+        long: "Very strong pattern (99% confidence)",
+      }
+    : {
+        short: "95% confidence",
+        long: "Strong pattern (95% confidence)",
+      };
 }
+
+/** Technical detail for a hover title: "Gi* z = 2.61 · p = 0.009". */
+export function giDetail(z: number | null | undefined, p: number | null | undefined): string {
+  if (z === null || z === undefined) return "";
+  const pText =
+    p === null || p === undefined ? "" : ` · p = ${p < 0.001 ? "< 0.001" : p.toFixed(3)}`;
+  return `Getis-Ord Gi* z = ${z.toFixed(2)}${pText}`;
+}
+
+export interface NeighbourCases {
+  psgc: number;
+  name: string;
+  count: number;
+}
+
+/**
+ * Queen neighbours of `psgc` that have at least one case, largest first —
+ * what lifts a barangay's Gi* score besides its own count.
+ */
+export function neighboursWithCases(
+  psgc: number,
+  countOf: (psgc: number) => number
+): NeighbourCases[] {
+  return (NEIGHBORS[String(psgc)] ?? [])
+    .map((p) => ({
+      psgc: p,
+      name: BARANGAY_INDEX.get(p)?.name ?? `PSGC ${p}`,
+      count: countOf(p),
+    }))
+    .filter((n) => n.count > 0)
+    .sort((a, b) => b.count - a.count);
+}
+
 
 function caseDate(row: HotspotCaseRow): number {
   const raw = row.reported_at ?? row.created_at;
@@ -202,70 +291,6 @@ export function computeHotspotInsights(
   barangayStats.sort((a, b) => b.caseCount - a.caseCount);
   const topBarangays = barangayStats.slice(0, 10);
 
-  // Clusters are always built on RESIDENCE, whatever axis the barangay counts
-  // are drawn on. A hotspot is an area where transmission is happening, and
-  // transmission happens where people live — clustering on the registering
-  // facility would pile every case onto a handful of clinic addresses and put
-  // the hotspot on the health centre instead of the neighbourhood.
-  //
-  // Build DBSCAN input. Prefer per-case jittered coordinates for precise
-  // clustering; fall back to the barangay centroid when jitter coords are
-  // not present. Cases with no resolvable position are dropped from
-  // clustering but still counted in the summary.
-  const points: DbscanPoint[] = [];
-  const pointBgy: number[] = [];
-  for (let i = 0; i < cases.length; i += 1) {
-    const row = cases[i];
-    const meta = BARANGAY_INDEX.get(row.barangay_psgc);
-    const lat =
-      typeof row.jitter_lat === "number" && Number.isFinite(row.jitter_lat)
-        ? row.jitter_lat
-        : meta?.lat;
-    const lon =
-      typeof row.jitter_lon === "number" && Number.isFinite(row.jitter_lon)
-        ? row.jitter_lon
-        : meta?.lon;
-    if (typeof lat !== "number" || typeof lon !== "number") continue;
-    points.push({ id: String(i), lat, lon });
-    pointBgy.push(row.barangay_psgc);
-  }
-
-  const rawClusters = dbscan(points, DBSCAN_EPS_KM, DBSCAN_MIN_PTS);
-  const idToIndex = new Map<string, number>();
-  points.forEach((p, idx) => idToIndex.set(p.id, idx));
-
-  const clusters: HotspotCluster[] = rawClusters.map((cl) => {
-    const bgyCounts = new Map<number, number>();
-    let maxRadius = 0;
-    for (const p of cl.points) {
-      const idx = idToIndex.get(p.id);
-      if (idx === undefined) continue;
-      const psgc = pointBgy[idx];
-      bgyCounts.set(psgc, (bgyCounts.get(psgc) ?? 0) + 1);
-      const d = haversineKm(
-        [p.lon, p.lat],
-        [cl.centroid.lon, cl.centroid.lat]
-      );
-      if (d > maxRadius) maxRadius = d;
-    }
-    const radiusKm = Math.max(0.3, maxRadius);
-    const barangays = [...bgyCounts.entries()]
-      .map(([psgc, count]) => ({
-        psgc,
-        name: BARANGAY_INDEX.get(psgc)?.name ?? `PSGC ${psgc}`,
-        count,
-      }))
-      .sort((a, b) => b.count - a.count);
-    return {
-      id: cl.id,
-      caseCount: cl.points.length,
-      severity: severityFor(cl.points.length),
-      centroid: cl.centroid,
-      radiusKm,
-      barangays,
-    };
-  });
-
   return {
     totalCases,
     recentCases,
@@ -273,7 +298,6 @@ export function computeHotspotInsights(
     attribution,
     barangayStats,
     topBarangays,
-    clusters,
     classificationBreakdown,
   };
 }

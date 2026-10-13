@@ -46,6 +46,14 @@ export type AppRoleName =
   | "patient"
   | "system_admin";
 
+/** Getis-Ord Gi* classification of a barangay (see 20261023000000). */
+export type GiClassValue =
+  | "hotspot_99"
+  | "hotspot_95"
+  | "not_significant"
+  | "coldspot_95"
+  | "coldspot_99";
+
 export interface Database {
   public: {
     Tables: {
@@ -204,6 +212,12 @@ export interface Database {
           centroid_lat: number;
           centroid_lon: number;
           radius_km: number;
+          /** Detection run that produced this row. */
+          run_id: string | null;
+          /** Getis-Ord Gi* z-score and two-sided p-value of the barangay. */
+          gi_z: number | null;
+          gi_p: number | null;
+          gi_class: GiClassValue | null;
         };
         Insert: Partial<Database["public"]["Tables"]["hotspots"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["hotspots"]["Row"]>;
@@ -241,6 +255,56 @@ export interface Database {
           lon: number;
         };
         Update: Partial<Database["public"]["Tables"]["dots_centers"]["Row"]>;
+        Relationships: [];
+      };
+      barangay_neighbors: {
+        Row: {
+          barangay_psgc: number;
+          neighbor_psgc: number;
+          kind: "queen" | "knn";
+        };
+        Insert: Database["public"]["Tables"]["barangay_neighbors"]["Row"];
+        Update: Partial<Database["public"]["Tables"]["barangay_neighbors"]["Row"]>;
+        Relationships: [];
+      };
+      hotspot_runs: {
+        Row: {
+          id: string;
+          run_at: string;
+          trigger: string;
+          window_start: string;
+          window_end: string;
+          metric: "rate_per_100k" | "case_count";
+          n_units: number;
+          cases_considered: number;
+          moran_i: number;
+          moran_expected: number;
+          moran_z: number;
+          moran_p_norm: number;
+          moran_p_sim: number;
+          permutations: number;
+          hotspot_count: number;
+          coldspot_count: number;
+          duration_ms: number | null;
+        };
+        Insert: Partial<Database["public"]["Tables"]["hotspot_runs"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["hotspot_runs"]["Row"]>;
+        Relationships: [];
+      };
+      hotspot_results: {
+        Row: {
+          run_id: string;
+          barangay_psgc: number;
+          case_count: number;
+          population: number | null;
+          value: number;
+          gi_z: number;
+          gi_p: number;
+          gi_class: GiClassValue;
+          fdr_significant: boolean;
+        };
+        Insert: Database["public"]["Tables"]["hotspot_results"]["Row"];
+        Update: Partial<Database["public"]["Tables"]["hotspot_results"]["Row"]>;
         Relationships: [];
       };
       app_settings: {

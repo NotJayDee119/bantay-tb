@@ -118,21 +118,6 @@ describe("computeHotspotInsights attribution", () => {
     expect(insights.attribution).toBe("residence");
     expect(statFor(insights.barangayStats, MINTAL.psgc)?.caseCount).toBe(2);
   });
-
-  it("clusters on residence regardless of the counting axis", () => {
-    // Transmission happens where people live. Clustering on the registering
-    // facility would stack every case onto the clinic and put the hotspot on
-    // the health centre instead of the neighbourhood.
-    const byFacility = computeHotspotInsights(CASES, {
-      attribution: "facility",
-      facilities: [TALOMO_DOTS],
-    });
-    const byResidence = computeHotspotInsights(CASES, {
-      attribution: "residence",
-      facilities: [TALOMO_DOTS],
-    });
-    expect(byFacility.clusters).toEqual(byResidence.clusters);
-  });
 });
 
 describe("computeCasePins", () => {
