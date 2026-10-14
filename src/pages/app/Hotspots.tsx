@@ -164,6 +164,12 @@ export function Hotspots() {
   // Scoped staff still see every hotspot RLS grants them — they just don't
   // trigger the run; the detect-hotspots Edge Function does it citywide.
   const canRecompute = !scope.scoped;
+  // The citywide "Hotspot areas" list is for coordinators; BHW/nurse/doctor
+  // and barangay admin accounts just see the map.
+  const showHotspotList = !scope.scoped;
+  // Area staff see where the hotspots are, not how many patients sit behind
+  // them — case figures stay with citywide accounts.
+  const showCaseCounts = !scope.scoped;
   const [list, setList] = useState<Hotspot[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
@@ -426,8 +432,10 @@ export function Hotspots() {
                       `<div style="margin-top:2px;display:flex;align-items:center;gap:6px;font-size:11px;color:#cbd5e1">` +
                       `<span style="width:8px;height:8px;border-radius:9999px;background:${dot};flex-shrink:0"></span>` +
                       `${GI_LABEL[r.gi_class]}</div>` +
-                      `<div style="margin-top:2px;font-size:10px;color:#94a3b8">` +
-                      `${cases.toLocaleString()} TB patient${cases === 1 ? "" : "s"} living here</div>` +
+                      (showCaseCounts
+                        ? `<div style="margin-top:2px;font-size:10px;color:#94a3b8">` +
+                          `${cases.toLocaleString()} TB patient${cases === 1 ? "" : "s"} living here</div>`
+                        : "") +
                       `</div>`,
                     { sticky: true, className: "pcm-tooltip" }
                   );
@@ -480,18 +488,22 @@ export function Hotspots() {
                             {barangayName(h.barangay_psgc)}
                           </span>
                         </div>
-                        <div className="mt-1 font-display text-2xl font-extrabold leading-none tracking-tight text-white">
-                          {h.case_count}
-                        </div>
+                        {showCaseCounts && (
+                          <div className="mt-1 font-display text-2xl font-extrabold leading-none tracking-tight text-white">
+                            {h.case_count}
+                          </div>
+                        )}
                         <div
                           className="mt-0.5 text-[11px] font-semibold"
                           style={{ color }}
                         >
                           {SEVERITY_LABEL[h.severity]}
                         </div>
-                        <div className="text-[10px] text-slate-300">
-                          TB patient{h.case_count === 1 ? "" : "s"} living here
-                        </div>
+                        {showCaseCounts && (
+                          <div className="text-[10px] text-slate-300">
+                            TB patient{h.case_count === 1 ? "" : "s"} living here
+                          </div>
+                        )}
                       </div>
                     </Tooltip>
                     <Popup className="ghm-popup">
@@ -508,14 +520,16 @@ export function Hotspots() {
                             <SeverityChip severity={h.severity} />
                           </span>
                         </div>
-                        <HotspotReason
-                          name={barangayName(h.barangay_psgc)}
-                          ownCases={h.case_count}
-                          neighbours={neighboursWithCases(
-                            h.barangay_psgc,
-                            (p) => results.get(p)?.case_count ?? 0
-                          )}
-                        />
+                        {showCaseCounts && (
+                          <HotspotReason
+                            name={barangayName(h.barangay_psgc)}
+                            ownCases={h.case_count}
+                            neighbours={neighboursWithCases(
+                              h.barangay_psgc,
+                              (p) => results.get(p)?.case_count ?? 0
+                            )}
+                          />
+                        )}
                         <p
                           className="mt-2 text-[11px] leading-snug text-slate-400"
                           title={giDetail(h.gi_z, h.gi_p)}
@@ -614,6 +628,8 @@ export function Hotspots() {
         )}
       </div>
 
+      {showHotspotList && (
+      <>
       {/* ── Detections chip — compact, only while the rail is hidden ─── */}
       <div className="pointer-events-none absolute right-3 top-3 z-[500] md:hidden">
         <div className={"pointer-events-auto flex items-center gap-2 px-3 py-2 " + GLASS}>
@@ -733,6 +749,8 @@ export function Hotspots() {
           <AlertTriangle className="h-4 w-4 text-vigil-400" />
           {list.length} hotspot{list.length === 1 ? "" : "s"}
         </button>
+      )}
+      </>
       )}
 
       {/* ── Severity legend — bottom-left, clear of the zoom control ── */}
