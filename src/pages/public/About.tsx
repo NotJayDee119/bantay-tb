@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import {
   Activity,
   ArrowRight,
+  BarChart3,
   Bell,
   BookOpenCheck,
   Clock,
@@ -17,6 +18,7 @@ import {
   Radar,
   ShieldCheck,
   Target,
+  Upload,
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -81,6 +83,40 @@ const PRINCIPLES = [
     icon: Handshake,
     title: "Partnership, not replacement",
     body: "Built to work alongside the City Health Office and its existing systems.",
+  },
+];
+
+/* ── The five modules — labelled by module, not a numbered sequence ──── */
+const CAPABILITIES = [
+  {
+    tag: "MAP",
+    icon: MapPin,
+    title: "GIS Mapping & Hotspots",
+    body: "Near real-time geospatial view of TB cases, pinpointing hotspots — areas with a high concentration of cases — for targeted response.",
+  },
+  {
+    tag: "CASES",
+    icon: Users,
+    title: "Case Management",
+    body: "Patient registration, treatment tracking, and outcome monitoring across every DOTS facility in the city.",
+  },
+  {
+    tag: "ALERTS",
+    icon: Bell,
+    title: "Hotspot Alerts",
+    body: "In-app alerts to barangay staff and the TB coordinator the moment an area is flagged as a hotspot.",
+  },
+  {
+    tag: "IMPORT",
+    icon: Upload,
+    title: "Bulk Excel Import",
+    body: "Upload CHO monthly reports (.xlsx, .xls, .csv). Columns are matched automatically and hotspot detection re-runs after each import.",
+  },
+  {
+    tag: "DATA",
+    icon: BarChart3,
+    title: "Analytics & Reporting",
+    body: "Program dashboards and automated reports for monitoring, evaluation, and DOH submission.",
   },
 ];
 
@@ -576,6 +612,93 @@ export function About() {
                 </p>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── The five modules — bento, GIS mapping as the flagship tile ── */}
+      {/* Moved here from the homepage, which now speaks to residents. */}
+      <section className="border-b border-slate-200 bg-white py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="max-w-2xl" data-reveal>
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-brand-600">
+              What the platform does
+            </p>
+            <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+              Five modules, built around one goal
+            </h2>
+            <p className="mt-3 text-base leading-relaxed text-slate-600">
+              From finding a case to recording how its treatment ended.
+            </p>
+          </div>
+
+          {/* Bento: the map module takes the left half, the other four sit
+              2×2 beside it. On two columns it spans the top row instead. */}
+          <div data-reveal className="mt-12 grid gap-5 sm:grid-cols-2 lg:auto-rows-fr lg:grid-cols-4">
+            {CAPABILITIES.map((c, i) => {
+              const featured = i === 0;
+              return (
+                <div
+                  key={c.title}
+                  className={
+                    "relative flex flex-col overflow-hidden border shadow-soft " +
+                    (featured
+                      ? "rounded-3xl border-brand-900 bg-brand-950 p-7 text-white sm:col-span-2 lg:row-span-2 lg:p-9"
+                      : "rounded-2xl border-slate-200 bg-white p-6")
+                  }
+                >
+                  {featured && (
+                    <>
+                      <div aria-hidden className="pointer-events-none absolute inset-0 bg-vigil-grid opacity-60" />
+                      <div
+                        aria-hidden
+                        className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent-500/10 blur-3xl"
+                      />
+                    </>
+                  )}
+                  <div className="relative flex items-start justify-between gap-3">
+                    <span
+                      className={
+                        "grid place-items-center " +
+                        (featured
+                          ? "h-14 w-14 rounded-2xl bg-white/10 text-accent-400 ring-1 ring-white/15"
+                          : "h-11 w-11 rounded-xl bg-brand-950 text-white")
+                      }
+                    >
+                      <c.icon className={featured ? "h-7 w-7" : "h-5 w-5"} />
+                    </span>
+                    <span
+                      className={
+                        "rounded-full px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] " +
+                        (featured
+                          ? "border border-white/15 bg-white/10 text-brand-200"
+                          : "bg-slate-100 text-slate-500")
+                      }
+                    >
+                      {c.tag}
+                    </span>
+                  </div>
+                  <h3
+                    className={
+                      "relative font-display mt-4 font-bold tracking-tight " +
+                      (featured
+                        ? "text-2xl text-white sm:mt-8 lg:mt-auto lg:text-3xl"
+                        : "text-lg text-slate-900")
+                    }
+                  >
+                    {c.title}
+                  </h3>
+                  <p
+                    className={
+                      "relative mt-1.5 leading-relaxed " +
+                      (featured ? "max-w-sm text-sm text-slate-300" : "text-sm text-slate-600")
+                    }
+                  >
+                    {c.body}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>

@@ -184,22 +184,70 @@ const OUT_OF_SCOPE: Record<Locale, string> = {
 // before retrieval, without calling the model.
 type SmallTalk = "greet" | "thanks" | "bye";
 
-const SMALL_TALK_REPLIES: Record<SmallTalk, Record<Locale, string>> = {
+// Two wordings each, alternated within a conversation (see rotate()).
+const SMALL_TALK_REPLIES: Record<SmallTalk, Record<Locale, string[]>> = {
   greet: {
-    en: "Good day. How may I assist you? You may ask about the symptoms, treatment, or prevention of tuberculosis and other respiratory diseases, or about how to use BANTAY-TB.",
-    tl: "Magandang araw po. Paano ko po kayo matutulungan? Maaari po kayong magtanong tungkol sa sintomas, paggamot, o pag-iwas sa tuberkulosis at iba pang sakit sa baga, o kung paano gamitin ang BANTAY-TB.",
-    ceb: "Maayong adlaw. Unsaon nako pagtabang kaninyo? Mahimo kamong mangutana bahin sa sintomas, tambal, o paglikay sa tuberkulosis ug uban pang sakit sa baga, o unsaon paggamit sa BANTAY-TB.",
+    en: [
+      "Good day. How may I assist you? You may ask about the symptoms, treatment, or prevention of tuberculosis and other respiratory diseases, or about how to use BANTAY-TB.",
+      "Hello again! What would you like to know — TB symptoms, treatment, prevention, or where to get checked for free?",
+    ],
+    tl: [
+      "Magandang araw po. Paano ko po kayo matutulungan? Maaari po kayong magtanong tungkol sa sintomas, paggamot, o pag-iwas sa tuberkulosis at iba pang sakit sa baga, o kung paano gamitin ang BANTAY-TB.",
+      "Kumusta po ulit! Ano po ang nais ninyong malaman — sintomas, paggamot, o pag-iwas sa TB, o kung saan magpasuri nang libre?",
+    ],
+    ceb: [
+      "Maayong adlaw. Unsaon nako pagtabang kaninyo? Mahimo kamong mangutana bahin sa sintomas, tambal, o paglikay sa tuberkulosis ug uban pang sakit sa baga, o unsaon paggamit sa BANTAY-TB.",
+      "Kumusta na usab! Unsa ang gusto ninyong mahibal-an — sintomas, tambal, o paglikay sa TB, o asa magpasusi nga libre?",
+    ],
   },
   thanks: {
-    en: "You're welcome! If you have more questions about TB or other respiratory diseases, just ask. Stay healthy!",
-    tl: "Walang anuman! Kung may iba ka pang tanong tungkol sa TB o iba pang sakit sa baga, magtanong lang. Ingat palagi!",
-    ceb: "Walay sapayan! Kung naa pa kay pangutana bahin sa TB o uban pang sakit sa baga, pangutana lang. Amping kanunay!",
+    en: [
+      "You're welcome! If you have more questions about TB or other respiratory diseases, just ask. Stay healthy!",
+      "Glad I could help! Feel free to ask anything else about TB or other respiratory diseases.",
+    ],
+    tl: [
+      "Walang anuman! Kung may iba ka pang tanong tungkol sa TB o iba pang sakit sa baga, magtanong lang. Ingat palagi!",
+      "Ikinagagalak kong makatulong! Magtanong lang po kung may iba pa tungkol sa TB o iba pang sakit sa baga.",
+    ],
+    ceb: [
+      "Walay sapayan! Kung naa pa kay pangutana bahin sa TB o uban pang sakit sa baga, pangutana lang. Amping kanunay!",
+      "Nalipay ko nga nakatabang! Pangutana lang kung naa pa moy laing pangutana bahin sa TB o uban pang sakit sa baga.",
+    ],
   },
   bye: {
-    en: "Take care! Remember, TB screening and treatment are free at DOTS centers in Davao City.",
-    tl: "Ingat! Tandaan, libre ang TB screening at paggamot sa mga DOTS center sa Davao City.",
-    ceb: "Amping! Hinumdumi, libre ang TB screening ug pagtambal sa mga DOTS center sa Davao City.",
+    en: [
+      "Take care! Remember, TB screening and treatment are free at DOTS centers in Davao City.",
+      "Goodbye, and stay well! You can come back anytime with more questions.",
+    ],
+    tl: [
+      "Ingat! Tandaan, libre ang TB screening at paggamot sa mga DOTS center sa Davao City.",
+      "Paalam po, at mag-ingat! Bumalik lang po anumang oras kung may tanong pa kayo.",
+    ],
+    ceb: [
+      "Amping! Hinumdumi, libre ang TB screening ug pagtambal sa mga DOTS center sa Davao City.",
+      "Babay, ug amping! Balik lang bisan kanus-a kung naa pa moy pangutana.",
+    ],
   },
+};
+
+// Said instead of a reply the visitor has already been given in this
+// conversation (see avoidRepeat()).
+const OUT_OF_SCOPE_AGAIN: Record<Locale, string> = {
+  en: "That one is outside what I can answer too. Try asking something like “What are the symptoms of TB?”, “Is TB treatment free?”, or “How is asthma treated?”",
+  tl: "Wala rin po iyan sa masasagot ko. Subukan pong itanong ang “Ano ang sintomas ng TB?”, “Libre ba ang gamot sa TB?”, o “Paano ginagamot ang hika?”",
+  ceb: "Wala usab na sa akong matubag. Sulayi pangutana ang “Unsa ang sintomas sa TB?”, “Libre ba ang tambal sa TB?”, o “Unsaon pagtambal sa hubak?”",
+};
+
+const NEXT_ARTICLE_LEAD: Record<Locale, (title: string) => string> = {
+  en: (t) => `I answered that just above, so here is something new — **${t}**:`,
+  tl: (t) => `Nasagot ko na po iyan sa itaas, kaya narito ang bagong impormasyon — **${t}**:`,
+  ceb: (t) => `Natubag na nako na sa ibabaw, mao nga ania ang bag-ong impormasyon — **${t}**:`,
+};
+
+const ALL_COVERED: Record<Locale, string> = {
+  en: "I've already shared everything I have on this topic above. For anything more specific, please ask a health worker at your nearest DOTS Center — screening and treatment are free.",
+  tl: "Naibahagi ko na po sa itaas ang lahat ng impormasyon ko tungkol dito. Para sa mas tiyak na tanong, magtanong po sa health worker sa pinakamalapit na DOTS Center — libre ang pagsusuri at paggamot.",
+  ceb: "Napaambit na nako sa ibabaw ang tanan nakong impormasyon bahin niini. Para sa mas piho nga pangutana, pangutana sa health worker sa pinaka-duol nga DOTS Center — libre ang pagsusi ug pagtambal.",
 };
 
 const SMALL_TALK_PATTERNS: [SmallTalk, RegExp][] = [
@@ -324,6 +372,12 @@ function pickDocument(message: string, loose: boolean): { topic: string; categor
   return null;
 }
 
+/** Chunk text is "<label line>\n<summary>\n<body>"; the label line is for
+ *  embeddings, not for people. */
+function articleBody(content: string): string {
+  return content.split("\n").slice(1).filter(Boolean).join("\n\n");
+}
+
 /** Answer straight from the knowledge base — zero AI requests. */
 async function directAnswer(
   cfg: DbConfig,
@@ -342,10 +396,7 @@ async function directAnswer(
     const doc = rows[0];
     const content = doc?.kb_chunks?.[0]?.content;
     if (!doc || !content) return null;
-    // Chunk text is "<label line>\n<summary>\n<body>"; the label line is for
-    // embeddings, not for people.
-    const reply = content.split("\n").slice(1).filter(Boolean).join("\n\n");
-    return { reply, sources: [doc.title] };
+    return { reply: articleBody(content), sources: [doc.title] };
   } catch (err) {
     console.error("direct answer lookup failed:", err);
     return null;
@@ -387,19 +438,146 @@ async function cachePut(cfg: DbConfig, key: string, language: Locale, a: Answer)
 interface PublicAnswer extends Answer {
   language: Locale;
   /** Where the reply came from — handy when checking AI spend. */
-  via: "small-talk" | "cache" | "knowledge-base" | "ai" | "knowledge-base-fallback" | "fallback";
+  via: "small-talk" | "cache" | "knowledge-base" | "ai" | "knowledge-base-fallback" | "fallback" | "no-repeat";
 }
 
-async function answerPublic(message: string, detected: Locale): Promise<PublicAnswer> {
+// ─── Conversation history ────────────────────────────────────────────────────
+//
+// The homepage chat sends its last few turns so that a follow-up ("how is it
+// treated?") keeps its disease, and so the visitor is never handed the same
+// reply twice in one conversation. The history comes from the browser, so it
+// only ever shapes that visitor's own answers.
+
+interface Turn {
+  role: "user" | "assistant";
+  content: string;
+  /** Article titles an assistant turn was grounded in. */
+  sources?: string[];
+}
+
+function cleanHistory(raw: unknown): Turn[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (t) =>
+        t && (t.role === "user" || t.role === "assistant") &&
+        typeof t.content === "string"
+    )
+    .slice(-8)
+    .map((t) => ({
+      role: t.role,
+      content: t.content.slice(0, 2000),
+      sources: Array.isArray(t.sources)
+        ? t.sources.filter((s: unknown) => typeof s === "string").slice(0, 5)
+        : [],
+    }));
+}
+
+// A message that leans on an earlier one: a topic word with no disease
+// ("what about treatment?") or a pronoun ("is it contagious?").
+const FOLLOW_UP = /\b(it|its|this|that|they|them|more|ito|iyan|nito|niyan|naman|kini|kana|niini|ana|usab|pa)\b/;
+
+/** The message with the disease from earlier in the conversation added, when
+ *  the message is a follow-up that names none itself. */
+function withFollowUpTopic(message: string, history: Turn[]): string {
+  const q = normalise(message).replace(/\bbantay[\s-]?tb\b/g, " ");
+  if (DISEASES.some(([, re]) => re.test(q))) return message;
+  if (SYSTEM_INTENTS.some(([, re]) => re.test(q))) return message;
+  if (!FOLLOW_UP.test(q) && !CATEGORIES.some(([, re]) => re.test(q))) return message;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].role !== "user") continue;
+    const prev = normalise(history[i].content).replace(/\bbantay[\s-]?tb\b/g, " ");
+    const hit = DISEASES.find(([, re]) => re.test(prev));
+    if (hit) return `${message} (${hit[0]})`;
+  }
+  return message;
+}
+
+/** Cycles through a set of wordings: each one already said in this
+ *  conversation moves the pick along by one. */
+function rotate(variants: string[], history: Turn[]): string {
+  const said = history.filter(
+    (t) => t.role === "assistant" && variants.includes(t.content)
+  ).length;
+  return variants[said % variants.length];
+}
+
+const CATEGORY_ORDER = [
+  "overview", "symptoms", "treatment", "prevention", "lifestyle",
+  "about", "public-features", "free-care", "staff", "patient-accounts",
+];
+
+/** Another article on the same topic as `a` that this conversation has not
+ *  shown yet, in reading order. */
+async function nextArticle(cfg: DbConfig, a: PublicAnswer, history: Turn[]): Promise<Answer | null> {
+  const titles = a.sources.map((s) => `"${s.replace(/["\\]/g, "\\$&")}"`).join(",");
+  const owners = await dbGet<{ topic: string }[]>(
+    cfg,
+    `kb_documents?select=topic&title=in.(${encodeURIComponent(titles)})&limit=1`
+  );
+  const topic = owners[0]?.topic;
+  if (!topic) return null;
+  const docs = await dbGet<{ title: string; category: string; kb_chunks: { content: string }[] }[]>(
+    cfg,
+    `kb_documents?select=title,category,kb_chunks(content)` +
+      `&topic=eq.${topic}&language=eq.${a.language}`
+  );
+  const shown = new Set([...a.sources, ...history.flatMap((t) => t.sources ?? [])]);
+  const next = docs
+    .sort((x, y) => CATEGORY_ORDER.indexOf(x.category) - CATEGORY_ORDER.indexOf(y.category))
+    .find((d) => !shown.has(d.title) && d.kb_chunks?.[0]?.content);
+  if (!next) return null;
+  return {
+    reply: `${NEXT_ARTICLE_LEAD[a.language](next.title)}\n\n${articleBody(next.kb_chunks[0].content)}`,
+    sources: [next.title],
+  };
+}
+
+/** Swaps a reply the visitor has already been given in this conversation for
+ *  something new: the next unseen article on the topic, or a different
+ *  wording. Costs no AI requests. */
+async function avoidRepeat(cfg: DbConfig | null, a: PublicAnswer, history: Turn[]): Promise<PublicAnswer> {
+  const said = new Set(
+    history.filter((t) => t.role === "assistant").map((t) => normalise(t.content))
+  );
+  if (!said.has(normalise(a.reply))) return a;
+
+  if (a.reply === OUT_OF_SCOPE[a.language]) {
+    const variants = [OUT_OF_SCOPE[a.language], OUT_OF_SCOPE_AGAIN[a.language]];
+    return { ...a, reply: rotate(variants, history), via: "no-repeat" };
+  }
+  // Nothing to move on to without an article behind the reply.
+  if (!cfg || a.sources.length === 0) return a;
+  try {
+    const next = await nextArticle(cfg, a, history);
+    if (next) return { ...a, ...next, via: "no-repeat" };
+  } catch (err) {
+    console.error("next article lookup failed:", err);
+  }
+  return { ...a, reply: ALL_COVERED[a.language], sources: [], via: "no-repeat" };
+}
+
+async function answerPublic(message: string, detected: Locale, history: Turn[]): Promise<PublicAnswer> {
   let language = detected;
 
   const talk = smallTalk(message);
   if (talk) {
     language = smallTalkLocale(message, language);
-    return { reply: SMALL_TALK_REPLIES[talk][language], sources: [], language, via: "small-talk" };
+    const reply = rotate(SMALL_TALK_REPLIES[talk][language], history);
+    return { reply, sources: [], language, via: "small-talk" };
   }
 
   const cfg = dbFromEnv();
+  const question = withFollowUpTopic(message, history);
+  return avoidRepeat(cfg, await findAnswer(cfg, question, language, history), history);
+}
+
+async function findAnswer(
+  cfg: DbConfig | null,
+  message: string,
+  language: Locale,
+  history: Turn[]
+): Promise<PublicAnswer> {
   const key = normalise(message);
   if (cfg) {
     const cached = await cacheGet(cfg, key, language);
@@ -420,7 +598,7 @@ async function answerPublic(message: string, detected: Locale): Promise<PublicAn
       const system = hits
         ? publicRagPrompt(language, hits)
         : SYSTEM_PROMPTS[language] + SYSTEM_INFO;
-      const reply = (await complete(apiKey, system, message)) ?? FALLBACKS[language];
+      const reply = (await complete(apiKey, system, message, history)) ?? FALLBACKS[language];
       answer = reply.includes(OUT_OF_SCOPE_TOKEN)
         ? { reply: OUT_OF_SCOPE[language], sources: [] }
         : { reply, sources: hits ? [...new Set(hits.map((h) => h.title))] : [] };
@@ -520,6 +698,7 @@ Rules:
 - If the question is about anything else, reply with exactly ${OUT_OF_SCOPE_TOKEN} and nothing more.
 - Never diagnose, and never give drug doses for an individual. When someone describes symptoms, recommend the nearest DOTS center (screening and treatment are free).
 - Reply in ${LANGUAGE_NAME[language]}, concisely (under 120 words), in plain words. Sources may be written in another language; translate as needed.
+- Earlier turns of the conversation are included. Do not repeat what you already said: if the visitor asks the same thing again, explain it more simply or add details you have not given yet. Write each answer so it stands on its own, without phrases like "as I mentioned".
 
 SOURCES:
 ${sources}`;
@@ -543,6 +722,8 @@ interface Body {
   reply_id?: string;
   role?: string | null;
   context?: string;
+  /** Public chat only: the last few turns, oldest first. */
+  history?: unknown;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -593,7 +774,7 @@ Deno.serve(async (req: Request) => {
     let via: PublicAnswer["via"] | undefined;
     if (isPublicRole) {
       // Public visitors: knowledge base first, AI only when needed.
-      const a = await answerPublic(body.message, language);
+      const a = await answerPublic(body.message, language, cleanHistory(body.history));
       ({ reply, sources, language, via } = a);
     } else if (apiKey) {
       let systemContent = SYSTEM_PROMPTS[language];
@@ -658,7 +839,8 @@ Deno.serve(async (req: Request) => {
 async function complete(
   apiKey: string,
   systemContent: string,
-  message: string
+  message: string,
+  history: Turn[] = []
 ): Promise<string | undefined> {
   const model = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
   const rawBase =
@@ -676,6 +858,7 @@ async function complete(
       temperature: 0.4,
       messages: [
         { role: "system", content: systemContent },
+        ...history.map((t) => ({ role: t.role, content: t.content })),
         { role: "user", content: message },
       ],
     }),

@@ -117,6 +117,10 @@ const SEVERITY_LABEL: Record<HotspotSeverity, string> = {
 const SEVERITY_ORDER: HotspotSeverity[] = ["high", "urgent"];
 
 const DENSITY_RAMP = ["#bae6fd", "#7dd3fc", "#0ea5e9", "#f97316", "#dc2626"];
+// The share of the busiest barangay's count each colour covers — the same
+// 20% steps barangayFill() uses. The middle three drop their "%" to fit
+// under a ~30px swatch.
+const DENSITY_BAND_LABEL = ["<20%", "20–40", "40–60", "60–80", "≥80%"];
 
 // Shared chrome for every floating panel — the dark glass console language
 // established by the public hero map (PublicCaseMap).
@@ -1341,18 +1345,26 @@ export function AdminHotspotMap({
                   ? "Cases registered"
                   : "Cases by residence"}
               </div>
-              <div className="mt-1 flex items-center gap-1">
-                {DENSITY_RAMP.map((color) => (
-                  <span
-                    key={color}
-                    className="h-2 flex-1 first:rounded-l-full last:rounded-r-full"
-                    style={{ background: color }}
-                  />
+              <div className="mt-1 grid grid-cols-5 gap-1">
+                {DENSITY_RAMP.map((color, i) => (
+                  <div key={color}>
+                    <span
+                      className={
+                        "block h-2 " +
+                        (i === 0 ? "rounded-l-full " : "") +
+                        (i === DENSITY_RAMP.length - 1 ? "rounded-r-full" : "")
+                      }
+                      style={{ background: color }}
+                    />
+                    <span className="mt-1 block text-center font-mono text-[9px] text-slate-400">
+                      {DENSITY_BAND_LABEL[i]}
+                    </span>
+                  </div>
                 ))}
               </div>
-              <div className="mt-1 flex justify-between font-mono text-[9px] uppercase tracking-wider text-slate-500">
-                <span>Low</span>
-                <span>High</span>
+              <div className="mt-1 text-[10px] text-slate-500">
+                Percent of the busiest barangay
+                {maxCount > 0 && <> ({maxCount.toLocaleString()} cases = 100%)</>}.
               </div>
               <div className="mt-1.5 text-[10px] text-slate-500">
                 {attribution === "facility"

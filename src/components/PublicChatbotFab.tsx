@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { OPEN_CHAT_EVENT } from "../lib/publicChat";
 import {
   ArrowUp,
   BookOpen,
@@ -119,6 +120,13 @@ const FALLBACK: Record<Locale, string> = {
   en: "I can help with TB, pneumonia, COVID-19, influenza, bronchitis, COPD, asthma, and paragonimiasis. For diagnosis please visit your nearest DOTS Center. (Local fallback — chatbot service is offline.)",
   tl: "Maaari kitang tulungan tungkol sa TB, pulmonya, COVID-19, trangkaso, bronchitis, COPD, hika, at paragonimiasis. Para sa diagnosis, bumisita sa pinakamalapit na DOTS Center. (Lokal na fallback — offline ang chatbot service.)",
   ceb: "Makatabang ko bahin sa TB, pulmonya, COVID-19, trangkaso, bronchitis, COPD, hubak, ug paragonimiasis. Para sa diagnosis adto sa pinaka-suod nga DOTS Center. (Local fallback — offline ang chatbot service.)",
+};
+
+// Said instead of an offline reply the visitor has already been shown.
+const STILL_OFFLINE: Record<Locale, string> = {
+  en: "The chatbot service is still offline, so I can't answer new questions right now. Please try again in a few minutes, or browse Health Education for TB information.",
+  tl: "Offline pa rin po ang chatbot service, kaya hindi ko pa masasagot ang bagong tanong. Subukan po ulit pagkalipas ng ilang minuto, o basahin ang Health Education para sa impormasyon tungkol sa TB.",
+  ceb: "Offline pa gihapon ang chatbot service, mao nga dili pa nako matubag ang bag-ong pangutana. Sulayi pag-usab human sa pipila ka minuto, o basaha ang Health Education alang sa impormasyon bahin sa TB.",
 };
 
 function greetingMessage(): Message {
@@ -305,6 +313,14 @@ export function PublicChatbotFab() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // Other parts of the site (the homepage's "Ask a question") open the chat
+  // through this event rather than shipping a second chat of their own.
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener(OPEN_CHAT_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_CHAT_EVENT, onOpen);
+  }, []);
+
   // Opening the chat puts the cursor in the composer once the panel has
   // finished scaling in.
   useEffect(() => {
@@ -362,6 +378,12 @@ export function PublicChatbotFab() {
     setDraft("");
     requestAnimationFrame(resizeInput);
     const language = detectLocale(trimmed);
+    // The last few turns (minus the greeting) let the chatbot follow up on
+    // the topic so far and never send the same reply twice.
+    const history = messages
+      .slice(1)
+      .slice(-8)
+      .map(({ role, content, sources }) => ({ role, content, sources }));
     setMessages((m) => [
       ...m,
       { id: crypto.randomUUID(), role: "user", content: trimmed, language },
@@ -376,6 +398,7 @@ export function PublicChatbotFab() {
           language,
           user_id: null,
           role: "public",
+          history,
         },
       });
       if (error) throw error;
@@ -386,10 +409,12 @@ export function PublicChatbotFab() {
         sources: d?.sources ?? [],
       });
     } catch {
+      const offline = isSystemQuery(trimmed)
+        ? ABOUT_SYSTEM[language]
+        : FALLBACK[language];
+      const shown = messages.some((m) => m.content === offline);
       pushAssistant({
-        content: isSystemQuery(trimmed)
-          ? ABOUT_SYSTEM[language]
-          : FALLBACK[language],
+        content: shown ? STILL_OFFLINE[language] : offline,
         language,
       });
     } finally {

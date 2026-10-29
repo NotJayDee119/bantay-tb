@@ -222,10 +222,25 @@ export function Chatbot() {
           "their assigned area — never state or imply another barangay has " +
           "zero cases."
       );
+    } else {
+      // A coordinator's area is the whole city. Without saying so, "how many
+      // cases in my area" read as an unanswerable question about some smaller
+      // patch, and the assistant refused while holding the citywide numbers.
+      const roleName =
+        profile?.role === "system_admin" ? "system administrator" : "city TB coordinator";
+      lines.push(
+        `- NOTE: this user is the ${roleName} with citywide access — their area ` +
+          "is ALL of Davao City. When they ask about \"my area\", answer with " +
+          "the Davao City figures above, addressed to them as their area. Do " +
+          "not say their area's figures are unavailable, and do not refer them " +
+          "to a DOTS center."
+      );
     }
 
-    // Assigned-area stats for health_worker / barangay_admin
-    const assignedPsgc = profile?.barangay_psgc ?? null;
+    // Assigned-area stats for health_worker / barangay_admin. Read from the
+    // scope, not the profile: a coordinator's profile can still carry a
+    // barangay, and labelling it "assigned area" shrinks their citywide view.
+    const assignedPsgc = scope.psgc;
     if (assignedPsgc !== null || scope.facilityId) {
       const bgyName =
         (barangays as { psgc: number; name: string }[]).find(
@@ -321,10 +336,14 @@ export function Chatbot() {
         );
       } else if (!mentioned.some((b) => b.psgc === here.psgc)) {
         mentioned.unshift({ psgc: here.psgc, name: here.name });
+        const where = `${here.name}${
+          here.confident ? "" : " (approximate — nearest barangay to their GPS fix)"
+        }`;
         lines.push(
-          `- The user is physically in ${here.name}${
-            here.confident ? "" : " (approximate — nearest barangay to their GPS fix)"
-          }. Read "my area" / "dinhi" / "dito sa amin" as ${here.name}.`
+          scope.scoped
+            ? `- The user is physically in ${where}. Read "my area" / "dinhi" / "dito sa amin" as ${here.name}.`
+            : // Citywide: "my area" stays the city; where they stand is extra.
+              `- The user is currently physically in ${where}. Give its figures too, after the citywide ones.`
         );
       }
     }
