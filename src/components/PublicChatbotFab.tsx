@@ -9,8 +9,26 @@ import {
   ShieldPlus,
   X,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { detectLocale, LOCALE_LABEL, type Locale } from "../lib/i18n";
+import { SYSTEM_KNOWLEDGE } from "../data/systemKnowledge";
+
+// Platform-guide sources point at the public page that covers them; every
+// other source is a Health Education article, opened by title on /learn.
+const SYSTEM_DOC_ROUTE: Record<string, string> = {
+  about: "/about",
+  "public-features": "/about",
+  "patient-accounts": "/dots-locator",
+  staff: "/about",
+  "free-care": "/dots-locator",
+};
+
+function sourceHref(title: string): string {
+  const doc = SYSTEM_KNOWLEDGE.find((d) => d.title === title);
+  if (doc) return SYSTEM_DOC_ROUTE[doc.slug.replace(/-(en|tl|ceb)$/, "")] ?? "/about";
+  return `/learn?article=${encodeURIComponent(title)}`;
+}
 
 interface Message {
   id: string;
@@ -63,9 +81,9 @@ const ABOUT_SYSTEM: Record<Locale, string> = {
     "📚 Health Education — learn about TB symptoms, treatment, and prevention.",
     "💬 This chatbot — ask health questions in English, Filipino, or Cebuano.",
     "",
-    "Patients with an account also get medication schedules, dose reminders, and a personal health assistant. Health workers and TB coordinators sign in to report cases, view the GIS surveillance map, and receive hotspot alerts.",
+    "Patients don’t need an account — your nurse or doctor records your treatment at the DOTS center. Health workers and TB coordinators sign in to report cases, view the GIS surveillance map, and receive hotspot alerts.",
     "",
-    "You don’t sign up yourself — when a nurse enrols you in treatment, they give you a claim code. Tap “I have a claim code” to set up your account. TB screening and DOTS treatment are free!",
+    "TB screening and DOTS treatment are free!",
   ].join("\n"),
   tl: [
     "Ang BANTAY-TB ay plataporma ng Davao City para sa pagbabantay at pangangalaga sa TB. Narito ang magagawa mo:",
@@ -74,9 +92,9 @@ const ABOUT_SYSTEM: Record<Locale, string> = {
     "📚 Health Education — alamin ang sintomas, paggamot, at pag-iwas sa TB.",
     "💬 Ang chatbot na ito — magtanong sa English, Filipino, o Cebuano.",
     "",
-    "Ang mga pasyenteng may account ay may iskedyul ng gamot, paalala sa dose, at personal na health assistant. Ang mga health worker at TB coordinator ay nag-sign in para mag-ulat ng kaso at makita ang surveillance map.",
+    "Hindi kailangan ng account ang pasyente — ang nars o doktor ang nagtatala ng iyong paggamot sa DOTS center. Ang mga health worker at TB coordinator ay nag-sign in para mag-ulat ng kaso at makita ang surveillance map.",
     "",
-    "Hindi ka mag-si-sign up mag-isa — kapag ipinasok ka ng nars sa paggamot, bibigyan ka niya ng claim code. Pindutin ang “I have a claim code” para buksan ang iyong account. Libre ang TB screening at DOTS treatment!",
+    "Libre ang TB screening at DOTS treatment!",
   ].join("\n"),
   ceb: [
     "Ang BANTAY-TB mao ang plataporma sa Davao City alang sa pagbantay ug pag-atiman sa TB. Ania ang imong mahimo:",
@@ -85,9 +103,9 @@ const ABOUT_SYSTEM: Record<Locale, string> = {
     "📚 Health Education — hibaloi ang sintomas, tambal, ug paglikay sa TB.",
     "💬 Kini nga chatbot — pangutana sa English, Filipino, o Cebuano.",
     "",
-    "Ang mga pasyente nga adunay account makakuha og iskedyul sa tambal, pahinumdom sa dose, ug personal nga health assistant. Ang mga health worker ug TB coordinator mo-sign in aron mag-report og kaso ug makita ang surveillance map.",
+    "Dili kinahanglan og account ang pasyente — ang nars o doktor ang mo-rekord sa imong pagtambal sa DOTS center. Ang mga health worker ug TB coordinator mo-sign in aron mag-report og kaso ug makita ang surveillance map.",
     "",
-    "Dili ka mag-sign up sa imong kaugalingon — kung ipasulod ka sa nars sa pagtambal, hatagan ka niya og claim code. I-tap ang “I have a claim code” aron ablihan ang imong account. Libre ang TB screening ug DOTS treatment!",
+    "Libre ang TB screening ug DOTS treatment!",
   ].join("\n"),
 };
 
@@ -468,12 +486,15 @@ export function PublicChatbotFab() {
                         Sources
                       </span>
                       {m.sources.map((s) => (
-                        <span
+                        <Link
                           key={s}
-                          className="max-w-full truncate rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[0.6875rem] text-slate-500"
+                          to={sourceHref(s)}
+                          onClick={() => setOpen(false)}
+                          title={s}
+                          className="max-w-full truncate rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[0.6875rem] text-slate-500 underline-offset-2 transition-colors hover:border-brand-300 hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                         >
                           {s}
-                        </span>
+                        </Link>
                       ))}
                     </div>
                   )}

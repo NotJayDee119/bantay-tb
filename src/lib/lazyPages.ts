@@ -6,10 +6,10 @@ export const About = lazyWithPreload(() => import("../pages/public/About").then(
 export const DotsLocator = lazyWithPreload(() => import("../pages/public/DotsLocator").then(m => ({ default: m.DotsLocator })));
 export const LearnPublic = lazyWithPreload(() => import("../pages/public/LearnPublic").then(m => ({ default: m.LearnPublic })));
 export const Login = lazyWithPreload(() => import("../pages/public/Login").then(m => ({ default: m.Login })));
-export const ClaimAccount = lazyWithPreload(() => import("../pages/public/ClaimAccount").then(m => ({ default: m.ClaimAccount })));
 export const StaffRegister = lazyWithPreload(() => import("../pages/public/StaffRegister").then(m => ({ default: m.StaffRegister })));
 export const ForgotPassword = lazyWithPreload(() => import("../pages/public/ForgotPassword").then(m => ({ default: m.ForgotPassword })));
 export const ResetPassword = lazyWithPreload(() => import("../pages/public/ResetPassword").then(m => ({ default: m.ResetPassword })));
+export const NotFound = lazyWithPreload(() => import("../pages/public/NotFound").then(m => ({ default: m.NotFound })));
 
 // App (authenticated)
 export const Dashboard = lazyWithPreload(() => import("../pages/app/Dashboard").then(m => ({ default: m.Dashboard })));
@@ -18,17 +18,13 @@ export const Hotspots = lazyWithPreload(() => import("../pages/app/Hotspots").th
 export const Alerts = lazyWithPreload(() => import("../pages/app/Alerts").then(m => ({ default: m.Alerts })));
 export const Cases = lazyWithPreload(() => import("../pages/app/Cases").then(m => ({ default: m.Cases })));
 export const CaseFormPage = lazyWithPreload(() => import("../pages/app/CaseFormPage").then(m => ({ default: m.CaseFormPage })));
-export const Adherence = lazyWithPreload(() => import("../pages/app/Adherence").then(m => ({ default: m.Adherence })));
 export const BulkImport = lazyWithPreload(() => import("../pages/app/BulkImport").then(m => ({ default: m.BulkImport })));
 export const Chatbot = lazyWithPreload(() => import("../pages/app/Chatbot").then(m => ({ default: m.Chatbot })));
-export const HealthEducation = lazyWithPreload(() => import("../pages/app/HealthEducation").then(m => ({ default: m.HealthEducation })));
-export const Cds = lazyWithPreload(() => import("../pages/app/Cds").then(m => ({ default: m.Cds })));
 export const DotsCentersAdmin = lazyWithPreload(() => import("../pages/app/DotsCentersAdmin").then(m => ({ default: m.DotsCentersAdmin })));
 export const SettingsPage = lazyWithPreload(() => import("../pages/app/SettingsPage").then(m => ({ default: m.SettingsPage })));
 export const Analytics = lazyWithPreload(() => import("../pages/app/Analytics").then(m => ({ default: m.Analytics })));
 export const Users = lazyWithPreload(() => import("../pages/app/Users").then(m => ({ default: m.Users })));
 export const InviteCodes = lazyWithPreload(() => import("../pages/app/InviteCodes").then(m => ({ default: m.InviteCodes })));
-export const PatientCodes = lazyWithPreload(() => import("../pages/app/PatientCodes").then(m => ({ default: m.PatientCodes })));
 export const AdminDashboard = lazyWithPreload(() => import("../pages/app/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
 export const Interoperability = lazyWithPreload(() => import("../pages/app/Interoperability").then(m => ({ default: m.Interoperability })));
 export const AuditLog = lazyWithPreload(() => import("../pages/app/AuditLog").then(m => ({ default: m.AuditLog })));
@@ -45,7 +41,6 @@ const PRELOAD_BY_PATH: Record<string, () => Promise<unknown>> = {
   "/dots-locator": DotsLocator.preload,
   "/learn": LearnPublic.preload,
   "/login": Login.preload,
-  "/claim": ClaimAccount.preload,
   "/register/staff": StaffRegister.preload,
   "/forgot-password": ForgotPassword.preload,
   "/reset-password": ResetPassword.preload,
@@ -58,16 +53,12 @@ const PRELOAD_BY_PATH: Record<string, () => Promise<unknown>> = {
   "/app/cases": Cases.preload,
   "/app/cases/new": CaseFormPage.preload,
   "/app/analytics": Analytics.preload,
-  "/app/cds": Cds.preload,
   "/app/dots-admin": DotsCentersAdmin.preload,
-  "/app/adherence": Adherence.preload,
-  "/app/education": HealthEducation.preload,
   "/app/import": BulkImport.preload,
   "/app/chatbot": Chatbot.preload,
   "/app/settings": SettingsPage.preload,
   "/app/users": Users.preload,
   "/app/invites": InviteCodes.preload,
-  "/app/patient-codes": PatientCodes.preload,
   "/app/interoperability": Interoperability.preload,
   "/app/audit-log": AuditLog.preload,
 };

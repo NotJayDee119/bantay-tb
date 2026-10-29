@@ -69,7 +69,6 @@ interface CaseOption {
   diagnosis_status: string | null;
   treatment_outcome: string;
   reported_at: string;
-  patient_profile_id: string | null;
 }
 
 interface EndpointRow {
@@ -203,7 +202,7 @@ export function Interoperability() {
       let q = supabase
         .from("cases")
         .select(
-          "id, patient_code, given_name, family_name, barangay_psgc, disease, diagnosis_status, treatment_outcome, reported_at, patient_profile_id"
+          "id, patient_code, given_name, family_name, barangay_psgc, disease, diagnosis_status, treatment_outcome, reported_at"
         )
         .order("reported_at", { ascending: false })
         .limit(50);
@@ -498,12 +497,6 @@ export function Interoperability() {
                     <dt className="text-slate-500">Reported</dt>
                     <dd className="truncate font-medium text-slate-800">
                       {formatDateTime(selectedCase.reported_at)}
-                    </dd>
-                  </div>
-                  <div className="min-w-0">
-                    <dt className="text-slate-500">DOTS regimen</dt>
-                    <dd className="truncate font-medium text-slate-800">
-                      {selectedCase.patient_profile_id ? "Included" : "None yet"}
                     </dd>
                   </div>
                 </dl>

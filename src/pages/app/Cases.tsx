@@ -30,7 +30,6 @@ import {
   ShieldAlert,
   SlidersHorizontal,
   Stethoscope,
-  Ticket,
   TrendingUp,
   UserPlus,
   UserRound,
@@ -84,13 +83,11 @@ interface Row {
   address: string | null;
   patient_code: string | null;
   diagnosis_date: string | null;
-  /** Set once the patient has claimed the account enrollment generated. */
-  patient_profile_id: string | null;
   enrolled_at: string | null;
 }
 
 const CASE_COLUMNS =
-  "id, reported_at, barangay_psgc, facility_id, disease, tb_classification, tb_site, diagnosis_status, age, sex, treatment_outcome, source, given_name, family_name, contact_phone, address, patient_code, diagnosis_date, patient_profile_id, enrolled_at";
+  "id, reported_at, barangay_psgc, facility_id, disease, tb_classification, tb_site, diagnosis_status, age, sex, treatment_outcome, source, given_name, family_name, contact_phone, address, patient_code, diagnosis_date, enrolled_at";
 
 interface FacilityRef {
   id: string;
@@ -357,7 +354,8 @@ export function Cases() {
     () => localStorage.getItem("bantay-cases-trends") !== "0"
   );
   const [filter, setFilter] = useState(() => ({
-    barangay: "",
+    // `?barangay=<psgc>` comes from the Hotspots map's case panel.
+    barangay: params.get("barangay") ?? "",
     disease: "all",
     search: params.get("q") ?? "",
   }));
@@ -1039,7 +1037,7 @@ export function Cases() {
         />
       )}
 
-      {/* Enrollment — the only path by which a patient account is created. */}
+      {/* Enrollment — verify the record and start treatment. */}
       {enrolling && (
         <EnrollPatientPanel
           caseRow={enrolling}
@@ -1310,7 +1308,7 @@ function CaseColumn({
                               onClick={() => onEnroll(r)}
                             >
                               <UserPlus aria-hidden className="h-4 w-4 shrink-0" />
-                              Enroll patient
+                              Start treatment
                             </Button>
                           )}
                         {/* Gate 2 — the result comes back. Without this a
@@ -1326,20 +1324,6 @@ function CaseColumn({
                             >
                               <Microscope aria-hidden className="h-4 w-4 shrink-0" />
                               Record test result
-                            </Button>
-                          )}
-                        {/* Enrolled but not yet claimed — the slip gets lost, so
-                            there has to be a way back to the code. */}
-                        {canEnroll &&
-                          state.status === "enrolled" &&
-                          r.patient_profile_id === null && (
-                            <Button
-                              variant="secondary"
-                              className="h-9 justify-start px-3"
-                              onClick={() => onEnroll(r)}
-                            >
-                              <Ticket aria-hidden className="h-4 w-4 shrink-0" />
-                              Show claim code
                             </Button>
                           )}
                       </div>

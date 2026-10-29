@@ -73,8 +73,8 @@ clinic. All three arrows crossed out with a red X.
 "Our system knows things no other system knows.
 
 It knows the barangay where the patient actually **lives**, not just where the
-clinic is. It knows which DOTS center is treating them. It knows if the patient
-took their medicine today, or missed it.
+clinic is. It knows which DOTS center is treating them, how firmly the TB was
+diagnosed, and how the treatment ended.
 
 But only our own screen can read that. So when a patient is referred to a
 hospital, or when the city sends a report to DOH, somebody has to type the record
@@ -138,16 +138,16 @@ Here is the whole thing in one picture first."
 > **Requirement 1 — Extract**
 > Built fresh from the database every time
 >
-> `cases` · `barangays` · `dots_centers` · `adherence_schedules` · `adherence_logs`
+> `cases` · `barangays` · `dots_centers`
 
 **WHAT TO SAY**
 
 "Requirement one says extract an existing record and convert it **dynamically**.
 
 Dynamically is the important word. We did not save one FHIR file and keep showing
-the same file. Every time the user clicks the button, our code reads five live
-tables: the case, the barangay, the DOTS center, the medicine schedule, and the
-dose-by-dose log. Then it builds the file from scratch.
+the same file. Every time the user clicks the button, our code reads three live
+tables: the case, the barangay, and the DOTS center. Then it builds the file from
+scratch.
 
 So if you change the patient's treatment outcome right now, the next export
 already shows the new value. We can demo that later if you want.
@@ -165,10 +165,10 @@ things: checking the destination address, and writing the logbook."
 **ON THE SLIDE**
 
 > **Requirement 1 — Serialize**
-> 1 database record → **9 FHIR records**
+> 1 database record → **7 FHIR records**
 >
 > Patient · Condition · Encounter · Organization · Location
-> MedicationStatement · 3 Observations
+> 2 Observations
 
 Put one real screenshot of your JSON here.
 
@@ -179,13 +179,13 @@ easiest way to explain it: FHIR is to health records what PDF is to documents.
 Any system that supports it can read our file. We do not need to build a
 different converter for every hospital.
 
-Our one database record becomes **nine FHIR records**: the patient, the
+Our one database record becomes **seven FHIR records**: the patient, the
 diagnosis, the clinic visit, the DOTS center as an organization and as a map
-location, the medicine regimen, and three measurements — how the TB was
-confirmed, the treatment outcome, and the adherence rate.
+location, and two measurements — how the TB was confirmed, and the treatment
+outcome.
 
-We send all nine inside one envelope, which FHIR calls a transaction bundle. It
-means: save all nine together, or save none of them.
+We send all seven inside one envelope, which FHIR calls a transaction bundle. It
+means: save all seven together, or save none of them.
 
 Why that matters: the other system replies and tells us the ID it gave to **each**
 record. That reply is our proof. It did not just accept a file. It actually read
@@ -220,7 +220,7 @@ systems use one, some use the other. This way both can read us."
 tool for checking if a FHIR file is correct. The result was **zero errors**.
 
 It gave us some warnings, but those are for our own internal code lists, which a
-public server would not have. The standard SNOMED and UCUM codes passed with no
+public server would not have. The standard SNOMED codes passed with no
 warning at all. That confirms they are real codes, not something we invented."
 
 ---
@@ -439,12 +439,12 @@ screenshots beforehand as backup.**
 Do it in this order:
 
 **1. Click Preview payload.**
-"This is the FHIR file, built right now from our database. Nine records. And this
+"This is the FHIR file, built right now from our database. Seven records. And this
 long code here is its fingerprint."
 
 **2. Click Transmit.**
 "HTTP 200, so it was accepted. And these are the IDs the other server gave to
-each of our nine records. That proves it read them properly."
+each of our seven records. That proves it read them properly."
 
 **3. Open Admin → Audit Log.**
 "Only the system admin has this page. Here is the transmission we just did —
@@ -514,19 +514,19 @@ guessing.
 
 It is real FHIR R4, and we can prove it. We checked our file with the official
 HAPI FHIR validator and got **zero errors**. Also, the receiving server replied
-with the ID it gave to each of our nine records. It could only do that if it
+with the ID it gave to each of our seven records. It could only do that if it
 really read them as FHIR.
 
 *If they ask about the warnings:* those warnings say "unknown code system." They
 are for our own internal code lists, which a public server would not have. The
-standard SNOMED and UCUM codes had no warnings.
+standard SNOMED codes had no warnings.
 
 ---
 
 ### "Where does the conversion happen? Is it really dynamic?"
 
 In the file `_shared/fhir.ts`, which our `fhir-export` function calls. It is
-fully dynamic. Every request reads five live tables and builds the file in
+fully dynamic. Every request reads three live tables and builds the file in
 memory. Nothing is pre-saved. Even the sample file we submitted is produced by
 that same code.
 
@@ -646,7 +646,7 @@ logged too.
 Yes. The other system receives our TB case code as the patient's ID, so it can
 recognise the same patient next visit without ever having the name. Everything
 medically useful is still there: the diagnosis, whether it was lab-confirmed, the
-treatment outcome, the medicine regimen, and the adherence rate. The name is only
+treatment outcome, and the treating DOTS center. The name is only
 needed for a real referral the patient agreed to, and that is a separate
 permission.
 
@@ -699,10 +699,10 @@ that every other feature of BANTAY-TB reads.
 
 ### "How did you test this?"
 
-We wrote 35 automated tests for the converter. They run together with our
-project's 179 tests. They check the bundle structure, that every internal link
-points to something real, every ICD-10 mapping including the presumptive case,
-and the adherence computation. Most importantly, they check that a no-name file
+We wrote 31 automated tests for the converter. They run together with the rest
+of the project's tests — 176 in all. They check the bundle structure, that every
+internal link points to something real, and every ICD-10 mapping including the
+presumptive case. Most importantly, they check that a no-name file
 really has no name, no phone, no street address, and uses the barangay centre
 point instead of the actual house. Plus the external check with the HAPI
 validator.

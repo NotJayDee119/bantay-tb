@@ -17,12 +17,12 @@ import {
   Spinner,
   Textarea,
 } from "../../components/ui";
-import { PatientSheet } from "../../components/PatientSheet";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useAreaScope } from "../../hooks/useAreaScope";
 import { useGeolocation } from "../../hooks/useGeolocation";
 import { detectLocale, LOCALE_LABEL, type Locale } from "../../lib/i18n";
+import { findMentionedBarangays } from "../../lib/barangayMention";
 import barangays from "../../data/barangays.json";
 
 interface Message {
@@ -37,20 +37,6 @@ interface Session {
   id: string;
   preview: string;
   created_at: string;
-}
-
-/** A patient's own treatment picture, built from their adherence rows. */
-interface TreatmentSummary {
-  medication: string;
-  dose: string;
-  timesPerDay: number;
-  startDate: string;
-  endDate: string;
-  taken: number;
-  missed: number;
-  late: number;
-  lastTakenAt: string | null;
-  nextDoseAt: string | null;
 }
 
 // Roles that can access live surveillance data
@@ -74,9 +60,7 @@ const MICRO_LABEL =
 export function Chatbot() {
   const { profile } = useAuth();
   const scope = useAreaScope();
-  const isPatient = profile?.role === "patient";
-  const canAccessData = !isPatient && DATA_ROLES.has(profile?.role ?? "");
-  const firstName = profile?.full_name?.trim().split(/\s+/)[0] ?? null;
+  const canAccessData = DATA_ROLES.has(profile?.role ?? "");
 
   // Opt-in, button-triggered only — see useGeolocation.
   const geo = useGeolocation();
@@ -87,12 +71,10 @@ export function Chatbot() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  // History panel visibility — remembered across visits. Patients start
-  // chat-first (hidden); staff start with it open.
+  // History panel visibility — remembered across visits, open by default.
   const [showHistory, setShowHistory] = useState<boolean>(() => {
     const saved = localStorage.getItem("bantay-chatbot-history");
-    if (saved !== null) return saved === "1";
-    return profile?.role !== "patient";
+    return saved === null ? true : saved === "1";
   });
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -167,7 +149,7 @@ export function Chatbot() {
     });
   }, [messages]);
 
-  // Only staff roles fetch live surveillance data; patients never get case stats.
+  // Only staff roles fetch live surveillance data.
   async function fetchDataContext(text: string): Promise<string | null> {
     if (!canAccessData) return null;
 
@@ -175,7 +157,7 @@ export function Chatbot() {
     const isDataQuery =
       /\b(how many|cases|count|total|stats|statistics|hotspot|recent|ilan|kaso|pila|data|infected|reported|area|barangay)\b/i.test(
         lower
-      );
+      ) || findMentionedBarangays(text).length > 0;
     if (!isDataQuery) return null;
 
     const thirtyDaysAgo = new Date();
@@ -309,23 +291,21 @@ export function Chatbot() {
       }
     }
 
-    // Barangays mentioned in the query — match full names and distinctive
-    // name parts so "cases in matina" finds Matina Crossing / Aplaya / Pangi.
-    const mentioned: { psgc: number; name: string }[] = (
-      barangays as { psgc: number; name: string }[]
-    )
-      .filter((b) => {
-        // Area-scoped staff can't read other barangays: the count would come
-        // back 0 and the assistant would report it as "no cases there".
-        if (scope.scoped && b.psgc !== scope.psgc) return false;
-        const name = b.name.toLowerCase();
-        if (lower.includes(name)) return true;
-        return name
-          .split(/\s+/)
-          .some((part) => part.length >= 4 && lower.includes(part));
-      })
-      .slice(0, 3)
-      .map((b) => ({ psgc: b.psgc, name: b.name }));
+    // Barangays named in the query ("Maa" finds Ma-a, "matina" finds Matina
+    // Crossing / Aplaya / Pangi). Coordinators read every one; area-scoped
+    // staff only their own — another barangay's count would come back 0 from
+    // RLS and the assistant would report it as "no cases there".
+    const named = findMentionedBarangays(text);
+    const mentioned = named.filter((b) => !scope.scoped || b.psgc === scope.psgc);
+    const outside = named.filter((b) => scope.scoped && b.psgc !== scope.psgc);
+    if (outside.length > 0) {
+      const own = scope.name ?? "your assigned area";
+      lines.push(
+        `- ${outside.map((b) => b.name).join(", ")}: outside your assigned area. ` +
+          `This account can only view case data for ${own}. ` +
+          "(Do not state, estimate, or imply any figure for these barangays.)"
+      );
+    }
 
     // "How many cases in my area" answered from where the user actually is.
     // Only when they have shared a fix — no location, no location answer.
@@ -430,78 +410,6 @@ export function Chatbot() {
     return lines.join("\n");
   }
 
-  // ── Patient self-service data ─────────────────────────────────────────
-  // Patients asking about their own care ("Kumusta ang aking paggamot?",
-  // "When was my last dose?") get their real treatment record pulled in as
-  // context. RLS restricts every query to the patient's own rows.
-  function isSelfCareQuery(text: string): boolean {
-    return /\b(treatment|paggamot|pagtambal|tambal|gamot|medicine|medication|medisina|dose|dosis|inom|took|taken?|missed|nakalimutan|nalimtan|schedule|iskedyul|progress|adherence|kumusta|kamusta|reminder)\b/i.test(
-      text
-    );
-  }
-
-  async function fetchTreatmentSummary(): Promise<TreatmentSummary | null> {
-    if (!profile?.id) return null;
-    try {
-      const { data: schedule } = await supabase
-        .from("adherence_schedules")
-        .select("medication, dose, times_per_day, start_date, end_date")
-        .eq("patient_id", profile.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!schedule) return null;
-
-      const countByStatus = async (status: "taken" | "missed" | "late") => {
-        const { count } = await supabase
-          .from("adherence_logs")
-          .select("id", { count: "exact", head: true })
-          .eq("patient_id", profile.id)
-          .eq("status", status);
-        return count ?? 0;
-      };
-
-      const [taken, missed, late, lastTaken, nextDose] = await Promise.all([
-        countByStatus("taken"),
-        countByStatus("missed"),
-        countByStatus("late"),
-        supabase
-          .from("adherence_logs")
-          .select("taken_at")
-          .eq("patient_id", profile.id)
-          .eq("status", "taken")
-          .not("taken_at", "is", null)
-          .order("taken_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        supabase
-          .from("adherence_logs")
-          .select("scheduled_at")
-          .eq("patient_id", profile.id)
-          .eq("status", "scheduled")
-          .gte("scheduled_at", new Date().toISOString())
-          .order("scheduled_at", { ascending: true })
-          .limit(1)
-          .maybeSingle(),
-      ]);
-
-      return {
-        medication: schedule.medication,
-        dose: schedule.dose,
-        timesPerDay: schedule.times_per_day,
-        startDate: schedule.start_date,
-        endDate: schedule.end_date,
-        taken,
-        missed,
-        late,
-        lastTakenAt: lastTaken.data?.taken_at ?? null,
-        nextDoseAt: nextDose.data?.scheduled_at ?? null,
-      };
-    } catch {
-      return null;
-    }
-  }
-
   // Accepts optional text so quick-reply cards can send in one tap
   // instead of just filling the input.
   async function send(textArg?: string) {
@@ -520,7 +428,7 @@ export function Chatbot() {
     setMessages((m) => [...m, userMsg]);
 
     if (profile?.id) {
-      await supabase.from("chatbot_messages").insert({
+      const { error } = await supabase.from("chatbot_messages").insert({
         id: userMsg.id,
         session_id: sessionId,
         user_id: profile.id,
@@ -528,39 +436,56 @@ export function Chatbot() {
         content: text,
         language,
       });
+      if (error) console.error("chatbot: could not save question", error);
     }
 
+    // Every reply is kept with the conversation, including the fallbacks
+    // shown when the AI is unreachable — those used to live only on screen,
+    // so reopening the chat showed questions with no answers. The Edge
+    // Function saves the replies it produces under this id and reports
+    // `saved`; anything it did not save is written here instead.
+    const replyId = crypto.randomUUID();
+    const saveReply = async (content: string, lang: Locale) => {
+      if (!profile?.id) return;
+      const { error } = await supabase.from("chatbot_messages").insert({
+        id: replyId,
+        session_id: sessionId,
+        user_id: profile.id,
+        role: "assistant",
+        content,
+        language: lang,
+      });
+      if (error) console.error("chatbot: could not save reply", error);
+    };
+
     setSending(true);
-    // Kept outside the try so the catch can build a data-aware fallback
-    // reply even when the Edge Function is unreachable.
-    let patientSummary: TreatmentSummary | null = null;
     // Hoisted so the catch can answer from the live DB data we already
     // fetched, even when the Edge Function / AI is unreachable.
     let statsContext: string | null = null;
     try {
-      let context = await fetchDataContext(text);
+      const context = await fetchDataContext(text);
       statsContext = context;
-      if (isPatient && isSelfCareQuery(text)) {
-        patientSummary = await fetchTreatmentSummary();
-        if (patientSummary) context = buildPatientContext(patientSummary);
-      }
       const { data, error } = await supabase.functions.invoke("chatbot", {
         body: {
           session_id: sessionId,
           message: text,
           language,
           user_id: profile?.id,
+          reply_id: replyId,
           role: profile?.role ?? null,
           context: context ?? undefined,
         },
       });
       if (error) throw error;
-      const reply = (data as { reply: string; language: Locale })?.reply;
-      const assistantLang =
-        (data as { language?: Locale })?.language ?? language;
+      const d = data as { reply?: string; language?: Locale; saved?: boolean };
+      const reply = d?.reply;
+      const assistantLang = d?.language ?? language;
       if (reply) {
+        // Only an explicit false: an older deployment of the function sends
+        // no flag but has already saved the reply.
+        if (d.saved === false) await saveReply(reply, assistantLang);
         const assistantMsg: Message = {
-          id: crypto.randomUUID(),
+          id: replyId,
           role: "assistant",
           content: reply,
           language: assistantLang,
@@ -570,61 +495,42 @@ export function Chatbot() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      // If we already fetched the patient's treatment record, answer from
-      // it directly — real data beats a canned reply.
-      const fallback = patientSummary
-        ? treatmentFallbackReply(patientSummary, language)
-        : statsContext
-          ? statsFallbackReply(statsContext, language)
-          : localFallback(text, language, isPatient);
+      const fallback = statsContext
+        ? statsFallbackReply(statsContext, language)
+        : localFallback(text, language);
+      await saveReply(fallback, language);
       setMessages((m) => [
         ...m,
         {
-          id: crypto.randomUUID(),
+          id: replyId,
           role: "assistant",
           content: fallback,
           language,
           created_at: new Date().toISOString(),
         },
       ]);
-      // Patients get the fallback answer seamlessly — the technical toast
-      // is only useful to staff.
-      if (!isPatient) {
-        toast.message(
-          `Edge Function unavailable — using local fallback. (${message})`
-        );
-      }
+      toast.message(
+        `Edge Function unavailable — using local fallback. (${message})`
+      );
     } finally {
       setSending(false);
       loadHistory();
     }
   }
 
-  // Quick-reply suggestions differ by role
-  const quickReplies = isPatient
-    ? [
-        "What are the symptoms of TB?",
-        "How long is TB treatment?",
-        "What should I do if I miss a dose?",
-        "Kumusta ang aking paggamot sa TB?",
-      ]
-    : [
-        "How many TB cases right now?",
-        "How many cases in my area?",
-        "How many cases in Maa?",
-        "Ano ang sintomas ng TB?",
-        "Unsa ang tambal sa hubak?",
-      ];
+  const quickReplies = [
+    "How many TB cases right now?",
+    "How many cases in my area?",
+    "How many cases in Maa?",
+    "Ano ang sintomas ng TB?",
+    "Unsa ang tambal sa hubak?",
+  ];
 
   return (
     <div className="mx-auto flex h-full w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8">
       <PageHeader
-        title={isPatient ? "Health Assistant" : "Multilingual Chatbot"}
-        subtitle={
-          isPatient
-            ? "I'm here to help with your TB care — ask me anything in English, Filipino, or Cebuano."
-            : "Ask in English, Filipino (Tagalog), or Cebuano. Language is detected automatically."
-        }
+        title="Multilingual Chatbot"
+        subtitle="Ask in English, Filipino (Tagalog), or Cebuano. Language is detected automatically."
         actions={
           <>
             <Button
@@ -651,14 +557,13 @@ export function Chatbot() {
       <div
         className={
           "grid min-h-0 flex-1 gap-4 " +
-          (showHistory && !isPatient
+          (showHistory
             ? "grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] lg:grid-rows-1"
             : "grid-cols-1 grid-rows-[minmax(0,1fr)]")
         }
       >
-        {/* History panel — staff keep a docked side panel; patients open it as
-            a bottom sheet (rendered after the grid) so chat stays full-width. */}
-        {showHistory && !isPatient && (
+        {/* History panel — docked beside the chat. */}
+        {showHistory && (
         <Card className="panel-in flex min-h-0 flex-col overflow-hidden p-0">
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
             <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
@@ -687,38 +592,7 @@ export function Chatbot() {
             ref={scrollRef}
             className="flex-1 space-y-3 overflow-y-auto p-4"
           >
-            {messages.length === 0 &&
-              (isPatient ? (
-                /* Patient welcome — warm, personal, one-tap suggestions. */
-                <div className="flex h-full flex-col items-center justify-center gap-5 px-4 text-center">
-                  <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-accent-500 text-white shadow-soft">
-                    <Bot className="h-7 w-7" />
-                  </div>
-                  <div>
-                    <p className="font-display text-xl font-bold tracking-tight text-slate-900">
-                      Hi{firstName ? ` ${firstName}` : ""}! 👋
-                    </p>
-                    <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-slate-600">
-                      I&apos;m your TB care assistant. Ask me about symptoms,
-                      treatment, or your medicines — in English, Filipino, or
-                      Cebuano.
-                    </p>
-                  </div>
-                  <div className="grid w-full max-w-md gap-2 sm:grid-cols-2">
-                    {quickReplies.map((q) => (
-                      <button
-                        key={q}
-                        type="button"
-                        onClick={() => send(q)}
-                        disabled={sending}
-                        className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 shadow-soft transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-50"
-                      >
-                        {q}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
+            {messages.length === 0 && (
                 <div className="space-y-3 text-sm text-slate-500">
                   <p>Ask about TB health topics or live case data:</p>
                   <ul className="flex flex-wrap gap-1.5">
@@ -742,7 +616,7 @@ export function Chatbot() {
                     </p>
                   )}
                 </div>
-              ))}
+              )}
             {messages.map((m) => (
               <div
                 key={m.id}
@@ -754,10 +628,7 @@ export function Chatbot() {
                 {m.role === "assistant" && (
                   <div
                     className={
-                      "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-white " +
-                      (isPatient
-                        ? "bg-gradient-to-br from-brand-500 to-accent-500"
-                        : "bg-brand-950")
+                      "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-950 text-white"
                     }
                   >
                     <Bot className="h-4 w-4" />
@@ -774,7 +645,7 @@ export function Chatbot() {
                   <div className="whitespace-pre-line leading-relaxed">
                     {m.content}
                   </div>
-                  {m.language && !isPatient && (
+                  {m.language && (
                     <div
                       className={
                         "mt-1.5 font-mono text-[9px] font-semibold uppercase tracking-wider " +
@@ -798,10 +669,7 @@ export function Chatbot() {
               <div className="panel-in flex gap-3">
                 <div
                   className={
-                    "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-white " +
-                    (isPatient
-                      ? "bg-gradient-to-br from-brand-500 to-accent-500"
-                      : "bg-brand-950")
+                    "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-950 text-white"
                   }
                 >
                   <Bot className="h-4 w-4" />
@@ -830,11 +698,7 @@ export function Chatbot() {
               <Textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder={
-                  isPatient
-                    ? "Ask me anything about your TB care…"
-                    : "Type in English, Filipino, or Cebuano…"
-                }
+                placeholder="Type in English, Filipino, or Cebuano…"
                 aria-label="Message"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -856,53 +720,23 @@ export function Chatbot() {
         </Card>
       </div>
 
-      {/* Patient chat history — bottom sheet (mobile) / centered dialog. */}
-      {isPatient && (
-        <PatientSheet
-          open={showHistory}
-          onClose={() => setShowHistory(false)}
-          accentClass="border-sky-200"
-          iconClass="bg-sky-100 text-sky-700"
-          icon={<History className="h-6 w-6" />}
-          title="Your chats"
-          subtitle={
-            history.length > 0
-              ? `${history.length} saved conversation${history.length === 1 ? "" : "s"}`
-              : "Your past questions live here"
-          }
-        >
-          <HistoryList
-            history={history}
-            sessionId={sessionId}
-            deletingId={deletingId}
-            alwaysShowDelete
-            onSelect={(id) => {
-              loadSession(id);
-              setShowHistory(false);
-            }}
-            onDelete={deleteSession}
-          />
-        </PatientSheet>
-      )}
     </div>
   );
 }
 
-/** Chat history list — shared by the staff side panel and the patient sheet. */
+/** Chat history list for the side panel. */
 function HistoryList({
   history,
   sessionId,
   deletingId,
   onSelect,
   onDelete,
-  alwaysShowDelete = false,
 }: {
   history: Session[];
   sessionId: string;
   deletingId: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
-  alwaysShowDelete?: boolean;
 }) {
   if (history.length === 0) {
     return (
@@ -942,10 +776,7 @@ function HistoryList({
               title="Delete this conversation"
               aria-label="Delete this conversation"
               className={
-                "absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 transition " +
-                (alwaysShowDelete
-                  ? "text-slate-400 "
-                  : "text-slate-300 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 ") +
+                "absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-300 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100 " +
                 "hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
               }
             >
@@ -970,8 +801,6 @@ const FALLBACKS: Record<Locale, Record<string, string>> = {
       "Standard drug-sensitive TB treatment is 6 months under DOTS supervision: 4 antibiotics for 2 months, then 2 antibiotics for 4 months. Always complete the full course.",
     default:
       "I can answer questions about TB, pneumonia, COVID-19, and asthma — symptoms, treatment, prevention, and DOTS center information. (Edge Function fallback response.)",
-    "patient-default":
-      "I'm here to support your TB care journey. I can answer questions about symptoms, treatment, adherence, and when to visit your DOTS center. (Edge Function fallback response.)",
   },
   tl: {
     "tb-symptoms":
@@ -980,8 +809,6 @@ const FALLBACKS: Record<Locale, Record<string, string>> = {
       "Ang karaniwang TB treatment ay 6 na buwan sa ilalim ng DOTS: 4 na antibiyotiko sa unang 2 buwan, tapos 2 antibiyotiko sa susunod na 4 na buwan. Kumpletuhin ang gamot.",
     default:
       "Maaari akong sumagot tungkol sa TB, pulmonya, COVID-19, at hika — sintomas, gamot, pag-iwas, at impormasyon ng DOTS Center.",
-    "patient-default":
-      "Nandito ako para suportahan ang iyong paggamot sa TB. Maaari kang magtanong tungkol sa sintomas, gamot, at kung kailan bisitahin ang DOTS Center.",
   },
   ceb: {
     "tb-symptoms":
@@ -990,81 +817,8 @@ const FALLBACKS: Record<Locale, Record<string, string>> = {
       "Standard nga TB tambal kay 6 ka bulan sa DOTS: 4 ka antibiotic sulod sa 2 ka bulan, dayon 2 ka antibiotic sulod sa 4 ka bulan. Kompleto ang tambal.",
     default:
       "Makahatag ko og impormasyon bahin sa TB, pulmonya, COVID-19, ug hubak — sintomas, tambal, pag-likay, ug DOTS Center.",
-    "patient-default":
-      "Ania ako aron suportahan ang imong paggamot sa TB. Pwede kang mangutana bahin sa sintomas, tambal, ug kung kanus-a adtoon ang DOTS Center.",
   },
 };
-
-const fmtDoseTime = (iso: string | null) =>
-  iso
-    ? new Date(iso).toLocaleString("en-PH", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : null;
-
-/** Context block sent to the Edge Function for the AI to answer from. */
-function buildPatientContext(s: TreatmentSummary): string {
-  const done = s.taken + s.missed + s.late;
-  const rate = done === 0 ? null : Math.round((s.taken / done) * 100);
-  return [
-    "PATIENT'S OWN TREATMENT RECORD from the BANTAY-TB database (this data belongs to the patient asking — share it with them clearly and kindly):",
-    `- Medication: ${s.medication} ${s.dose}, ${s.timesPerDay}x per day`,
-    `- Treatment period: ${s.startDate} to ${s.endDate}`,
-    `- Doses taken: ${s.taken} · missed: ${s.missed} · late: ${s.late}` +
-      (rate !== null ? ` (adherence ${rate}%)` : ""),
-    `- Last dose taken: ${fmtDoseTime(s.lastTakenAt) ?? "no dose recorded yet"}`,
-    `- Next scheduled dose: ${fmtDoseTime(s.nextDoseAt) ?? "none upcoming on record"}`,
-  ].join("\n");
-}
-
-/** Offline answer built straight from the patient's data, per language. */
-function treatmentFallbackReply(s: TreatmentSummary, locale: Locale): string {
-  const last = fmtDoseTime(s.lastTakenAt);
-  const next = fmtDoseTime(s.nextDoseAt);
-  const lines: string[] = [];
-  if (locale === "tl") {
-    lines.push("Narito ang iyong treatment record mula sa BANTAY-TB:", "");
-    lines.push(
-      `💊 ${s.medication} ${s.dose} — ${s.timesPerDay}x kada araw (hanggang ${s.endDate})`,
-      `✅ Nainom: ${s.taken} · ❌ Nakalimutan: ${s.missed} · ⏰ Nahuli: ${s.late}`
-    );
-    lines.push(last ? `Huling dose: ${last}` : "Wala pang naitalang dose.");
-    if (next) lines.push(`Susunod na dose: ${next}`);
-    lines.push(
-      "",
-      "Ipagpatuloy mo lang! Kung may nakalimutang dose, inumin ang susunod sa tamang oras at sabihin sa iyong health worker."
-    );
-  } else if (locale === "ceb") {
-    lines.push("Ania ang imong treatment record gikan sa BANTAY-TB:", "");
-    lines.push(
-      `💊 ${s.medication} ${s.dose} — ${s.timesPerDay}x kada adlaw (hangtod ${s.endDate})`,
-      `✅ Nainom: ${s.taken} · ❌ Nakalimtan: ${s.missed} · ⏰ Naulahi: ${s.late}`
-    );
-    lines.push(last ? `Kataposang dose: ${last}` : "Wala pay narekord nga dose.");
-    if (next) lines.push(`Sunod nga dose: ${next}`);
-    lines.push(
-      "",
-      "Padayon lang! Kung adunay nakalimtan nga dose, inoma ang sunod sa saktong oras ug isulti sa imong health worker."
-    );
-  } else {
-    lines.push("Here is your treatment record from BANTAY-TB:", "");
-    lines.push(
-      `💊 ${s.medication} ${s.dose} — ${s.timesPerDay}x a day (until ${s.endDate})`,
-      `✅ Taken: ${s.taken} · ❌ Missed: ${s.missed} · ⏰ Late: ${s.late}`
-    );
-    lines.push(last ? `Last dose taken: ${last}` : "No dose has been recorded yet.");
-    if (next) lines.push(`Next scheduled dose: ${next}`);
-    lines.push(
-      "",
-      "Keep it up! If you missed a dose, take the next one on schedule and let your health worker know."
-    );
-  }
-  return lines.join("\n");
-}
 
 /**
  * Offline answer built straight from the live database context we already
@@ -1073,11 +827,13 @@ function treatmentFallbackReply(s: TreatmentSummary, locale: Locale): string {
  * canned line. `context` is the string produced by fetchDataContext().
  */
 function statsFallbackReply(context: string, locale: Locale): string {
-  // Drop the machine-facing header line; keep the "- ..." data lines.
+  // Drop the machine-facing header and NOTE lines and the AI-only
+  // instructions in parentheses; keep the "- ..." data lines.
   const dataLines = context
     .split("\n")
-    .filter((l) => l.trim().startsWith("-"));
-  if (dataLines.length === 0) return localFallback("", locale, false);
+    .filter((l) => l.trim().startsWith("-") && !l.trim().startsWith("- NOTE"))
+    .map((l) => l.replace(/ \(Do not [^)]*\)$/, ""));
+  if (dataLines.length === 0) return localFallback("", locale);
 
   const header: Record<Locale, string> = {
     en: "Here are the latest figures from the BANTAY-TB database:",
@@ -1092,12 +848,12 @@ function statsFallbackReply(context: string, locale: Locale): string {
   return [header[locale], "", ...dataLines, "", footer[locale]].join("\n");
 }
 
-function localFallback(text: string, locale: Locale, patient: boolean): string {
+function localFallback(text: string, locale: Locale): string {
   const lower = text.toLowerCase();
   const tbWords = ["tb", "tuberkulosis", "tuberculosis"];
   const isTb = tbWords.some((w) => lower.includes(w));
   if (isTb && /(symptom|sintoma)/.test(lower)) return FALLBACKS[locale]["tb-symptoms"];
   if (isTb && /(treat|gamot|tambal)/.test(lower))
     return FALLBACKS[locale]["tb-treatment"];
-  return patient ? FALLBACKS[locale]["patient-default"] : FALLBACKS[locale].default;
+  return FALLBACKS[locale].default;
 }

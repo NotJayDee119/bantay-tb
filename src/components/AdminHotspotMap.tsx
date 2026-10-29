@@ -179,6 +179,7 @@ function MarkerTooltip({
   attribution,
   assigned = false,
   open = false,
+  radius,
 }: {
   stat: BarangayStat;
   fill: string;
@@ -186,6 +187,9 @@ function MarkerTooltip({
   assigned?: boolean;
   /** True when this barangay is the one currently drilled into. */
   open?: boolean;
+  /** The circle's radius in px. A CircleMarker tooltip anchors at the
+      centre, so the card has to clear this or it covers the circle. */
+  radius: number;
 }) {
   const byFacility = attribution === "facility";
   // The other axis, always shown underneath. A Mintal patient registered in
@@ -195,7 +199,12 @@ function MarkerTooltip({
     ? `${stat.residentCases} live${stat.residentCases === 1 ? "s" : ""} here`
     : `${stat.registeredCases} registered here`;
   return (
-    <Tooltip direction="top" offset={[0, -6]} opacity={1} className="pcm-tooltip">
+    <Tooltip
+      direction="top"
+      offset={[0, -(radius + 6)]}
+      opacity={1}
+      className="pcm-tooltip"
+    >
       <div className="pcm-tooltip-inner text-center">
         <div className="flex items-center justify-center gap-1.5">
           <span
@@ -204,8 +213,8 @@ function MarkerTooltip({
           />
           <span className="text-xs font-semibold text-white">{stat.name}</span>
         </div>
-        <div className="mt-1 font-display text-2xl font-extrabold leading-none tracking-tight text-white">
-          {stat.caseCount}
+        <div className="mt-1 font-display text-2xl font-extrabold tabular-nums leading-none tracking-tight text-white">
+          {stat.caseCount.toLocaleString()}
         </div>
         {/* Never the bare word "cases": the number means something different
             on each axis, and one label for both is what let a facility count
@@ -659,6 +668,9 @@ export function AdminHotspotMap({
                   fill={barangayFill(stat.caseCount, maxCount)}
                   attribution={attribution}
                   open={open}
+                  radius={
+                    barangayRadius(stat.caseCount, maxCount) + (open ? 3 : 0)
+                  }
                 />
               </CircleMarker>
             );
@@ -692,6 +704,9 @@ export function AdminHotspotMap({
                   attribution={attribution}
                   assigned
                   open={open}
+                  radius={
+                    barangayRadius(stat.caseCount, maxCount) + (open ? 6 : 4)
+                  }
                 />
               </CircleMarker>
             );
@@ -1081,25 +1096,27 @@ export function AdminHotspotMap({
               <Activity className="h-3.5 w-3.5 text-accent-400" />
               TB hotspot overview
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              <div>
-                <div className="font-display text-xl font-extrabold leading-none tracking-tight text-white">
+            {/* Content-sized cells with dividers: an equal 3-column grid let a
+                5-digit total run into the 30-day figure ("11,575331"). */}
+            <div className="mt-2 flex divide-x divide-white/10">
+              <div className="flex-auto pr-2.5">
+                <div className="font-display text-xl font-extrabold tabular-nums leading-none tracking-tight text-white">
                   {summary.totalCases.toLocaleString()}
                 </div>
                 <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-slate-400">
                   Cases
                 </div>
               </div>
-              <div>
-                <div className="font-display text-xl font-extrabold leading-none tracking-tight text-white">
+              <div className="flex-auto px-2.5">
+                <div className="font-display text-xl font-extrabold tabular-nums leading-none tracking-tight text-white">
                   {summary.recentCases.toLocaleString()}
                 </div>
                 <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-slate-400">
                   {summary.recentWindowDays}-day
                 </div>
               </div>
-              <div>
-                <div className="font-display text-xl font-extrabold leading-none tracking-tight text-white">
+              <div className="flex-auto pl-2.5">
+                <div className="font-display text-xl font-extrabold tabular-nums leading-none tracking-tight text-white">
                   {clusters.length}
                 </div>
                 <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-slate-400">

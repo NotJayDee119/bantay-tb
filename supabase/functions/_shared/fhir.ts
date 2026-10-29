@@ -1,7 +1,7 @@
 // BANTAY-TB -> HL7 FHIR R4 serializer.
 //
-// Turns one row of `public.cases`, plus the barangay, DOTS facility and DOTS
-// adherence rows that hang off it, into a FHIR R4 **transaction Bundle**: the
+// Turns one row of `public.cases`, plus the barangay and DOTS facility that
+// hang off it, into a FHIR R4 **transaction Bundle**: the
 // interaction the specification defines for pushing a set of related
 // resources to a server in one atomic request.
 //
@@ -21,8 +21,8 @@
 // ICD-10 for the TB diagnosis, SNOMED CT for the disorder and body site, HL7
 // v3 / FHIR code systems for the administrative values. Where BANTAY-TB holds
 // a concept the published systems do not model the way the NTP does (our
-// three-way diagnosis axis, the DOH treatment-outcome list, the DOTS
-// adherence rate), the resource carries an explicit local CodeSystem URI under
+// three-way diagnosis axis, the DOH treatment-outcome list), the resource
+// carries an explicit local CodeSystem URI under
 // our own namespace rather than a mis-mapped standard code. Inventing a
 // SNOMED code would make the payload look more standardised and be less
 // interoperable.
@@ -81,27 +81,10 @@ export interface FacilityRecord {
   hours: string | null;
 }
 
-export interface ScheduleRecord {
-  id: string;
-  medication: string;
-  dose: string | null;
-  times_per_day: number;
-  start_date: string;
-  end_date: string;
-}
-
-export interface AdherenceSummary {
-  total: number;
-  taken: number;
-  missed: number;
-}
-
 export interface BuildOptions {
   caseRow: CaseRecord;
   barangay: BarangayRecord | null;
   facility: FacilityRecord | null;
-  schedules?: ScheduleRecord[];
-  adherence?: AdherenceSummary | null;
   /** Default `pseudonymous`. See "Minimum necessary" above. */
   disclosure?: Disclosure;
   /** Tags the bundle HTEST, so a public test server never holds untagged PHI. */
@@ -129,7 +112,6 @@ const SYS = {
   icd10: "http://hl7.org/fhir/sid/icd-10",
   snomed: "http://snomed.info/sct",
   loinc: "http://loinc.org",
-  ucum: "http://unitsofmeasure.org",
   conditionCategory: "http://terminology.hl7.org/CodeSystem/condition-category",
   conditionClinical: "http://terminology.hl7.org/CodeSystem/condition-clinical",
   conditionVerStatus: "http://terminology.hl7.org/CodeSystem/condition-ver-status",
@@ -434,8 +416,6 @@ export function buildCaseBundle(options: BuildOptions): BuildResult {
     caseRow: c,
     barangay,
     facility,
-    schedules = [],
-    adherence = null,
     disclosure = "pseudonymous",
     testData = false,
     newId = () => crypto.randomUUID(),
@@ -832,134 +812,6 @@ export function buildCaseBundle(options: BuildOptions): BuildResult {
     }),
     request: { method: "POST", url: "Observation" },
   });
-
-  // ── MedicationStatement: the DOTS regimen ─────────────────────────────────
-  // The regimen and its adherence record are what BANTAY-TB holds that a
-  // hospital EMR does not -- the part of this payload the receiving system
-  // cannot get anywhere else.
-  const today = now().toISOString().slice(0, 10);
-  for (const s of schedules) {
-    entries.push({
-      fullUrl: `urn:uuid:${newId()}`,
-      resource: compact({
-        resourceType: "MedicationStatement",
-        status: s.end_date < today ? "completed" : "active",
-        category: {
-          coding: [
-            {
-              system:
-                "http://terminology.hl7.org/CodeSystem/medication-statement-category",
-              code: "community",
-              display: "Community",
-            },
-          ],
-        },
-        medicationCodeableConcept: { text: s.medication },
-        subject: { reference: patientRef },
-        effectivePeriod: { start: s.start_date, end: s.end_date },
-        dateAsserted: timestamp,
-        dosage: [
-          compact({
-            text: s.dose || undefined,
-            timing: {
-              repeat: {
-                frequency: s.times_per_day,
-                period: 1,
-                periodUnit: "d",
-              },
-            },
-            route: {
-              coding: [
-                { system: SYS.snomed, code: "26643006", display: "Oral route" },
-              ],
-            },
-          }),
-        ],
-      }),
-      request: { method: "POST", url: "MedicationStatement" },
-    });
-  }
-
-  // ── Observation: DOTS adherence rate ──────────────────────────────────────
-  if (adherence && adherence.total > 0) {
-    const pct = Math.round((adherence.taken / adherence.total) * 1000) / 10;
-    entries.push({
-      fullUrl: `urn:uuid:${newId()}`,
-      resource: compact({
-        resourceType: "Observation",
-        status: "preliminary",
-        category: [
-          {
-            coding: [
-              {
-                system: SYS.observationCategory,
-                code: "therapy",
-                display: "Therapy",
-              },
-            ],
-          },
-        ],
-        code: {
-          coding: [
-            {
-              system: SYS.observation,
-              code: "dots-adherence-rate",
-              display: "DOTS medication adherence rate",
-            },
-          ],
-          text: "Proportion of scheduled doses recorded as taken",
-        },
-        subject: { reference: patientRef },
-        performer,
-        effectiveDateTime: timestamp,
-        valueQuantity: {
-          value: pct,
-          unit: "%",
-          system: SYS.ucum,
-          code: "%",
-        },
-        component: [
-          {
-            code: {
-              coding: [
-                {
-                  system: SYS.observation,
-                  code: "doses-taken",
-                  display: "Doses recorded as taken",
-                },
-              ],
-            },
-            valueInteger: adherence.taken,
-          },
-          {
-            code: {
-              coding: [
-                {
-                  system: SYS.observation,
-                  code: "doses-missed",
-                  display: "Doses recorded as missed",
-                },
-              ],
-            },
-            valueInteger: adherence.missed,
-          },
-          {
-            code: {
-              coding: [
-                {
-                  system: SYS.observation,
-                  code: "doses-scheduled",
-                  display: "Doses scheduled",
-                },
-              ],
-            },
-            valueInteger: adherence.total,
-          },
-        ],
-      }),
-      request: { method: "POST", url: "Observation" },
-    });
-  }
 
   const bundleId = newId();
   const bundle: FhirBundle = {

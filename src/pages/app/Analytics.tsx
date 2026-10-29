@@ -272,7 +272,7 @@ export function Analytics() {
       kind: "donut",
       description:
         "Where each case currently stands in treatment. Cured and completed are favourable outcomes.",
-      note: "“Lost to follow-up” cases are the priority for BHW home visits and adherence reminders.",
+      note: "“Lost to follow-up” cases are the priority for BHW home visits and follow-up calls.",
       rows: sliceRows(toSlices(data.byOutcome, OUTCOME_COLORS)),
     },
     sex: {
@@ -611,7 +611,7 @@ function buildInsights(d: AnalyticsData): string[] {
     d.byOutcome.find((o) => o.label === "lost_to_followup")?.count ?? 0;
   if (lost / d.total >= 0.05) {
     out.push(
-      `Lost-to-follow-up rate is ${Math.round((lost / d.total) * 100)}% — prioritise SMS adherence reminders and BHW home visits.`
+      `Lost-to-follow-up rate is ${Math.round((lost / d.total) * 100)}% — prioritise BHW home visits and follow-up calls.`
     );
   }
 

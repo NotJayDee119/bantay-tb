@@ -18,7 +18,7 @@ no database change, because a Mirth listener is just another row in
 A case recorded at a Davao City DOTS facility lives in `public.cases`. It holds
 things no other system has: the barangay of **residence** (not the facility's
 barangay), the geocoded household, the DOTS facility providing treatment, the
-NTP diagnosis axis, and the per-dose adherence log. Until now the only way to
+NTP diagnosis axis, and the treatment outcome. Until now the only way to
 read any of it was through this app's own UI. A referral to a hospital, a report
 to the DOH Integrated TB Information System, or a hand-off to a regional HIE
 node all meant a human re-typing the record off a screen.
@@ -35,9 +35,9 @@ The pipeline replaces that with one HTTPS request carrying a standard payload:
 ┌─────────────────────────────────────────────────────────────────┐
 │ Edge Function: fhir-export            (the integration service) │
 │                                                                 │
-│  2. EXTRACT    reads cases + barangays + dots_centers +         │
-│                adherence_schedules/logs AS THE CALLER,          │
-│                so RLS decides what they may export              │
+│  2. EXTRACT    reads cases + barangays + dots_centers           │
+│                AS THE CALLER, so RLS decides what they          │
+│                may export                                       │
 │  3. SERIALIZE  _shared/fhir.ts -> FHIR R4 transaction Bundle    │
 │                built from live rows, nothing pre-rendered       │
 │  4. DISPATCH   interop_endpoint_dispatch() returns the URL and  │
@@ -68,7 +68,7 @@ The pipeline replaces that with one HTTPS request carrying a standard payload:
 | `supabase/functions/_shared/fhir.ts` | The FHIR R4 serializer and terminology mapping |
 | `supabase/migrations/20261019000000_fhir_interoperability.sql` | Endpoints, audit log, encryption, grants |
 | `src/pages/app/Interoperability.tsx` | Operator UI at `/app/interoperability` |
-| `src/__tests__/fhirBundle.test.ts` | 35 tests over the serializer |
+| `src/__tests__/fhirBundle.test.ts` | 31 tests over the serializer |
 | `scripts/sample-fhir-payload.ts` | Regenerates the sample payload (`npm run fhir:sample`) |
 | `docs/fhir-sample-payload.json` | Exported sample payload |
 
@@ -83,11 +83,10 @@ Nothing is stored pre-serialised. Each request reads live rows:
 | `cases` | the record itself: TB code, site, diagnosis status, outcome, dates |
 | `barangays` | residence barangay name and centroid |
 | `dots_centers` | the treating facility, its address and coordinates |
-| `adherence_schedules` | the DOTS regimen, dose and frequency |
-| `adherence_logs` | exact counts of doses scheduled / taken / missed |
 
 Only the **system administrator** can use the pipeline. Every other role —
-TB coordinator, barangay admin, health worker, patient — is refused by the Edge
+TB coordinator, barangay admin, health worker, an account with no staff role —
+is refused by the Edge
 Function before anything is read, and the refusal is written to the audit log
 as `access_denied`.
 
@@ -103,7 +102,7 @@ lookup and the audit append. It is never used to read a case.
 
 ---
 
-## 3. Serialize — HL7 FHIR R4, nine resources
+## 3. Serialize — HL7 FHIR R4, seven resources
 
 A **transaction bundle**, which is the interaction the FHIR specification
 defines for pushing a set of related resources in one atomic request. The
@@ -120,8 +119,6 @@ discrete resources rather than accepted as an opaque blob.
 | `Location` | the facility's real coordinates | v3-RoleCode `OF` |
 | `Observation` ×1 | NTP diagnosis axis | local CodeSystem, observation-category `laboratory` |
 | `Observation` ×1 | WHO/NTP treatment outcome | local CodeSystem, observation-category `therapy` |
-| `MedicationStatement` | the DOTS regimen and its dosing frequency | medication-statement-category `community`, SNOMED route |
-| `Observation` ×1 | DOTS adherence rate + raw dose counts | local CodeSystem, **UCUM** `%` |
 
 Entries reference one another by `urn:uuid:` matching their own `fullUrl`, so
 the receiver resolves the graph internally. `Patient`, `Organization` and
@@ -148,8 +145,7 @@ SNOMED CT `56717001` *Tuberculosis (disorder)*, so a receiver that speaks only
 one of the two systems still understands the payload.
 
 Where BANTAY-TB holds a concept the published systems do not model the NTP's
-way — the three-way diagnosis axis, the DOH outcome list, the DOTS adherence
-rate — the resource carries an explicit local CodeSystem URI under
+way — the three-way diagnosis axis and the DOH outcome list — the resource carries an explicit local CodeSystem URI under
 `https://bantay-tb.davao.gov.ph/fhir/CodeSystem/…` rather than a mis-mapped
 standard code. A plausible-looking SNOMED code we had not verified would make
 the payload *look* more standardised and be less interoperable.
@@ -160,19 +156,20 @@ The sample payload validates against the HAPI FHIR R4 reference validator:
 
 ```
 POST https://hapi.fhir.org/baseR4/Bundle/$validate
--> HTTP 200, OperationOutcome: 0 errors, 0 fatals, 19 warnings
+-> HTTP 200, OperationOutcome: 0 errors, 0 fatals, warnings only
 ```
 
-All 19 warnings are expected and are not defects:
+The warnings are expected and are not defects:
 
-- **9 × `dom-6`** "a resource should have narrative" — a *best-practice
-  recommendation*, not a constraint. We deliberately send no XHTML narrative:
-  it would duplicate the structured data, and in an identified bundle it would
-  restate PHI as unstructured text a receiver cannot selectively redact.
-- **10 × "CodeSystem is unknown and can't be validated"** — our own local code
+- **`dom-6`** "a resource should have narrative", once per resource — a
+  *best-practice recommendation*, not a constraint. We deliberately send no
+  XHTML narrative: it would duplicate the structured data, and in an identified
+  bundle it would restate PHI as unstructured text a receiver cannot
+  selectively redact.
+- **"CodeSystem is unknown and can't be validated"** — our own local code
   systems, plus `http://hl7.org/fhir/sid/icd-10`, which the public HAPI instance
-  does not have loaded. Notably the SNOMED CT and UCUM codes validate clean,
-  which confirms those are real codes.
+  does not have loaded. Notably the SNOMED CT codes validate clean, which
+  confirms those are real codes.
 
 ---
 
@@ -274,7 +271,7 @@ The default disclosure scope is **`pseudonymous`**:
 | TB case code as business identifier | patient name |
 | gender, birth **year** (derived from age) | contact number |
 | barangay name, barangay **centroid** | street address, household coordinates |
-| diagnosis, outcome, regimen, adherence | clinical free-text notes |
+| diagnosis, outcome | clinical free-text notes |
 
 The bundle labels itself: `meta.security` carries v3-Confidentiality `R`
 (*restricted*) and v3-ObservationValue `PSEUDED` (*pseudonymized*), so a
@@ -447,8 +444,8 @@ trail would end at Mirth's door rather than at the destination.
   `Patient` one of ours?) and a merge policy, which is a bigger design problem
   than transmission.
 - **No retry queue.** A failed transmission is recorded as
-  `transmit_failure` and must be retried by hand. A durable outbox would belong
-  next to `sms_outbox`, which already solves exactly this for reminders.
+  `transmit_failure` and must be retried by hand. A durable outbox table with
+  a scheduled retry would close this.
 - **Encryption key co-resident with the data** — see §5.1.
 - **No narrative** on resources (`dom-6`), by choice — see §3.
 - **Local code systems are not published.** The

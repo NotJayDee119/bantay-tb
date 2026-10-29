@@ -45,10 +45,10 @@ VALUES
   ),
   (
     'Agdao Health Center',
-    'Agdao District',
+    'Lapu-Lapu St. cor. F. Bangoy St., Agdao District',
     112402002,
-    7.0845,
-    125.6239,
+    7.0812,
+    125.6222,
     NULL,
     'Mon–Fri 8:00–17:00',
     ARRAY['DOTS', 'sputum AFB', 'IPT', 'contact tracing']

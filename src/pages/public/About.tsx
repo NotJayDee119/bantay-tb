@@ -658,13 +658,13 @@ export function About() {
                 <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
-            <Link to="/claim">
+            <Link to="/learn">
               <Button
                 size="lg"
                 variant="secondary"
                 className="border-white/15 bg-white/5 text-white backdrop-blur-sm hover:border-white/25 hover:bg-white/10"
               >
-                I have a claim code
+                Read the health guides
               </Button>
             </Link>
           </div>

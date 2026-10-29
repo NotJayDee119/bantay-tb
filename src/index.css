@@ -106,6 +106,35 @@ body {
   transform-origin: bottom center;
   animation: pcm-tooltip-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
+/* Hotspots map — barangay name under each hotspot circle when zoomed in.
+   The divIcon is a zero-size anchor; the pill centres itself on it. */
+.leaflet-marker-icon.hs-label {
+  background: none;
+  border: none;
+  pointer-events: none;
+}
+.hs-label span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(11, 18, 32, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  animation: hs-label-in 200ms ease-out;
+}
+@keyframes hs-label-in {
+  from {
+    opacity: 0;
+  }
+}
 @keyframes pcm-tooltip-in {
   from {
     opacity: 0;
@@ -114,6 +143,149 @@ body {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+/* Landing map tour — spotlight, card and per-step map effects.
+   The spotlight's dim backdrop is its own giant box-shadow, so it morphs
+   between targets on one transition; the ring, ripple and corner brackets
+   ride along inside it. */
+.tour-spot {
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(2, 6, 23, 0.72);
+  transition:
+    top 620ms cubic-bezier(0.16, 1, 0.3, 1),
+    left 620ms cubic-bezier(0.16, 1, 0.3, 1),
+    width 620ms cubic-bezier(0.16, 1, 0.3, 1),
+    height 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tour-spot-ring {
+  border-radius: inherit;
+  box-shadow:
+    0 0 0 2px #34d399,
+    0 0 28px 2px rgba(52, 211, 153, 0.45),
+    inset 0 0 24px rgba(52, 211, 153, 0.12);
+  transition: opacity 300ms ease;
+}
+.tour-spot-ripple {
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.7);
+  animation: tour-ripple 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+@keyframes tour-ripple {
+  from {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+}
+.tour-corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-color: #6ee7b7;
+  animation: tour-corner-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes tour-corner-in {
+  from {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+.tour-card {
+  animation: tour-card-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes tour-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+}
+.tour-step-next {
+  animation: tour-step-next 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.tour-step-prev {
+  animation: tour-step-prev 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes tour-step-next {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+}
+@keyframes tour-step-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+}
+/* Step 1: every barangay bubble breathes, so "each dot is a barangay" is
+   shown, not just said. */
+.tour-breathe .pcm-core {
+  animation: tour-breathe 1.8s ease-in-out infinite;
+}
+.tour-breathe .pcm-glow {
+  animation: tour-breathe-glow 1.8s ease-in-out infinite;
+}
+@keyframes tour-breathe {
+  50% {
+    filter: blur(1.25px) brightness(1.6);
+  }
+}
+@keyframes tour-breathe-glow {
+  50% {
+    filter: blur(9px) brightness(1.8);
+  }
+}
+/* Step 3: the legend ramp lights up low → high in a sweep. */
+.tour-legend-bar {
+  animation: tour-legend 1.6s ease-in-out infinite;
+}
+@keyframes tour-legend {
+  0%,
+  100% {
+    transform: scaleY(1);
+    filter: none;
+  }
+  30% {
+    transform: scaleY(2.2);
+    filter: brightness(1.35) drop-shadow(0 0 6px currentColor);
+  }
+}
+/* Step 4: a beacon on the map over the barangay with the most cases. */
+.tour-beacon {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: tour-beacon 1.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+@keyframes tour-beacon {
+  from {
+    transform: scale(0.6);
+    stroke-opacity: 1;
+  }
+  to {
+    transform: scale(1.5);
+    stroke-opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot,
+  .tour-spot-ring {
+    transition: none;
+  }
+  .tour-spot-ripple,
+  .tour-corner,
+  .tour-card,
+  .tour-step-next,
+  .tour-step-prev,
+  .tour-breathe .pcm-core,
+  .tour-breathe .pcm-glow,
+  .tour-legend-bar,
+  .tour-beacon {
+    animation: none;
   }
 }
 
@@ -580,24 +752,24 @@ body {
   color: #0f172a;
 }
 
-/* Learn — the article settles in when the reader changes section, disease, or
-   language. It confirms the click landed on content that actually changed,
-   which matters here because the page frame around it stays put. Animating in
-   (rather than gating visibility on a class) means the final state is the
-   default: the global prefers-reduced-motion rule collapses the duration and
-   the article is simply there. */
-@keyframes learn-article-in {
+/* Learn guide: a newly opened chapter rises into place rather than snapping. */
+.learn-chapter-in {
+  animation: learn-chapter-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes learn-chapter-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
-.learn-article-in {
-  animation: learn-article-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+@media (prefers-reduced-motion: reduce) {
+  .learn-chapter-in {
+    animation: none;
+  }
 }
 
 .bg-grid {
@@ -701,128 +873,6 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-  }
-}
-
-/* ── Patient claim slip ────────────────────────────────────────────────
-   The slip a health worker prints and hands to the patient. On screen it
-   is never shown; on paper it is the ONLY thing shown, so printing gives a
-   slip rather than a screenshot of the dashboard. Visibility (not display)
-   is what collapses the app — it keeps the slip's own layout intact while
-   blanking every ancestor. */
-.claim-slip {
-  display: none;
-}
-
-@media print {
-  body * {
-    visibility: hidden;
-  }
-  #claim-slip,
-  #claim-slip * {
-    visibility: visible;
-  }
-  #claim-slip {
-    display: block;
-    position: absolute;
-    inset: 0 auto auto 0;
-    width: 100%;
-    padding: 0;
-    margin: 0;
-    background: #fff;
-    color: #000;
-  }
-  .claim-slip__inner {
-    /* Roughly a half-sheet — two slips per A4 if the clinic batches them. */
-    width: 100%;
-    max-width: 148mm;
-    padding: 12mm 12mm 10mm;
-    border: 1px dashed #999;
-    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
-    line-height: 1.5;
-  }
-  .claim-slip__head {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 8mm;
-    border-bottom: 1.5pt solid #000;
-    padding-bottom: 3mm;
-  }
-  .claim-slip__brand {
-    margin: 0;
-    font-size: 13pt;
-    font-weight: 800;
-    letter-spacing: -0.01em;
-  }
-  .claim-slip__sub {
-    margin: 1mm 0 0;
-    font-size: 7.5pt;
-    color: #333;
-  }
-  .claim-slip__facility {
-    margin: 0;
-    font-size: 8pt;
-    font-weight: 600;
-    text-align: right;
-    max-width: 45mm;
-  }
-  .claim-slip__for {
-    margin: 5mm 0 0;
-    font-size: 10pt;
-  }
-  .claim-slip__codebox {
-    margin-top: 4mm;
-    border: 1.5pt solid #000;
-    padding: 4mm 3mm;
-    text-align: center;
-  }
-  .claim-slip__label {
-    margin: 0;
-    font-size: 7.5pt;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-  }
-  .claim-slip__code {
-    margin: 2mm 0 0;
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 26pt;
-    font-weight: 700;
-    letter-spacing: 0.22em;
-    /* The trailing letter-spacing would otherwise push it off-centre. */
-    text-indent: 0.22em;
-  }
-  .claim-slip__expiry {
-    margin: 2mm 0 0;
-    font-size: 7.5pt;
-    color: #333;
-  }
-  .claim-slip__steps {
-    margin: 5mm 0 0;
-    padding-left: 5mm;
-    font-size: 9pt;
-  }
-  .claim-slip__steps li {
-    margin-bottom: 1.5mm;
-  }
-  .claim-slip__lang {
-    margin-top: 4mm;
-    border-top: 0.5pt solid #bbb;
-    padding-top: 3mm;
-    font-size: 7.5pt;
-    color: #222;
-  }
-  .claim-slip__lang p {
-    margin: 0 0 1.5mm;
-  }
-  .claim-slip__foot {
-    margin: 4mm 0 0;
-    font-size: 7pt;
-    color: #444;
-  }
-  @page {
-    margin: 10mm;
   }
 }
 

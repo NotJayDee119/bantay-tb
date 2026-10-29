@@ -3,12 +3,23 @@ import {
   CircleMarker,
   GeoJSON,
   MapContainer,
+  Marker,
+  Pane,
   Popup,
   Tooltip,
   ZoomControl,
+  useMap,
+  useMapEvents,
 } from "react-leaflet";
-import type { Map as LeafletMap, PathOptions } from "leaflet";
-import { Activity, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { divIcon } from "leaflet";
+import type {
+  CircleMarker as LeafletCircleMarker,
+  Map as LeafletMap,
+  Path as LeafletPath,
+  PathOptions,
+} from "leaflet";
+import { Link } from "react-router-dom";
+import { Activity, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, X } from "lucide-react";
 import { Spinner } from "../../components/ui";
 import { OpenFreeMapLayer } from "../../components/OpenFreeMapLayer";
 import { supabase } from "../../lib/supabase";
@@ -28,7 +39,7 @@ import {
   shouldDetect,
   type DetectReason,
 } from "../../lib/hotspotRefresh";
-import { formatDateTime } from "../../lib/utils";
+import { formatDate, formatDateTime } from "../../lib/utils";
 import { useAreaScope } from "../../hooks/useAreaScope";
 import barangays from "../../data/barangays.json";
 import { toast } from "sonner";
@@ -184,6 +195,9 @@ export function Hotspots() {
   const [results, setResults] = useState<Map<number, GiResultRow>>(new Map());
   const [geo, setGeo] = useState<BarangayGeo | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
+  const [zoom, setZoom] = useState(11);
+  // Barangay whose cases are open in the side panel (a circle or area click).
+  const [selected, setSelected] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/data/davao-city-barangays.geojson")
@@ -412,6 +426,8 @@ export function Hotspots() {
       >
             <OpenFreeMapLayer styleName="dark" />
             <ZoomControl position="bottomleft" />
+            <ZoomWatcher onZoom={setZoom} />
+            <FitToHotspots hotspots={list} />
             {geo && (
               // Keyed on the run so Leaflet restyles when a new run lands.
               <GeoJSON
@@ -426,22 +442,41 @@ export function Hotspots() {
                   const name = escapeHtml(String(feature.properties?.ADM4_EN ?? ""));
                   const dot = GI_FILL[r.gi_class] ?? "#94a3b8";
                   const cases = r.case_count;
-                  layer.bindTooltip(
-                    `<div class="pcm-tooltip-inner">` +
-                      `<div style="font-size:12px;font-weight:600;color:#fff">${name}</div>` +
-                      `<div style="margin-top:2px;display:flex;align-items:center;gap:6px;font-size:11px;color:#cbd5e1">` +
-                      `<span style="width:8px;height:8px;border-radius:9999px;background:${dot};flex-shrink:0"></span>` +
-                      `${GI_LABEL[r.gi_class]}</div>` +
-                      (showCaseCounts
-                        ? `<div style="margin-top:2px;font-size:10px;color:#94a3b8">` +
-                          `${cases.toLocaleString()} TB patient${cases === 1 ? "" : "s"} living here</div>`
-                        : "") +
-                      `</div>`,
-                    { sticky: true, className: "pcm-tooltip" }
-                  );
+                  const card =
+                    `<div style="font-size:12px;font-weight:600;color:#fff">${name}</div>` +
+                    `<div style="margin-top:2px;display:flex;align-items:center;gap:6px;font-size:11px;color:#cbd5e1">` +
+                    `<span style="width:8px;height:8px;border-radius:9999px;background:${dot};flex-shrink:0"></span>` +
+                    `${GI_LABEL[r.gi_class]}</div>` +
+                    (showCaseCounts
+                      ? `<div style="margin-top:2px;font-size:10px;color:#94a3b8">` +
+                        `${cases.toLocaleString()} TB patient${cases === 1 ? "" : "s"} living here</div>`
+                      : "");
+                  layer.bindTooltip(`<div class="pcm-tooltip-inner">${card}</div>`, {
+                    sticky: true,
+                    className: "pcm-tooltip",
+                  });
+                  // Hover never happens on a phone, and a click should name
+                  // the area too — the same card, pinned where it was tapped.
+                  layer.bindPopup(`<div style="min-width:160px">${card}</div>`, {
+                    className: "ghm-popup",
+                  });
+                  layer.on("popupopen", () => layer.closeTooltip());
+                  layer.on("click", () => setSelected(Number(feature.properties?.psgc)));
+                  // Outline the area under the cursor so it's clear which
+                  // barangay the card is describing.
+                  const path = layer as LeafletPath;
+                  layer.on("mouseover", () => {
+                    path.setStyle({ color: "#e2e8f0", weight: 1.6, opacity: 0.9, fillOpacity: 0.55 });
+                  });
+                  layer.on("mouseout", () => path.setStyle(geoStyle(feature)));
                 }}
               />
             )}
+            {/* Own pane above the overlay pane (z 400). The GeoJSON above is
+                keyed on the run, so it remounts after the circles and would
+                otherwise be drawn over them — swallowing every click and
+                hover meant for a hotspot. */}
+            <Pane name="hotspot-circles" style={{ zIndex: 450 }}>
             {list.map((h) => {
               const color = SEVERITY_COLOR[h.severity];
               const r = Math.min(30, 10 + Math.max(0, h.gi_z ?? 0) * 3);
@@ -471,10 +506,38 @@ export function Hotspots() {
                       fillColor: color,
                       fillOpacity: 0.5,
                     }}
+                    eventHandlers={{
+                      click: () => setSelected(h.barangay_psgc),
+                      mouseover: (e) => {
+                        const c = e.target as LeafletCircleMarker;
+                        c.setStyle({ color: "#fff", weight: 2.5, fillOpacity: 0.8 });
+                        c.bringToFront();
+                      },
+                      mouseout: (e) =>
+                        (e.target as LeafletCircleMarker).setStyle({
+                          color,
+                          weight: 1.5,
+                          fillOpacity: 0.5,
+                        }),
+                      // The hover card and the click card say the same thing —
+                      // never show both stacked on one circle.
+                      popupopen: (e) =>
+                        (e.target as LeafletCircleMarker).closeTooltip(),
+                      tooltipopen: (e) => {
+                        const c = e.target as LeafletCircleMarker;
+                        if (c.isPopupOpen()) c.closeTooltip();
+                      },
+                    }}
                   >
+                    {/* Tooltip anchors at the circle's centre — clear the
+                        radius plus the r+7 halo so the card never covers it.
+                        Both cards name Leaflet's own panes explicitly: inside
+                        <Pane> react-leaflet would otherwise put them in
+                        hotspot-circles, under the name labels (z 460). */}
                     <Tooltip
+                      pane="tooltipPane"
                       direction="top"
-                      offset={[0, -8]}
+                      offset={[0, -(r + 10)]}
                       opacity={1}
                       className="pcm-tooltip"
                     >
@@ -489,8 +552,8 @@ export function Hotspots() {
                           </span>
                         </div>
                         {showCaseCounts && (
-                          <div className="mt-1 font-display text-2xl font-extrabold leading-none tracking-tight text-white">
-                            {h.case_count}
+                          <div className="mt-1 font-display text-2xl font-extrabold tabular-nums leading-none tracking-tight text-white">
+                            {h.case_count.toLocaleString()}
                           </div>
                         )}
                         <div
@@ -506,7 +569,7 @@ export function Hotspots() {
                         )}
                       </div>
                     </Tooltip>
-                    <Popup className="ghm-popup">
+                    <Popup className="ghm-popup" pane="popupPane">
                       <div className="min-w-[190px]">
                         <div className="flex items-center gap-1.5 text-sm font-semibold text-white">
                           <AlertTriangle
@@ -545,6 +608,29 @@ export function Hotspots() {
                 </Fragment>
               );
             })}
+            </Pane>
+            {/* Names on the map once zoomed in far enough for them not to
+                collide — at city zoom the circles overlap and labels would
+                pile up, so there the hover card does the naming. */}
+            {zoom >= LABEL_MIN_ZOOM && (
+              <Pane
+                name="hotspot-labels"
+                style={{ zIndex: 460, pointerEvents: "none" }}
+              >
+                {list.map((h) => (
+                  <Marker
+                    key={h.id}
+                    position={[h.centroid_lat, h.centroid_lon]}
+                    interactive={false}
+                    keyboard={false}
+                    icon={hotspotLabelIcon(
+                      barangayName(h.barangay_psgc),
+                      Math.min(30, 10 + Math.max(0, h.gi_z ?? 0) * 3)
+                    )}
+                  />
+                ))}
+              </Pane>
+            )}
       </MapContainer>
 
       {/* ── Title + action — top-left console panel ─────────────────── */}
@@ -753,6 +839,16 @@ export function Hotspots() {
       </>
       )}
 
+      {selected !== null && (
+        <BarangayCasesPanel
+          psgc={selected}
+          windowDays={windowDays}
+          ownPsgc={scope.psgc}
+          scoped={scope.scoped}
+          onClose={() => setSelected(null)}
+        />
+      )}
+
       {/* ── Severity legend — bottom-left, clear of the zoom control ── */}
       <div className={"absolute bottom-3 left-14 z-[500] px-3 py-2 sm:bottom-4 sm:left-16 " + GLASS}>
         <div className="text-[11px] font-semibold text-slate-200">
@@ -868,6 +964,171 @@ function MoranCard({ run }: { run: HotspotRun }) {
   );
 }
 
+interface PanelCase {
+  id: string;
+  reported_at: string;
+  diagnosis_status: string | null;
+  treatment_outcome: string;
+  age: number | null;
+  sex: string;
+  given_name: string | null;
+  family_name: string | null;
+  patient_code: string | null;
+}
+
+const DX_LABEL: Record<string, string> = {
+  presumptive: "Presumptive",
+  clinically_diagnosed: "Clinically diagnosed",
+  bacteriologically_confirmed: "Bact. confirmed",
+};
+
+const PANEL_LIMIT = 50;
+
+/**
+ * The cases behind a barangay on the map — the same set detection counted:
+ * TB, by residence, inside the detection window. RLS decides which rows the
+ * viewer may open, so area staff only ever see their own area's patients.
+ */
+function BarangayCasesPanel({
+  psgc,
+  windowDays,
+  ownPsgc,
+  scoped,
+  onClose,
+}: {
+  psgc: number;
+  windowDays: number;
+  ownPsgc: number | null;
+  scoped: boolean;
+  onClose: () => void;
+}) {
+  const [rows, setRows] = useState<PanelCase[] | null>(null);
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRows(null);
+    const since = new Date();
+    since.setDate(since.getDate() - windowDays);
+    supabase
+      .from("cases")
+      .select(
+        "id, reported_at, diagnosis_status, treatment_outcome, age, sex, given_name, family_name, patient_code",
+        { count: "exact" }
+      )
+      .eq("barangay_psgc", psgc)
+      .eq("disease", "tb")
+      .gte("reported_at", since.toISOString())
+      .order("reported_at", { ascending: false })
+      .limit(PANEL_LIMIT)
+      .then(({ data, count, error }) => {
+        if (cancelled) return;
+        if (error) toast.error(error.message);
+        setRows((data ?? []) as PanelCase[]);
+        setTotal(count ?? 0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [psgc, windowDays]);
+
+  const name = barangayName(psgc);
+  const outsideArea = scoped && ownPsgc !== psgc;
+
+  return (
+    <div
+      className={
+        "absolute inset-x-3 bottom-3 z-[510] flex max-h-[60%] flex-col overflow-hidden md:inset-x-auto md:bottom-4 md:right-4 md:top-4 md:max-h-none md:w-80 " +
+        GLASS
+      }
+    >
+      <div className="flex items-start justify-between gap-2 border-b border-white/10 px-4 py-3">
+        <div className="min-w-0">
+          <div className={"truncate " + PANEL_TITLE}>{name}</div>
+          <div className="mt-0.5 text-[11px] text-slate-400">
+            TB cases living here · last{" "}
+            {windowDays === 365 ? "12 months" : `${windowDays} days`}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close cases"
+          title="Close"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 text-slate-300 transition hover:bg-white/10 hover:text-white"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {rows === null ? (
+        <div className="flex h-32 items-center justify-center">
+          <Spinner className="text-accent-400" />
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="px-4 py-8 text-center text-[12px] leading-relaxed text-slate-400">
+          {outsideArea
+            ? `Cases in ${name} are handled by that barangay's health workers. Your account only opens cases in your own area.`
+            : "No TB cases recorded here in this period."}
+        </p>
+      ) : (
+        <ul className="flex-1 divide-y divide-white/5 overflow-y-auto">
+          {rows.map((c) => {
+            const who =
+              [c.family_name, c.given_name].filter(Boolean).join(", ") ||
+              c.patient_code ||
+              "Unnamed patient";
+            const meta = [
+              c.age !== null ? `${c.age}` : null,
+              c.sex ? c.sex.charAt(0).toUpperCase() : null,
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            return (
+              <li key={c.id} className="px-4 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-[13px] font-medium text-white">
+                    {who}
+                  </span>
+                  <span className="shrink-0 text-[10px] tabular-nums text-slate-500">
+                    {formatDate(c.reported_at)}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-slate-400">
+                  {[
+                    meta || null,
+                    DX_LABEL[c.diagnosis_status ?? ""] ?? null,
+                    c.treatment_outcome.replace(/_/g, " "),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {rows !== null && rows.length > 0 && (
+        <div className="border-t border-white/10 px-4 py-2.5">
+          {total > rows.length && (
+            <p className="mb-1.5 text-[10px] text-slate-500">
+              Showing the latest {rows.length} of {total.toLocaleString()}.
+            </p>
+          )}
+          <Link
+            to={`/app/cases?barangay=${psgc}&closed=1`}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/10 px-2.5 py-2 text-[12px] font-semibold text-white transition hover:bg-white/15"
+          >
+            Open in Cases
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** For text placed into Leaflet's HTML tooltips. */
 function escapeHtml(s: string): string {
   return s.replace(
@@ -879,4 +1140,55 @@ function escapeHtml(s: string): string {
 
 function barangayName(psgc: number): string {
   return barangays.find((b) => b.psgc === psgc)?.name ?? "—";
+}
+
+/** Zoom level from which hotspot names are drawn on the map itself. */
+const LABEL_MIN_ZOOM = 13;
+
+function ZoomWatcher({ onZoom }: { onZoom: (z: number) => void }) {
+  const map = useMapEvents({ zoomend: () => onZoom(map.getZoom()) });
+  return null;
+}
+
+/**
+ * Opens the map framed on the hotspots themselves rather than the whole city.
+ * Runs once, on the first non-empty list — later live updates must not yank
+ * the view away from wherever the user has panned to.
+ */
+function FitToHotspots({ hotspots }: { hotspots: Hotspot[] }) {
+  const map = useMap();
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current || hotspots.length === 0) return;
+    done.current = true;
+    // Median, not the bounding-box centre: one outlying hotspot (Lasang, up
+    // north) would drag the box centre away from the main cluster.
+    const median = (xs: number[]) => {
+      const s = [...xs].sort((a, b) => a - b);
+      const m = Math.floor(s.length / 2);
+      return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+    };
+    const centre: [number, number] = [
+      median(hotspots.map((h) => h.centroid_lat)),
+      median(hotspots.map((h) => h.centroid_lon)),
+    ];
+    // Fixed at the label zoom: close enough that every hotspot carries its
+    // name, wide enough to show the city's cluster.
+    map.setView(centre, LABEL_MIN_ZOOM, { animate: false });
+    // An unanimated setView can skip zoomend; report it so the name labels
+    // follow.
+    map.fire("zoomend");
+  }, [hotspots, map]);
+  return null;
+}
+
+/** A name pill sitting just under a hotspot circle of radius `r` px. */
+function hotspotLabelIcon(name: string, r: number) {
+  return divIcon({
+    className: "hs-label",
+    html: `<span>${escapeHtml(name)}</span>`,
+    iconSize: [0, 0],
+    // Anchor at the circle's centre; the pill is pushed below the halo.
+    iconAnchor: [0, -(r + 9)],
+  });
 }

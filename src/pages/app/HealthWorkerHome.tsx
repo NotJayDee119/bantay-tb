@@ -9,16 +9,12 @@ import {
   ClipboardList,
   Flame,
   HelpCircle,
-  KeyRound,
   MapPin,
   MapPinned,
-  Pill,
-  Stethoscope,
   Upload,
   UserPlus,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { fetchAll } from "../../lib/fetchAll";
 import type { AreaScope } from "../../lib/areaScope";
 import { delay } from "../../lib/stagger";
 import { yearPhrase, type CaseYear } from "../../hooks/useCaseYear";
@@ -35,20 +31,11 @@ import {
  * Home screen for health workers (BHWs, nurses, doctors).
  *
  * Written for people who are not comfortable with dashboards: every number
- * is a sentence ("3 patients missed their medicine"), every card says what to
- * do next, and the tools are named after the job ("Check symptoms"), not the
- * feature ("Decision Support"). Zero is shown as "All clear" in green rather
+ * is a sentence ("3 new alerts"), every card says what to
+ * do next, and the tools are named after the job ("Add a new patient"), not
+ * the feature ("Cases (ACF)"). Zero is shown as "All clear" in green rather
  * than as a bare 0, so a quiet day reads as good news, not as missing data.
  */
-
-/** Same 14-day look-back the Adherence page uses for its follow-up list. */
-const FOLLOW_UP_DAYS = 14;
-
-interface HomeCounts {
-  missedPatients: number;
-  onTreatment: number;
-  unreadAlerts: number;
-}
 
 export function HealthWorkerHome({
   year,
@@ -56,6 +43,7 @@ export function HealthWorkerHome({
   firstName,
   scope,
   totalCases,
+  onTreatment,
   recentCases,
   recentWindowDays,
   activeHotspots,
@@ -68,6 +56,8 @@ export function HealthWorkerHome({
   firstName: string | null;
   scope: AreaScope;
   totalCases: number;
+  /** Cases whose treatment outcome is still "ongoing". */
+  onTreatment: number;
   recentCases: number;
   recentWindowDays: number;
   activeHotspots: number;
@@ -75,46 +65,17 @@ export function HealthWorkerHome({
   onOpenHotspots: () => void;
   areaTable: ReactNode;
 }) {
-  const [counts, setCounts] = useState<HomeCounts | null>(null);
+  const [unreadAlerts, setUnreadAlerts] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - FOLLOW_UP_DAYS);
-      const today = new Date().toISOString().slice(0, 10);
-      const [missed, schedules, alerts] = await Promise.all([
-        fetchAll<{ patient_id: string }>((from, to) =>
-          supabase
-            .from("adherence_logs")
-            .select("patient_id")
-            .in("status", ["missed", "late"])
-            .gte("scheduled_at", cutoff.toISOString())
-            .order("id")
-            .range(from, to)
-        ),
-        fetchAll<{ patient_id: string }>((from, to) =>
-          supabase
-            .from("adherence_schedules")
-            .select("patient_id")
-            .gte("end_date", today)
-            .order("id")
-            .range(from, to)
-        ),
-        supabase
-          .from("hotspot_alerts")
-          .select("id", { count: "exact", head: true })
-          .eq("recipient_id", userId)
-          .is("read_at", null),
-      ]);
-      if (cancelled) return;
-      const distinct = (rows: { patient_id: string }[]) =>
-        new Set(rows.map((r) => r.patient_id)).size;
-      setCounts({
-        missedPatients: distinct(missed.data),
-        onTreatment: distinct(schedules.data),
-        unreadAlerts: alerts.count ?? 0,
-      });
+      const { count } = await supabase
+        .from("hotspot_alerts")
+        .select("id", { count: "exact", head: true })
+        .eq("recipient_id", userId)
+        .is("read_at", null);
+      if (!cancelled) setUnreadAlerts(count ?? 0);
     })();
     return () => {
       cancelled = true;
@@ -132,10 +93,7 @@ export function HealthWorkerHome({
   });
   const areaName = scope.scoped ? scope.name ?? "your area" : "Davao City";
 
-  const attentionTotal =
-    (counts?.missedPatients ?? 0) +
-    (counts?.unreadAlerts ?? 0) +
-    activeHotspots;
+  const attentionTotal = (unreadAlerts ?? 0) + activeHotspots;
 
   return (
     <div className="space-y-8">
@@ -163,7 +121,7 @@ export function HealthWorkerHome({
               {firstName ? `, ${firstName}` : ""}!
             </h1>
             <p className="mt-2 max-w-xl text-base leading-relaxed text-slate-300">
-              {counts == null
+              {unreadAlerts == null
                 ? "Checking what needs your attention…"
                 : attentionTotal === 0
                   ? "Everything looks good today. No patient or area needs urgent attention."
@@ -185,26 +143,13 @@ export function HealthWorkerHome({
           title="Needs your attention"
           hint="Tap a card to see the details."
         />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-3">
           <AttentionCard
             index={1}
-            icon={Pill}
-            tone="danger"
-            loading={counts == null}
-            count={counts?.missedPatients ?? 0}
-            one="patient missed their medicine"
-            many="patients missed their medicine"
-            sub={`In the last ${FOLLOW_UP_DAYS} days`}
-            clear="No missed medicine"
-            action="Check patients"
-            to="/app/adherence"
-          />
-          <AttentionCard
-            index={2}
             icon={Bell}
             tone="warning"
-            loading={counts == null}
-            count={counts?.unreadAlerts ?? 0}
+            loading={unreadAlerts == null}
+            count={unreadAlerts ?? 0}
             one="new alert"
             many="new alerts"
             sub="Not yet read"
@@ -213,7 +158,7 @@ export function HealthWorkerHome({
             to="/app/alerts"
           />
           <AttentionCard
-            index={3}
+            index={2}
             icon={Flame}
             tone="danger"
             count={activeHotspots}
@@ -225,7 +170,7 @@ export function HealthWorkerHome({
             onClick={onOpenHotspots}
           />
           <AttentionCard
-            index={4}
+            index={3}
             icon={ClipboardList}
             tone="info"
             count={recentCases}
@@ -246,14 +191,14 @@ export function HealthWorkerHome({
           title="What would you like to do?"
           hint="Pick a task to get started."
         />
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           {MAIN_TASKS.map((t, i) => (
-            <MainTask key={t.to} task={t} index={5 + i} />
+            <MainTask key={t.to} task={t} index={4 + i} />
           ))}
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {MORE_TASKS.map((t, i) => (
-            <SmallTask key={t.to} task={t} index={8 + i} />
+            <SmallTask key={t.to} task={t} index={7 + i} />
           ))}
         </div>
       </section>
@@ -270,8 +215,12 @@ export function HealthWorkerHome({
         >
           <GlanceStat
             label="Patients on treatment"
-            value={counts == null ? "…" : counts.onTreatment.toLocaleString()}
-            sub="With an active medicine schedule"
+            value={onTreatment.toLocaleString()}
+            sub={
+              year === "all"
+                ? "Patients currently taking TB medicine"
+                : `${year} cases still taking TB medicine`
+            }
           />
           <GlanceStat
             label={`TB cases ${yearPhrase(year)}`}
@@ -328,29 +277,15 @@ const MAIN_TASKS: Task[] = [
     chip: "bg-brand-600 text-white",
   },
   {
-    to: "/app/cds",
-    label: "Check symptoms",
-    blurb: "Answer a few questions and get advice on what to do next.",
-    icon: Stethoscope,
-    chip: "bg-accent-600 text-white",
-  },
-  {
-    to: "/app/adherence",
-    label: "Track medicine",
-    blurb: "See who is taking their medicine and who needs a follow-up.",
-    icon: Pill,
+    to: "/app/cases",
+    label: "Update a patient",
+    blurb: "Record a test result, start treatment, or close a case.",
+    icon: ClipboardList,
     chip: "bg-vigil-500 text-white",
   },
 ];
 
 const MORE_TASKS: Task[] = [
-  {
-    to: "/app/patient-codes",
-    label: "Patient login code",
-    blurb: "Give a patient access to the app",
-    icon: KeyRound,
-    chip: "bg-sky-50 text-sky-700",
-  },
   {
     to: "/app/map",
     label: "Case map",

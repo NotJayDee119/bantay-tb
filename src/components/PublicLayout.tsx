@@ -3,6 +3,7 @@ import { Activity, ArrowRight, Heart, Menu, X } from "lucide-react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import gsap from "gsap";
 import { ReactLenis, useLenis } from "lenis/react";
+import { useAuth } from "../hooks/useAuth";
 import { usePageTransition } from "../hooks/usePageTransition";
 import { preloadRoute } from "../lib/lazyPages";
 import { LazyFallback } from "./LazyFallback";
@@ -50,7 +51,6 @@ const HEADER_FLAT = {
 };
 const AUTH_PATHS = [
   "/login",
-  "/claim",
   "/register/staff",
   "/forgot-password",
   "/reset-password",
@@ -71,12 +71,18 @@ const FOOTER_PATIENT_LINKS = [
 
 const FOOTER_WORKER_LINKS = [
   { to: "/login", label: "Sign in" },
-  { to: "/claim", label: "I have a claim code" },
   { to: "/register/staff", label: "Staff registration" },
 ];
 
 export function PublicLayout() {
   const location = useLocation();
+  // A signed-in user browsing the public pages keeps their session — the
+  // header swaps "Sign in" for a way back into the app instead of implying
+  // they were logged out.
+  const { user } = useAuth();
+  const account = user
+    ? { to: "/app", label: "Dashboard" }
+    : { to: "/login", label: "Sign in" };
   const [mobileOpen, setMobileOpen] = useState(false);
   const { containerRef: pageRef, pathname: pageKey, element: pageElement } = usePageTransition();
 
@@ -232,12 +238,12 @@ export function PublicLayout() {
   }, [mobileOpen, lenis]);
 
   // Check if current page should hide footer
-  const hideFooter = [
-    "/login",
-    "/claim",
-    "/register/staff",
-    "/dots-locator",
-  ].includes(location.pathname);
+  const hideFooter =
+    [
+      "/login",
+      "/register/staff",
+      "/dots-locator",
+    ].includes(location.pathname);
 
   // The DOTS Locator's full-screen map already has its own floating panels
   // (search/list top-left, route summary bottom-right) — the chatbot FAB
@@ -314,21 +320,21 @@ export function PublicLayout() {
               ))}
             </div>
             <Link
-              to="/login"
-              {...preloadProps("/login")}
+              to={account.to}
+              {...preloadProps(account.to)}
               className="ml-4 inline-flex h-10 items-center gap-2 rounded-full bg-brand-950 px-5 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-900"
             >
-              Sign in
+              {account.label}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </nav>
 
           <div className="flex items-center gap-2 lg:hidden">
             <Link
-              to="/login"
+              to={account.to}
               className="inline-flex h-9 items-center rounded-full bg-brand-950 px-4 text-sm font-medium text-white shadow-soft transition hover:bg-brand-900"
             >
-              Sign in
+              {account.label}
             </Link>
             <button
               onClick={() => setMobileOpen((v) => !v)}
@@ -398,19 +404,12 @@ export function PublicLayout() {
             ))}
             <div className="mt-2 flex flex-col gap-2 border-t border-slate-200/70 pt-4">
               <Link
-                to="/login"
-                {...preloadProps("/login")}
+                to={account.to}
+                {...preloadProps(account.to)}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-950 px-4 font-semibold text-white shadow-soft transition hover:bg-brand-900"
               >
-                Sign in
+                {account.label}
                 <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                to="/claim"
-                {...preloadProps("/claim")}
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 font-medium text-slate-700 shadow-soft transition hover:bg-slate-50"
-              >
-                I have a claim code
               </Link>
             </div>
           </nav>
@@ -510,7 +509,10 @@ export function PublicLayout() {
                   For health workers
                 </p>
                 <ul className="mt-4 space-y-2 text-sm">
-                  {FOOTER_WORKER_LINKS.map((l) => (
+                  {(user
+                    ? [account, ...FOOTER_WORKER_LINKS.slice(1)]
+                    : FOOTER_WORKER_LINKS
+                  ).map((l) => (
                     <li key={l.to}>
                       <Link
                         to={l.to}

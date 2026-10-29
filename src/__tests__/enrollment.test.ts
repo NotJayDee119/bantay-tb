@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  claimState,
-  enrollmentState,
-  type EnrollmentInput,
-} from "../lib/enrollment";
+import { enrollmentState, type EnrollmentInput } from "../lib/enrollment";
 
 /**
  * A confirmed, named, untreated TB case — the one shape that is enrollable.
@@ -15,7 +11,6 @@ function enrollable(overrides: Partial<EnrollmentInput> = {}): EnrollmentInput {
     diagnosis_status: "bacteriologically_confirmed",
     treatment_outcome: "ongoing",
     enrolled_at: null,
-    patient_profile_id: null,
     given_name: "Maria",
     family_name: "Dela Cruz",
     ...overrides,
@@ -40,7 +35,7 @@ describe("enrollmentState", () => {
 
   // The rule the panel exists to enforce: presumptive is the case-finding
   // yield, not a patient. Enrolling one would put a six-month course against
-  // someone who may be sent home well, and inflate every adherence figure.
+  // someone who may be sent home well, and inflate every treatment figure.
   it("refuses a presumptive case", () => {
     const state = enrollmentState(
       enrollable({ diagnosis_status: "presumptive" })
@@ -66,7 +61,7 @@ describe("enrollmentState", () => {
     }
   });
 
-  it("reports an already-enrolled case as enrolled, by either marker", () => {
+  it("reports an already-enrolled case as enrolled", () => {
     expect(
       enrollmentState(enrollable({ enrolled_at: "2026-08-10T00:00:00Z" }))
     ).toEqual({
@@ -74,12 +69,6 @@ describe("enrollmentState", () => {
       canEnroll: false,
       blocker: "already_enrolled",
     });
-
-    // The account may exist before enrolled_at was backfilled; either one is
-    // enough to mean "this person already has a treatment record".
-    expect(
-      enrollmentState(enrollable({ patient_profile_id: "some-uuid" })).status
-    ).toBe("enrolled");
   });
 
   it("refuses a case whose treatment has closed", () => {
@@ -114,44 +103,5 @@ describe("enrollmentState", () => {
       })
     );
     expect(state.status).toBe("enrolled");
-  });
-});
-
-describe("claimState", () => {
-  const now = new Date("2026-08-10T12:00:00Z");
-
-  it("is active before expiry and unused", () => {
-    expect(
-      claimState(
-        { used_at: null, expires_at: "2026-08-17T12:00:00Z" },
-        now
-      )
-    ).toBe("active");
-  });
-
-  it("is used once redeemed, even if it has not expired", () => {
-    expect(
-      claimState(
-        { used_at: "2026-08-10T09:00:00Z", expires_at: "2026-08-17T12:00:00Z" },
-        now
-      )
-    ).toBe("used");
-  });
-
-  it("is expired past its window", () => {
-    expect(
-      claimState(
-        { used_at: null, expires_at: "2026-08-09T12:00:00Z" },
-        now
-      )
-    ).toBe("expired");
-  });
-
-  // A code that lapses exactly now is spent — matches the SQL's
-  // `expires_at > now()`, which is strict.
-  it("treats the exact expiry instant as expired", () => {
-    expect(
-      claimState({ used_at: null, expires_at: now.toISOString() }, now)
-    ).toBe("expired");
   });
 });

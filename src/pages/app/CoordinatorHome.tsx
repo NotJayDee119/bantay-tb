@@ -8,7 +8,6 @@ import {
   CalendarDays,
   ClipboardList,
   Flame,
-  KeyRound,
   MapPin,
   MapPinned,
   Ticket,
@@ -410,13 +409,6 @@ const MORE_TASKS: Task[] = [
     blurb: "Create sign-up codes",
     icon: Ticket,
     chip: "bg-violet-50 text-violet-700",
-  },
-  {
-    to: "/app/patient-codes",
-    label: "Patient login code",
-    blurb: "Give a patient app access",
-    icon: KeyRound,
-    chip: "bg-emerald-50 text-emerald-700",
   },
   {
     to: "/app/chatbot",

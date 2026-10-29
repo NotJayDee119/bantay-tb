@@ -1,10 +1,9 @@
 /**
- * Who may be enrolled in treatment, and what a claim slip is currently worth.
+ * Who may be enrolled in treatment.
  *
- * The server owns both rules — `case_enrollable()` and the guards inside
- * `redeem_patient_claim()` are what actually decide. This module is the client
- * mirror that drives button visibility and status chips, kept deliberately
- * small so the two can be compared line for line.
+ * The server owns the rule — `case_enrollable()` is what actually decides.
+ * This module is the client mirror that drives button visibility and status
+ * chips, kept deliberately small so the two can be compared line for line.
  *
  * The reason strings match the SQL exactly. If one side gains a case, the
  * other has to gain it too.
@@ -29,7 +28,6 @@ export interface EnrollmentInput {
   diagnosis_status: string | null;
   treatment_outcome: string;
   enrolled_at: string | null;
-  patient_profile_id: string | null;
   given_name: string | null;
   family_name: string | null;
 }
@@ -42,7 +40,7 @@ export interface EnrollmentState {
 }
 
 export function enrollmentState(row: EnrollmentInput): EnrollmentState {
-  if (row.enrolled_at !== null || row.patient_profile_id !== null) {
+  if (row.enrolled_at !== null) {
     return { status: "enrolled", canEnroll: false, blocker: "already_enrolled" };
   }
 
@@ -88,15 +86,4 @@ export function enrollmentState(row: EnrollmentInput): EnrollmentState {
   }
 
   return { status: "not_enrolled", canEnroll: true, blocker: null };
-}
-
-export type ClaimState = "active" | "used" | "expired";
-
-export function claimState(
-  claim: { used_at: string | null; expires_at: string },
-  now: Date = new Date()
-): ClaimState {
-  if (claim.used_at) return "used";
-  if (new Date(claim.expires_at).getTime() <= now.getTime()) return "expired";
-  return "active";
 }

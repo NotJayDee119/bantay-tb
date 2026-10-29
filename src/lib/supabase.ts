@@ -31,5 +31,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   tb_coordinator: "TB Coordinator / Official",
   barangay_admin: "Barangay Admin / Frontliner",
   health_worker: "BHW / Nurse / Doctor",
-  patient: "Patient / Client",
+  // The database still writes `patient` on every sign-up until an invite
+  // code promotes the account; there is no patient product behind it.
+  patient: "No staff role",
 };

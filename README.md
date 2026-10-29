@@ -1,6 +1,6 @@
 # bantay-tb
 
-Barangay-level TB surveillance and DOTS adherence system for Davao City.
+Barangay-level TB surveillance and hotspot mapping system for Davao City.
 
 ## HL7 FHIR interoperability
 
@@ -21,12 +21,8 @@ append-only, hash-chained audit log.
 
 ```bash
 npm run fhir:sample   # regenerate the sample payload from the live serializer
-npm test              # 179 tests, 35 of them over the FHIR serializer
+npm test              # 176 tests, 31 of them over the FHIR serializer
 ```
-
-## SMS adherence pipeline
-
-See [`SMS-PIPELINE.md`](SMS-PIPELINE.md).
 
 ## Development
 

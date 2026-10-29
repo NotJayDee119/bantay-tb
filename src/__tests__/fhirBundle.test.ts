@@ -116,28 +116,13 @@ describe("buildCaseBundle — bundle shape", () => {
   });
 
   it("names the DOTS facility as the performer of every observation", () => {
-    const { bundle } = build(
-      {},
-      {
-        schedules: [
-          {
-            id: "s1",
-            medication: "HRZE",
-            dose: "4 tablets",
-            times_per_day: 1,
-            start_date: "2026-09-02",
-            end_date: "2026-11-30",
-          },
-        ],
-        adherence: { total: 10, taken: 9, missed: 1 },
-      }
-    );
+    const { bundle } = build();
     const org = bundle.entry.find((e) => e.resource.resourceType === "Organization");
     const observations = pick(bundle.entry, "Observation") as unknown as Record<
       string,
       unknown
     >[];
-    expect(observations).toHaveLength(3);
+    expect(observations).toHaveLength(2);
     for (const obs of observations) {
       expect(obs.performer).toEqual([{ reference: org?.fullUrl }]);
     }
@@ -372,75 +357,6 @@ describe("buildCaseBundle — terminology", () => {
       one(build({ treatment_outcome: "completed" }).bundle.entry, "Encounter")
         .status
     ).toBe("finished");
-  });
-});
-
-describe("buildCaseBundle — DOTS regimen and adherence", () => {
-  const schedules = [
-    {
-      id: "s1",
-      medication: "HRZE fixed-dose combination",
-      dose: "4 tablets",
-      times_per_day: 1,
-      start_date: "2026-09-02",
-      end_date: "2026-11-30",
-    },
-  ];
-
-  it("sends one MedicationStatement per regimen, with its dosing frequency", () => {
-    const { bundle } = build({}, { schedules });
-    const ms = one(bundle.entry, "MedicationStatement");
-    expect(ms.status).toBe("active");
-    expect((ms.medicationCodeableConcept as { text: string }).text).toBe(
-      "HRZE fixed-dose combination"
-    );
-    const dosage = (ms.dosage as Record<string, unknown>[])[0];
-    const repeat = (dosage.timing as { repeat: Record<string, unknown> }).repeat;
-    expect(repeat.frequency).toBe(1);
-    expect(repeat.periodUnit).toBe("d");
-  });
-
-  it("marks a finished regimen completed", () => {
-    const { bundle } = build(
-      {},
-      { schedules: [{ ...schedules[0], end_date: "2026-09-30" }] }
-    );
-    expect(one(bundle.entry, "MedicationStatement").status).toBe("completed");
-  });
-
-  it("computes the adherence rate and carries the raw dose counts with it", () => {
-    const { bundle } = build(
-      {},
-      { schedules, adherence: { total: 80, taken: 61, missed: 19 } }
-    );
-    const obs = pick(bundle.entry, "Observation") as unknown as Record<
-      string,
-      unknown
-    >[];
-    const adherenceObs = obs.find((o) => {
-      const code = o.code as { coding: { code: string }[] };
-      return code.coding[0].code === "dots-adherence-rate";
-    });
-    expect(adherenceObs).toBeDefined();
-    const q = adherenceObs!.valueQuantity as { value: number; code: string };
-    expect(q.value).toBe(76.3); // 61/80 to one decimal
-    expect(q.code).toBe("%");
-    const components = adherenceObs!.component as {
-      code: { coding: { code: string }[] };
-      valueInteger: number;
-    }[];
-    expect(
-      components.find((c) => c.code.coding[0].code === "doses-taken")?.valueInteger
-    ).toBe(61);
-  });
-
-  it("omits the adherence observation when no doses have been scheduled", () => {
-    const { bundle } = build({}, { adherence: { total: 0, taken: 0, missed: 0 } });
-    const codes = (pick(bundle.entry, "Observation") as unknown as Record<
-      string,
-      unknown
-    >[]).map((o) => (o.code as { coding: { code: string }[] }).coding[0].code);
-    expect(codes).not.toContain("dots-adherence-rate");
   });
 });
 

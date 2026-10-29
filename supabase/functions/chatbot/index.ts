@@ -2,14 +2,12 @@
 //
 // Behaviour:
 //   • Accepts {session_id, message, language?, user_id?, role?, context?}.
-//   • role: "patient" -> support-only prompt; no case statistics.
-//     All other roles (health_worker, barangay_admin, tb_coordinator,
+//   • Staff roles (health_worker, barangay_admin, tb_coordinator,
 //     system_admin) -> clinical staff prompt; context is injected when present.
-//   • context: optional pre-fetched live DB data injected into the system
-//     prompt. For staff roles this is case stats/hotspots; for patients it is
-//     their OWN treatment record (the client builds it via RLS-scoped
-//     queries, so a patient can never receive another patient's data).
-//   • role: "public" (or absent) -> answerPublic(): the knowledge base
+//   • context: optional pre-fetched live DB data (case stats/hotspots)
+//     injected into the system prompt.
+//   • role: "public", "patient" (a sign-up with no staff role yet) or
+//     absent -> answerPublic(): the knowledge base
 //     (BANTAY-TB platform + eight respiratory diseases, ingested by
 //     scripts/ingest-kb.ts) is used before any AI request — small talk,
 //     the answer cache, and direct article lookups cost nothing. Only the
@@ -20,7 +18,10 @@
 //   • If OPENAI_API_KEY is set, forwards the message to OpenAI Chat Completions.
 //   • Otherwise returns a deterministic, locale-aware fallback.
 //
-// All assistant replies are persisted to the chatbot_messages table.
+// Every reply is persisted to chatbot_messages (and, for public visitors, the
+// question too). Signed-in replies are saved under the user verified from the
+// request's token; the response's `saved` tells the app whether it must save
+// the reply itself.
 
 declare const Deno: any;
 
@@ -143,13 +144,6 @@ const SYSTEM_PROMPTS: Record<Locale, string> = {
   ceb: "Ikaw si BANTAY-TB, usa ka clinical health assistant alang sa tuberkulosis ug sakit sa baga sa Davao City. Tubaga sa mubo (ubos sa 120 ka pulong) sa yano nga Cebuano. Kanunay nga isugyot ang pag-adto sa pinaka-suod nga DOTS Center alang sa eksamen. Ayaw paghatag og piho nga dosage sa tambal.",
 };
 
-// Patient support prompts: no surveillance data, focus on care and adherence
-const PATIENT_PROMPTS: Record<Locale, string> = {
-  en: "You are BANTAY-TB, a supportive health assistant for TB patients and their families in Davao City. Provide general health education, symptom guidance, treatment adherence encouragement, and emotional support. Reply concisely (under 120 words) in plain English. Always recommend consulting the nearest DOTS center for medical concerns. Do NOT provide case statistics, epidemiological data, or surveillance figures.",
-  tl: "Ikaw si BANTAY-TB, isang health support assistant para sa mga pasyenteng may TB at kanilang pamilya sa Davao City. Magbigay ng pangkalahatang edukasyon sa kalusugan, gabay sa sintomas, at emosyonal na suporta. Sumagot nang maikli (wala pang 120 salita) sa Filipino. Irekomenda ang DOTS Center para sa medikal na alalahanin. HUWAG magbigay ng estadistika ng kaso o surveillance data.",
-  ceb: "Ikaw si BANTAY-TB, usa ka health support assistant para sa mga pasyente sa TB ug ilang pamilya sa Davao City. Maghatag og kinatibuk-ang edukasyon sa kahimsog, giya sa sintomas, ug emosyonal nga suporta. Tubaga sa mubo (ubos sa 120 ka pulong) sa Cebuano. Irekomenda ang DOTS Center para sa medikal nga mga kabalaka. AYAW paghatag og estadistika sa kaso o surveillance data.",
-};
-
 // Platform knowledge for public visitors — lets the homepage chatbot
 // explain how BANTAY-TB works, in any of the three languages.
 const SYSTEM_INFO = `
@@ -157,9 +151,9 @@ const SYSTEM_INFO = `
 ABOUT THE BANTAY-TB PLATFORM (use this when visitors ask how the system, website, or app works):
 - BANTAY-TB is Davao City's tuberculosis surveillance and care platform.
 - Public visitors can: use the DOTS Center Locator (a map with directions to free TB treatment centers), read Health Education articles about TB symptoms/treatment/prevention, and chat with this assistant in English, Filipino, or Cebuano.
-- Patients with accounts get: medication schedules, dose reminders (including SMS), dose tracking, health education, and a personal health assistant that can report their own treatment progress.
+- Patients do not need an account: their nurse or doctor records their treatment at the DOTS center, and everything for the public is open without signing in.
 - Health workers, barangay admins, and TB coordinators sign in to: encode and track TB cases, view the GIS surveillance map and heatmaps, identify hotspots (areas with a high concentration of TB cases), receive alerts when a new high-severity hotspot is found, and view outreach analytics.
-- To get an account: patients do not sign up themselves — the nurse who enrolls them gives a claim code, entered under "I have a claim code". Staff use the staff registration page with an invite code.
+- Accounts are for health staff only. Staff use the staff registration page with an invite code.
 - TB screening and DOTS treatment are free at DOTS centers in Davao City.
 
 SCOPE: only discuss the BANTAY-TB platform and these diseases: tuberculosis, pneumonia, COVID-19, influenza, bronchitis, COPD, asthma, paragonimiasis. Politely decline anything else.`;
@@ -544,8 +538,34 @@ interface Body {
   message: string;
   language?: Locale;
   user_id?: string | null;
+  /** Id the signed-in app gives the reply, so it can save the reply itself
+   *  when this function could not (and never save it twice). */
+  reply_id?: string;
   role?: string | null;
   context?: string;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The signed-in user behind the request, checked against Supabase Auth.
+ *  The function is deployed without JWT verification (public visitors call
+ *  it too), so the body's user_id is never trusted: saving under it would
+ *  let anyone write into someone else's chat history. */
+async function verifiedUserId(req: Request): Promise<string | null> {
+  const url = Deno.env.get("SUPABASE_URL");
+  const anon = Deno.env.get("SUPABASE_ANON_KEY");
+  const auth = req.headers.get("Authorization");
+  if (!url || !anon || !auth?.startsWith("Bearer ")) return null;
+  try {
+    const res = await fetch(`${url}/auth/v1/user`, {
+      headers: { apikey: anon, Authorization: auth },
+    });
+    if (!res.ok) return null; // the anon key, or an expired session
+    const id = (await res.json())?.id;
+    return typeof id === "string" ? id : null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
@@ -561,8 +581,10 @@ Deno.serve(async (req: Request) => {
     }
 
     let language: Locale = body.language ?? detectLocale(body.message);
-    const isPatient = body.role === "patient";
-    const isPublicRole = !body.role || body.role === "public";
+    // `patient` is a sign-up that never received a staff role; it gets the
+    // same answers as an anonymous visitor.
+    const isPublicRole =
+      !body.role || body.role === "public" || body.role === "patient";
 
     const apiKey = Deno.env.get("OPENAI_API_KEY");
 
@@ -574,22 +596,13 @@ Deno.serve(async (req: Request) => {
       const a = await answerPublic(body.message, language);
       ({ reply, sources, language, via } = a);
     } else if (apiKey) {
-      let systemContent = isPatient
-        ? PATIENT_PROMPTS[language]
-        : SYSTEM_PROMPTS[language];
+      let systemContent = SYSTEM_PROMPTS[language];
 
-      if (isPatient && body.context) {
-        // The client only ever sends a patient their OWN adherence record
-        // (RLS-scoped queries) — never case statistics.
-        systemContent +=
-          "\n\nTHE PATIENT'S OWN TREATMENT RECORD (this belongs to the patient you are talking to — share it with them clearly and kindly):\n" +
-          body.context +
-          "\nUse these figures when the patient asks about their own treatment, doses, or progress. Encourage adherence; if doses were missed, advise gently and suggest telling their health worker. Never invent figures that are not listed above.";
-      } else if (!isPatient && body.context) {
+      if (body.context) {
         systemContent +=
           "\n\nLIVE DATABASE CONTEXT (use this to answer statistics questions):\n" +
           body.context +
-          "\nWhen answering questions about case counts or statistics, use only the figures above and state that they come from the live BANTAY-TB database. If a figure the user asks for is not listed, say it is not available rather than guessing.";
+          "\nWhen answering questions about case counts or statistics, use only the figures above and state that they come from the live BANTAY-TB database. If a figure the user asks for is not listed, say it is not available rather than guessing. When a line says a barangay is outside the user's assigned area, tell them plainly that their account only covers their assigned area. The user is health staff, not a patient: do not tell them to visit a DOTS center when they ask about data.";
       }
 
       reply =
@@ -599,23 +612,43 @@ Deno.serve(async (req: Request) => {
       reply = FALLBACKS[language];
     }
 
-    // Persist assistant message (best effort)
+    // Persist the exchange (best effort). Signed-in users' questions are saved
+    // by the app before it calls here; public visitors have no app-side save,
+    // so their question is stored here, ahead of the reply.
     const cfg = dbFromEnv();
+    let saved = false;
     if (cfg) {
+      const userId = isPublicRole ? null : await verifiedUserId(req);
       try {
-        await dbInsert(cfg, "chatbot_messages", {
-          session_id: body.session_id,
-          user_id: body.user_id ?? null,
-          role: "assistant",
-          content: reply,
-          language,
-        });
+        if (isPublicRole) {
+          await dbInsert(cfg, "chatbot_messages", {
+            session_id: body.session_id,
+            user_id: null,
+            role: "user",
+            content: body.message,
+            language,
+          });
+        }
+        // A signed-in reply saved without its owner would never show in their
+        // history, so when the session can't be verified it is left unsaved
+        // here and the app saves it under their account instead.
+        if (isPublicRole || userId !== null) {
+          await dbInsert(cfg, "chatbot_messages", {
+            ...(body.reply_id && UUID.test(body.reply_id) ? { id: body.reply_id } : {}),
+            session_id: body.session_id,
+            user_id: userId,
+            role: "assistant",
+            content: reply,
+            language,
+          });
+          saved = true;
+        }
       } catch (err) {
         console.error("chatbot persist failed:", err);
       }
     }
 
-    return json({ reply, language, sources, via });
+    return json({ reply, language, sources, via, saved });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return json({ error: message }, 500);

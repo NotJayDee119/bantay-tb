@@ -49,6 +49,10 @@ interface RouteInfo {
 }
 
 const DAVAO_CENTER: [number, number] = [7.0731, 125.6128];
+// Locked to Davao City, same wall as the public case map and the admin
+// hotspot map, so panning or zooming out never drifts past the city.
+const DAVAO_BOUNDS = L.latLngBounds([6.82, 125.05], [7.72, 125.83]);
+const MIN_ZOOM = 10;
 
 // Unselected pins are accent green; the picked one switches to the "vigil"
 // amber signal. A hue jump — not another shade of green — is what makes the
@@ -106,7 +110,8 @@ function directionsUrl(
 function FlyToPosition({ position }: { position: [number, number] | null }) {
   const map = useMap();
   useEffect(() => {
-    if (!position) return;
+    // A fix outside the city would only fly out and bounce off the bounds.
+    if (!position || !DAVAO_BOUNDS.contains(position)) return;
     map.flyTo(position, 14, FLY);
   }, [position, map]);
   return null;
@@ -742,8 +747,13 @@ export function DotsLocator() {
       {/* ─── Map ───────────────────────────────────────────────────── */}
       <div className="relative order-1 min-h-0 min-w-0 lg:order-2">
         <MapContainer
-          center={referencePoint}
+          center={
+            DAVAO_BOUNDS.contains(referencePoint) ? referencePoint : DAVAO_CENTER
+          }
           zoom={12}
+          minZoom={MIN_ZOOM}
+          maxBounds={DAVAO_BOUNDS}
+          maxBoundsViscosity={1}
           zoomControl={false}
           // Continuous fractional zoom — with GL-rendered vector tiles the map
           // can rest at any zoom level, so the wheel/trackpad glides instead of

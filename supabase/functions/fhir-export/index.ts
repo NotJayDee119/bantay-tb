@@ -2,8 +2,8 @@
 //
 // One pipeline, four steps, all of them inside this function:
 //
-//   1. EXTRACT     read one `public.cases` row and the barangay, DOTS facility
-//                  and DOTS adherence rows that hang off it -- using the
+//   1. EXTRACT     read one `public.cases` row and the barangay and DOTS
+//                  facility that hang off it -- using the
 //                  *caller's* JWT, so Row Level Security decides what this
 //                  particular health worker is allowed to export.
 //   2. SERIALIZE   build an HL7 FHIR R4 transaction Bundle from those rows
@@ -38,7 +38,7 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { buildCaseBundle, createdLocations, sha256Hex, summariseFhirResponse } from "../_shared/fhir.ts";
-import type { AdherenceSummary, BarangayRecord, CaseRecord, Disclosure, FacilityRecord, ScheduleRecord } from "../_shared/fhir.ts";
+import type { BarangayRecord, CaseRecord, Disclosure, FacilityRecord } from "../_shared/fhir.ts";
 
 interface RequestBody {
   case_id?: string;
@@ -82,7 +82,6 @@ const CASE_COLUMNS = [
   "residence_lon",
   "barangay_psgc",
   "facility_id",
-  "patient_profile_id",
   "disease",
   "tb_classification",
   "tb_site",
@@ -176,33 +175,6 @@ async function callerSelect<T>(
     throw new Error(`read ${path.split("?")[0]}: ${res.status} ${await res.text()}`);
   }
   return (await res.json()) as T[];
-}
-
-/**
- * Exact row count via PostgREST's Content-Range header. Counting rather than
- * fetching and tallying keeps a long regimen's dose log -- which can run past
- * the API's max_rows -- from silently truncating the adherence figure.
- */
-async function callerCount(
-  rest: Rest,
-  token: string,
-  path: string
-): Promise<number> {
-  const res = await fetch(`${rest.url}/rest/v1/${path}`, {
-    headers: {
-      apikey: rest.anonKey,
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-      Prefer: "count=exact",
-      Range: "0-0",
-    },
-  });
-  if (!res.ok && res.status !== 206) {
-    throw new Error(`count ${path.split("?")[0]}: ${res.status} ${await res.text()}`);
-  }
-  const range = res.headers.get("content-range") ?? "";
-  const total = Number(range.split("/")[1]);
-  return Number.isFinite(total) ? total : 0;
 }
 
 /** An RPC performed as service_role -- dispatch lookup and audit append only. */
@@ -409,14 +381,12 @@ Deno.serve(async (req) => {
   const disclosure: Disclosure = wantsIdentifiers ? "identified" : "pseudonymous";
 
   // ── 1. Extract, as the caller ─────────────────────────────────────────────
-  let caseRow: (CaseRecord & { patient_profile_id: string | null }) | undefined;
+  let caseRow: CaseRecord | undefined;
   let barangay: BarangayRecord | null = null;
   let facility: FacilityRecord | null = null;
-  let schedules: ScheduleRecord[] = [];
-  let adherence: AdherenceSummary | null = null;
 
   try {
-    const cases = await callerSelect<CaseRecord & { patient_profile_id: string | null }>(
+    const cases = await callerSelect<CaseRecord>(
       rest,
       token,
       `cases?select=${CASE_COLUMNS}&id=eq.${body.case_id}&limit=1`
@@ -458,34 +428,6 @@ Deno.serve(async (req) => {
         `dots_centers?select=id,name,address,lat,lon,phone,hours&id=eq.${caseRow.facility_id}&limit=1`
       );
       facility = facilities[0] ?? null;
-    }
-
-    // The DOTS regimen and its dose log are the part of this payload no
-    // hospital EMR can supply. They exist only once the case has been
-    // enrolled and the patient has an account.
-    if (caseRow.patient_profile_id) {
-      const pid = caseRow.patient_profile_id;
-      schedules = await callerSelect<ScheduleRecord>(
-        rest,
-        token,
-        `adherence_schedules?select=id,medication,dose,times_per_day,start_date,end_date&patient_id=eq.${pid}&order=start_date.asc`
-      );
-      if (schedules.length > 0) {
-        const [total, taken, missed] = await Promise.all([
-          callerCount(rest, token, `adherence_logs?select=id&patient_id=eq.${pid}`),
-          callerCount(
-            rest,
-            token,
-            `adherence_logs?select=id&patient_id=eq.${pid}&status=eq.taken`
-          ),
-          callerCount(
-            rest,
-            token,
-            `adherence_logs?select=id&patient_id=eq.${pid}&status=eq.missed`
-          ),
-        ]);
-        adherence = { total, taken, missed };
-      }
     }
   } catch (err) {
     return json(
@@ -537,8 +479,6 @@ Deno.serve(async (req) => {
     caseRow,
     barangay,
     facility,
-    schedules,
-    adherence,
     disclosure,
     // No endpoint yet (a bare preview) counts as test data: the bundle has
     // not been accepted by any system of record.

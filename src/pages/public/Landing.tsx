@@ -6,7 +6,7 @@ import {
   Users,
   Activity,
   Heart,
-  Stethoscope,
+  Upload,
   BarChart3,
   Bell,
   BookOpen,
@@ -55,20 +55,14 @@ const CAPABILITIES = [
   {
     tag: "ALERTS",
     icon: Bell,
-    title: "Smart SMS Alerts",
-    body: "Automated notifications for missed doses, treatment milestones, and outbreak thresholds — over plain SMS.",
+    title: "Hotspot Alerts",
+    body: "In-app alerts to barangay staff and the TB coordinator the moment an area is flagged as a hotspot.",
   },
   {
-    tag: "ADHERE",
-    icon: Heart,
-    title: "Treatment Adherence",
-    body: "Digital observation of the daily dose, with reminders and visual progress across the 6-month course.",
-  },
-  {
-    tag: "CDS",
-    icon: Stethoscope,
-    title: "Clinical Decision Support",
-    body: "Evidence-based treatment guidance and drug-interaction checks at the point of care.",
+    tag: "IMPORT",
+    icon: Upload,
+    title: "Bulk Excel Import",
+    body: "Upload CHO monthly reports (.xlsx, .xls, .csv). Columns are matched automatically and hotspot detection re-runs after each import.",
   },
   {
     tag: "DATA",
@@ -125,6 +119,14 @@ export function Landing() {
         />
 
         <div className="relative mx-auto max-w-screen-2xl px-3 py-6 sm:px-5 sm:py-8">
+          {/* The page's one heading — short, so the map stays the hero. */}
+          <h1 className="mb-3 flex items-center gap-2.5 px-1 font-display text-lg font-bold tracking-tight text-white sm:mb-4 sm:text-2xl">
+            <span aria-hidden className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-400 opacity-60 motion-reduce:hidden" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent-400" />
+            </span>
+            Live map of TB cases in Davao City
+          </h1>
           {/* The height goes on the map region, not the card: below lg the
               side panel stacks underneath the map and brings its own height. */}
           <Suspense fallback={<MapPlaceholder />}>
@@ -134,8 +136,8 @@ export function Landing() {
             <p className="flex items-center gap-2 text-xs text-slate-400">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-400" />
               <span>
-                Live TB case map of Davao City — counts are grouped per barangay, so no
-                patient is ever identifiable.{" "}
+                Counts are grouped per barangay, so no patient is ever
+                identifiable.{" "}
                 <CaseMapHint className="text-slate-500" />.
               </span>
             </p>
@@ -251,14 +253,6 @@ export function Landing() {
                     <ArrowRight className="h-4 w-4 transition-transform duration-150 group-hover/cta:translate-x-0.5" />
                   </Button>
                 </Link>
-                <Link to="/claim">
-                  <Button
-                    variant="secondary"
-                    className="border-white/15 bg-white/5 text-white hover:border-white/25 hover:bg-white/10"
-                  >
-                    I have a claim code
-                  </Button>
-                </Link>
               </div>
             </div>
           </div>
@@ -294,8 +288,8 @@ export function Landing() {
               },
               {
                 step: "03",
-                title: "Daily observation",
-                body: "A health worker confirms every dose in person, the core of the DOTS protocol.",
+                title: "Regular follow-up",
+                body: "Collect your medicine at the DOTS center and check in with your health worker.",
               },
               {
                 step: "04",
@@ -342,23 +336,25 @@ export function Landing() {
               What the platform does
             </p>
             <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-              Six modules, built around one goal
+              Five modules, built around one goal
             </h2>
             <p className="mt-3 text-base leading-relaxed text-slate-600">
-              From detecting a hotspot to logging the final dose of a six-month course.
+              From finding a case to recording how its treatment ended.
             </p>
           </div>
 
-          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:grid-rows-[repeat(2,minmax(0,1fr))_auto]">
+          {/* Bento: the map module takes the left half, the other four sit
+              2×2 beside it. On two columns it spans the top row instead. */}
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:auto-rows-fr lg:grid-cols-4">
             {CAPABILITIES.map((c, i) => {
               const featured = i === 0;
               return (
                 <div
                   key={c.title}
                   className={
-                    "relative overflow-hidden border shadow-soft " +
+                    "relative flex flex-col overflow-hidden border shadow-soft " +
                     (featured
-                      ? "rounded-3xl border-brand-900 bg-brand-950 p-7 text-white lg:col-span-2 lg:row-span-2 lg:p-9"
+                      ? "rounded-3xl border-brand-900 bg-brand-950 p-7 text-white sm:col-span-2 lg:row-span-2 lg:p-9"
                       : "rounded-2xl border-slate-200 bg-white p-6")
                   }
                 >
@@ -396,7 +392,9 @@ export function Landing() {
                   <h3
                     className={
                       "relative font-display mt-4 font-bold tracking-tight " +
-                      (featured ? "text-2xl text-white lg:mt-8" : "text-lg text-slate-900")
+                      (featured
+                        ? "text-2xl text-white sm:mt-8 lg:mt-auto lg:text-3xl"
+                        : "text-lg text-slate-900")
                     }
                   >
                     {c.title}

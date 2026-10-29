@@ -12,27 +12,23 @@ import {
   DotsLocator,
   LearnPublic,
   Login,
-  ClaimAccount,
   StaffRegister,
   ForgotPassword,
   ResetPassword,
+  NotFound,
   Dashboard,
   GISMapTab,
   Hotspots,
   Alerts,
   Cases,
   CaseFormPage,
-  Adherence,
   BulkImport,
   Chatbot,
-  HealthEducation,
-  Cds,
   DotsCentersAdmin,
   SettingsPage,
   Analytics,
   Users,
   InviteCodes,
-  PatientCodes,
   AdminDashboard,
   Interoperability,
   AuditLog,
@@ -67,12 +63,12 @@ export default function App() {
         <Route path="dots-locator" element={<DotsLocator />} />
         <Route path="learn" element={<LearnPublic />} />
         <Route path="login" element={<Login />} />
-        {/* Patients never self-register — they claim an account the nurse
-            generated when they were enrolled in treatment. */}
-        <Route path="claim" element={<ClaimAccount />} />
         <Route path="register/staff" element={<StaffRegister />} />
         <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="reset-password" element={<ResetPassword />} />
+        {/* Unknown addresses, public or under /app, get a real 404 rather
+            than a silent bounce to the homepage. */}
+        <Route path="*" element={<NotFound />} />
       </Route>
 
       <Route path="app" element={<AppLayout />}>
@@ -152,26 +148,10 @@ export default function App() {
           }
         />
         <Route
-          path="cds"
-          element={
-            <RequireRole roles={["health_worker"]}>
-              <Cds />
-            </RequireRole>
-          }
-        />
-        <Route
           path="dots-admin"
           element={
             <RequireRole roles={["system_admin"]}>
               <DotsCentersAdmin />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="adherence"
-          element={
-            <RequireRole roles={["health_worker", "patient"]}>
-              <Adherence />
             </RequireRole>
           }
         />
@@ -196,16 +176,8 @@ export default function App() {
         <Route
           path="chatbot"
           element={
-            <RequireRole roles={["tb_coordinator", "barangay_admin", "health_worker", "patient"]}>
+            <RequireRole roles={["tb_coordinator", "barangay_admin", "health_worker"]}>
               <Chatbot />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="education"
-          element={
-            <RequireRole roles={["patient"]}>
-              <HealthEducation />
             </RequireRole>
           }
         />
@@ -264,19 +236,7 @@ export default function App() {
             </RequireRole>
           }
         />
-        <Route
-          path="patient-codes"
-          element={
-            <RequireRole
-              roles={["health_worker", "tb_coordinator", "system_admin"]}
-            >
-              <PatientCodes />
-            </RequireRole>
-          }
-        />
       </Route>
-
-      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </Suspense>
     </ErrorBoundary>

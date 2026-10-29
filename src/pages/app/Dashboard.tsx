@@ -5,14 +5,10 @@ import {
   AlertTriangle,
   ArrowRight,
   BarChart3,
-  BookOpen,
-  Bot,
   ClipboardList,
   Flame,
   MapPin,
   MapPinned,
-  Pill,
-  Sun,
   TrendingDown,
   TrendingUp,
   Upload,
@@ -297,7 +293,8 @@ export function Dashboard() {
   // (useTbCases) — the GIS map reads the same copy, so moving between the two
   // doesn't download 7,000+ rows again. Switching the axis or the year is a
   // different way of counting the same cases, not a different query.
-  const staff = !!role && role !== "patient";
+  // AppLayout turns away accounts without a staff role before this renders.
+  const staff = !!role;
   const casesQuery = useTbCases(staff);
   const centersQuery = useDotsCenters(staff);
   const caseRows = casesQuery.data ?? null;
@@ -340,8 +337,7 @@ export function Dashboard() {
   return (
     <>
       {/* Health workers get their own greeting inside HealthWorkerHome. */}
-      {role !== "patient" &&
-        role !== "health_worker" &&
+      {role !== "health_worker" &&
         role !== "tb_coordinator" && (
         <PageHeader
           title={`Welcome${profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}!`}
@@ -380,7 +376,7 @@ export function Dashboard() {
           </div>
         )}
 
-      {role !== "patient" && stats && (
+      {stats && (
         <YearFilter
           className="mb-5"
           value={year}
@@ -389,9 +385,7 @@ export function Dashboard() {
         />
       )}
 
-      {role === "patient" ? (
-        <PatientDashboard name={profile?.full_name ?? null} />
-      ) : loading ? (
+      {loading ? (
         <div className="space-y-6">
           <Skeleton className="h-56 rounded-2xl" />
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -412,6 +406,7 @@ export function Dashboard() {
           firstName={profile.full_name?.trim().split(/\s+/)[0] ?? null}
           scope={scope}
           totalCases={stats.totalCases}
+          onTreatment={stats.outcomes.ongoing}
           recentCases={stats.liveRecentCases}
           recentWindowDays={stats.insights.recentWindowDays}
           activeHotspots={activeHotspots}
@@ -483,9 +478,8 @@ const SUBTITLE: Record<AppRole, string> = {
   barangay_admin:
     "Frontline tools for case finding, monitoring trends, and acting on hotspot alerts.",
   health_worker:
-    "Clinical decision support, adherence and alert monitoring, GIS heatmap, and outreach analytics.",
-  patient:
-    "Welcome to BANTAY-TB. Track your medication, learn about TB, and chat with our health assistant.",
+    "Case finding, alert monitoring, GIS heatmap, and outreach analytics.",
+  patient: "This account has no staff role yet.",
 };
 
 const QUICK_ACTIONS = [
@@ -1137,110 +1131,6 @@ function SeverityBadge({ severity }: { severity: HotspotCluster["severity"] }) {
   if (severity === "moderate" || severity === "medium")
     return <Badge tone="warning">{severity === "moderate" ? "Moderate" : "Medium"}</Badge>;
   return <Badge tone="info">Watch</Badge>;
-}
-
-/**
- * Patient home — friendly, nursery-style landing that matches the patient
- * Adherence and Health Education pages: pastel hero + big colorful tiles.
- */
-function PatientDashboard({ name }: { name: string | null }) {
-  const firstName = (name ?? "").trim().split(/\s+/)[0] || "friend";
-  const tiles = [
-    {
-      to: "/app/adherence",
-      label: "My medicine",
-      blurb: "Tap when you take your dose and earn stars!",
-      icon: Pill,
-      card: "border-emerald-200 bg-emerald-50 hover:border-emerald-300",
-      iconBg: "bg-emerald-500",
-      arrow: "text-emerald-400",
-    },
-    {
-      to: "/app/chatbot",
-      label: "Ask a question",
-      blurb: "Chat in English, Filipino, o Cebuano — anytime.",
-      icon: Bot,
-      card: "border-sky-200 bg-sky-50 hover:border-sky-300",
-      iconBg: "bg-sky-500",
-      arrow: "text-sky-400",
-    },
-    {
-      to: "/app/education",
-      label: "Learn & grow",
-      blurb: "Easy step-by-step guides about TB and getting better.",
-      icon: BookOpen,
-      card: "border-pink-200 bg-pink-50 hover:border-pink-300",
-      iconBg: "bg-pink-500",
-      arrow: "text-pink-400",
-    },
-  ];
-  return (
-    <div className="space-y-6">
-      {/* ── Hero — warm welcome ──────────────────────────────────────── */}
-      <section className="relative overflow-hidden rounded-3xl border-2 border-sky-200 bg-gradient-to-br from-sky-100 via-emerald-50 to-amber-100 p-5 sm:p-8">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-amber-200/50 blur-2xl"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -bottom-12 left-1/3 h-36 w-36 rounded-full bg-emerald-200/50 blur-2xl"
-        />
-        <div className="relative">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-xs font-bold text-sky-700 shadow-soft">
-            <Sun className="h-3.5 w-3.5 text-amber-500" />
-            Your health home
-          </span>
-          <h1 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-            Hi, {firstName}!
-          </h1>
-          <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-700 sm:text-base">
-            Every day you take your medicine, you get closer to feeling great.
-            What would you like to do today?
-          </p>
-        </div>
-      </section>
-
-      {/* ── Big friendly tiles — tap to open each area ───────────────── */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        {tiles.map((t) => (
-          <Link
-            key={t.to}
-            to={t.to}
-            className={
-              "group block rounded-3xl border-2 p-5 shadow-soft transition-all duration-200 hover:-translate-y-1 hover:shadow-lift active:scale-[0.98] " +
-              t.card
-            }
-          >
-            <div className="flex items-start justify-between">
-              <span
-                className={
-                  "grid h-12 w-12 place-items-center rounded-2xl text-white shadow-soft " +
-                  t.iconBg
-                }
-              >
-                <t.icon className="h-6 w-6" />
-              </span>
-              <span
-                className={
-                  "grid h-8 w-8 place-items-center rounded-full bg-white/70 transition-transform group-hover:translate-x-0.5 " +
-                  t.arrow
-                }
-              >
-                <ArrowRight className="h-4 w-4" />
-              </span>
-            </div>
-            <div className="mt-4 font-display text-lg font-extrabold tracking-tight text-slate-900">
-              {t.label}
-            </div>
-            <div className="mt-1 text-sm font-medium text-slate-600">
-              {t.blurb}
-            </div>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 export default Dashboard;

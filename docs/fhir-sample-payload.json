@@ -1,8 +1,8 @@
 {
   "resourceType": "Bundle",
-  "id": "23c987cf-e0b1-44ee-a6ca-40d5a0392c15",
+  "id": "56b91618-17b8-4754-8c16-dd1c4c474be0",
   "meta": {
-    "lastUpdated": "2026-10-11T12:00:42.603Z",
+    "lastUpdated": "2026-10-25T02:50:47.785Z",
     "security": [
       {
         "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
@@ -28,10 +28,10 @@
     "value": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
   },
   "type": "transaction",
-  "timestamp": "2026-10-11T12:00:42.603Z",
+  "timestamp": "2026-10-25T02:50:47.785Z",
   "entry": [
     {
-      "fullUrl": "urn:uuid:e024b3da-31d5-4c1e-8bf3-db0c2986addd",
+      "fullUrl": "urn:uuid:cfbbb28e-6cb5-4134-ba67-8dd454d90f62",
       "resource": {
         "resourceType": "Organization",
         "identifier": [
@@ -78,7 +78,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:cdfc5b2e-69b9-4796-9d60-0bf4ad527e92",
+      "fullUrl": "urn:uuid:5de6ea93-5303-4351-812a-95c318c5fef1",
       "resource": {
         "resourceType": "Location",
         "identifier": [
@@ -107,7 +107,7 @@
           "longitude": 125.6218
         },
         "managingOrganization": {
-          "reference": "urn:uuid:e024b3da-31d5-4c1e-8bf3-db0c2986addd",
+          "reference": "urn:uuid:cfbbb28e-6cb5-4134-ba67-8dd454d90f62",
           "display": "Buhangin Health Center (DOTS)"
         }
       },
@@ -118,7 +118,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:7f8bd902-c6bb-4305-bc10-cb9cc8c9526b",
+      "fullUrl": "urn:uuid:489b5e34-963f-4486-9807-73145a29703b",
       "resource": {
         "resourceType": "Patient",
         "meta": {
@@ -185,7 +185,7 @@
           }
         ],
         "managingOrganization": {
-          "reference": "urn:uuid:e024b3da-31d5-4c1e-8bf3-db0c2986addd"
+          "reference": "urn:uuid:cfbbb28e-6cb5-4134-ba67-8dd454d90f62"
         }
       },
       "request": {
@@ -195,7 +195,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:ecae5614-0ee6-46af-a250-30457e3b9e0d",
+      "fullUrl": "urn:uuid:33ceaba5-7d40-433b-9518-67ec9ec943e9",
       "resource": {
         "resourceType": "Encounter",
         "status": "in-progress",
@@ -210,7 +210,7 @@
           }
         ],
         "subject": {
-          "reference": "urn:uuid:7f8bd902-c6bb-4305-bc10-cb9cc8c9526b"
+          "reference": "urn:uuid:489b5e34-963f-4486-9807-73145a29703b"
         },
         "period": {
           "start": "2026-08-14T01:40:00.000Z"
@@ -229,7 +229,7 @@
         "diagnosis": [
           {
             "condition": {
-              "reference": "urn:uuid:4fc62377-54dd-447c-a82e-3b789845bf40"
+              "reference": "urn:uuid:62701b11-ae7c-45bf-885f-c2eaa7521cea"
             },
             "use": {
               "coding": [
@@ -246,12 +246,12 @@
         "location": [
           {
             "location": {
-              "reference": "urn:uuid:cdfc5b2e-69b9-4796-9d60-0bf4ad527e92"
+              "reference": "urn:uuid:5de6ea93-5303-4351-812a-95c318c5fef1"
             }
           }
         ],
         "serviceProvider": {
-          "reference": "urn:uuid:e024b3da-31d5-4c1e-8bf3-db0c2986addd"
+          "reference": "urn:uuid:cfbbb28e-6cb5-4134-ba67-8dd454d90f62"
         }
       },
       "request": {
@@ -260,7 +260,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:4fc62377-54dd-447c-a82e-3b789845bf40",
+      "fullUrl": "urn:uuid:62701b11-ae7c-45bf-885f-c2eaa7521cea",
       "resource": {
         "resourceType": "Condition",
         "clinicalStatus": {
@@ -319,10 +319,10 @@
           }
         ],
         "subject": {
-          "reference": "urn:uuid:7f8bd902-c6bb-4305-bc10-cb9cc8c9526b"
+          "reference": "urn:uuid:489b5e34-963f-4486-9807-73145a29703b"
         },
         "encounter": {
-          "reference": "urn:uuid:ecae5614-0ee6-46af-a250-30457e3b9e0d"
+          "reference": "urn:uuid:33ceaba5-7d40-433b-9518-67ec9ec943e9"
         },
         "onsetDateTime": "2026-08-12",
         "recordedDate": "2026-08-14T01:52:11.000Z",
@@ -338,7 +338,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:41b694d8-89ef-44da-b59c-b1ef1852f674",
+      "fullUrl": "urn:uuid:b2b02397-4a3d-42ff-83f7-894db52aec50",
       "resource": {
         "resourceType": "Observation",
         "status": "final",
@@ -364,14 +364,14 @@
           "text": "How firmly this TB case is diagnosed"
         },
         "subject": {
-          "reference": "urn:uuid:7f8bd902-c6bb-4305-bc10-cb9cc8c9526b"
+          "reference": "urn:uuid:489b5e34-963f-4486-9807-73145a29703b"
         },
         "encounter": {
-          "reference": "urn:uuid:ecae5614-0ee6-46af-a250-30457e3b9e0d"
+          "reference": "urn:uuid:33ceaba5-7d40-433b-9518-67ec9ec943e9"
         },
         "performer": [
           {
-            "reference": "urn:uuid:e024b3da-31d5-4c1e-8bf3-db0c2986addd"
+            "reference": "urn:uuid:cfbbb28e-6cb5-4134-ba67-8dd454d90f62"
           }
         ],
         "effectiveDateTime": "2026-08-12",
@@ -391,7 +391,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:cf62ef5f-30fe-4e50-aa9a-81ec28603756",
+      "fullUrl": "urn:uuid:3117bbda-2514-429f-842b-7c3c9f33e3fa",
       "resource": {
         "resourceType": "Observation",
         "status": "preliminary",
@@ -417,17 +417,17 @@
           "text": "WHO/NTP treatment outcome category"
         },
         "subject": {
-          "reference": "urn:uuid:7f8bd902-c6bb-4305-bc10-cb9cc8c9526b"
+          "reference": "urn:uuid:489b5e34-963f-4486-9807-73145a29703b"
         },
         "encounter": {
-          "reference": "urn:uuid:ecae5614-0ee6-46af-a250-30457e3b9e0d"
+          "reference": "urn:uuid:33ceaba5-7d40-433b-9518-67ec9ec943e9"
         },
         "performer": [
           {
-            "reference": "urn:uuid:e024b3da-31d5-4c1e-8bf3-db0c2986addd"
+            "reference": "urn:uuid:cfbbb28e-6cb5-4134-ba67-8dd454d90f62"
           }
         ],
-        "effectiveDateTime": "2026-10-11T12:00:42.603Z",
+        "effectiveDateTime": "2026-10-25T02:50:47.785Z",
         "valueCodeableConcept": {
           "coding": [
             {
@@ -437,143 +437,6 @@
             }
           ]
         }
-      },
-      "request": {
-        "method": "POST",
-        "url": "Observation"
-      }
-    },
-    {
-      "fullUrl": "urn:uuid:ae25d577-12fd-4262-9671-f819567a3b1b",
-      "resource": {
-        "resourceType": "MedicationStatement",
-        "status": "active",
-        "category": {
-          "coding": [
-            {
-              "system": "http://terminology.hl7.org/CodeSystem/medication-statement-category",
-              "code": "community",
-              "display": "Community"
-            }
-          ]
-        },
-        "medicationCodeableConcept": {
-          "text": "HRZE fixed-dose combination (intensive phase)"
-        },
-        "subject": {
-          "reference": "urn:uuid:7f8bd902-c6bb-4305-bc10-cb9cc8c9526b"
-        },
-        "effectivePeriod": {
-          "start": "2026-08-15",
-          "end": "2026-10-14"
-        },
-        "dateAsserted": "2026-10-11T12:00:42.603Z",
-        "dosage": [
-          {
-            "text": "4 tablets",
-            "timing": {
-              "repeat": {
-                "frequency": 1,
-                "period": 1,
-                "periodUnit": "d"
-              }
-            },
-            "route": {
-              "coding": [
-                {
-                  "system": "http://snomed.info/sct",
-                  "code": "26643006",
-                  "display": "Oral route"
-                }
-              ]
-            }
-          }
-        ]
-      },
-      "request": {
-        "method": "POST",
-        "url": "MedicationStatement"
-      }
-    },
-    {
-      "fullUrl": "urn:uuid:d3f0db52-4f8e-483d-9d5e-0870bc163482",
-      "resource": {
-        "resourceType": "Observation",
-        "status": "preliminary",
-        "category": [
-          {
-            "coding": [
-              {
-                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
-                "code": "therapy",
-                "display": "Therapy"
-              }
-            ]
-          }
-        ],
-        "code": {
-          "coding": [
-            {
-              "system": "https://bantay-tb.davao.gov.ph/fhir/CodeSystem/bantay-tb-observation",
-              "code": "dots-adherence-rate",
-              "display": "DOTS medication adherence rate"
-            }
-          ],
-          "text": "Proportion of scheduled doses recorded as taken"
-        },
-        "subject": {
-          "reference": "urn:uuid:7f8bd902-c6bb-4305-bc10-cb9cc8c9526b"
-        },
-        "performer": [
-          {
-            "reference": "urn:uuid:e024b3da-31d5-4c1e-8bf3-db0c2986addd"
-          }
-        ],
-        "effectiveDateTime": "2026-10-11T12:00:42.603Z",
-        "valueQuantity": {
-          "value": 93.1,
-          "unit": "%",
-          "system": "http://unitsofmeasure.org",
-          "code": "%"
-        },
-        "component": [
-          {
-            "code": {
-              "coding": [
-                {
-                  "system": "https://bantay-tb.davao.gov.ph/fhir/CodeSystem/bantay-tb-observation",
-                  "code": "doses-taken",
-                  "display": "Doses recorded as taken"
-                }
-              ]
-            },
-            "valueInteger": 54
-          },
-          {
-            "code": {
-              "coding": [
-                {
-                  "system": "https://bantay-tb.davao.gov.ph/fhir/CodeSystem/bantay-tb-observation",
-                  "code": "doses-missed",
-                  "display": "Doses recorded as missed"
-                }
-              ]
-            },
-            "valueInteger": 4
-          },
-          {
-            "code": {
-              "coding": [
-                {
-                  "system": "https://bantay-tb.davao.gov.ph/fhir/CodeSystem/bantay-tb-observation",
-                  "code": "doses-scheduled",
-                  "display": "Doses scheduled"
-                }
-              ]
-            },
-            "valueInteger": 58
-          }
-        ]
       },
       "request": {
         "method": "POST",

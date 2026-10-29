@@ -15,7 +15,7 @@ values
   ('Toril District Hospital DOTS', 'Toril, Davao City', 7.0118, 125.5043, '(082) 291-1126', 'Mon–Fri 8am–5pm', array['Sputum testing','TB treatment']),
   ('Buhangin Health Center DOTS', 'Buhangin, Davao City', 7.1289, 125.6308, '(082) 234-1234', 'Mon–Fri 8am–4pm', array['Sputum testing','TB treatment']),
   ('Talomo Health Center DOTS', 'Talomo, Davao City', 7.0467, 125.5805, '(082) 297-1010', 'Mon–Fri 8am–4pm', array['Sputum testing','TB treatment']),
-  ('Agdao Health Center DOTS', 'Agdao, Davao City', 7.0850, 125.6240, '(082) 226-2828', 'Mon–Fri 8am–4pm', array['TB treatment']),
+  ('Agdao Health Center DOTS', 'Lapu-Lapu St. cor. F. Bangoy St., Agdao, Davao City', 7.0812, 125.6222, '(082) 226-2828', 'Mon–Fri 8am–4pm', array['TB treatment']),
   ('Calinan Hospital DOTS', 'Calinan, Davao City', 7.1841, 125.4612, '(082) 295-0101', 'Mon–Fri 8am–4pm', array['Sputum testing','TB treatment']),
   ('Tugbok Health Center DOTS', 'Mintal, Davao City', 7.0944, 125.4937, '(082) 293-1234', 'Mon–Fri 8am–4pm', array['TB treatment']),
   ('Bunawan Health Center DOTS', 'Bunawan, Davao City', 7.236596, 125.643938, '(082) 235-9000', 'Mon–Fri 8am–4pm', array['TB treatment']),

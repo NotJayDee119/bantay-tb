@@ -920,7 +920,7 @@ export function CaseFormPage() {
                 aria-describedby="contact_hint"
               />
               <p id="contact_hint" className="text-xs text-slate-500">
-                Where refill reminders go. Staff-only.
+                For follow-up calls if the patient misses a visit. Staff-only.
               </p>
             </div>
 

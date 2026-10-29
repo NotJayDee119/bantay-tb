@@ -61,20 +61,20 @@ export const SYSTEM_KNOWLEDGE: SystemDoc[] = [
   {
     slug: "patient-accounts-en",
     locale: "en",
-    title: "How do patients get an account?",
-    body: "Patients do not sign up by themselves. When a nurse or doctor enrolls you in TB treatment, your account is created from that enrollment and you are given a claim code. On the website, choose \"I have a claim code\" and enter it to set up your login. Your medication schedule is created automatically from your enrollment. With your account you can see your medication schedule, track your doses, read health education, and ask a personal health assistant about your own treatment progress. If you lost your claim code, ask the health worker or nurse at your DOTS center.",
+    title: "Do patients need an account?",
+    body: "No. BANTAY-TB accounts are for health staff only — patients and residents never need to sign up or log in. Everything for the public is open on the website: the DOTS Center Locator, Health Education, and this assistant. Your treatment is recorded by the nurse or doctor at your DOTS center, so just keep going to your scheduled visits and collect your medicine there.",
   },
   {
     slug: "patient-accounts-tl",
     locale: "tl",
-    title: "Paano nagkakaroon ng account ang pasyente?",
-    body: "Hindi nag-si-sign up mag-isa ang pasyente. Kapag ipinasok ka ng nars o doktor sa paggamot sa TB, gagawin ang iyong account mula sa enrollment na iyon at bibigyan ka ng claim code. Sa website, piliin ang \"I have a claim code\" at ilagay ito para buksan ang iyong login. Awtomatikong ginagawa ang iskedyul ng iyong gamot mula sa enrollment. Sa iyong account, makikita mo ang iskedyul ng gamot, masusubaybayan ang iyong mga dose, makakabasa ng health education, at makakapagtanong sa personal na health assistant tungkol sa iyong paggamot. Kung nawala ang claim code, magtanong sa health worker o nars sa iyong DOTS center.",
+    title: "Kailangan ba ng account ang pasyente?",
+    body: "Hindi. Ang mga account sa BANTAY-TB ay para lamang sa mga health staff — hindi kailangang mag-sign up o mag-log in ang mga pasyente at residente. Bukas sa website ang lahat ng para sa publiko: ang DOTS Center Locator, Health Education, at ang assistant na ito. Ang iyong paggamot ay itinatala ng nars o doktor sa iyong DOTS center, kaya ituloy lang ang pagpunta sa iyong mga nakatakdang bisita at doon kunin ang iyong gamot.",
   },
   {
     slug: "patient-accounts-ceb",
     locale: "ceb",
-    title: "Unsaon pagkuha og account sa pasyente?",
-    body: "Dili mag-sign up ang pasyente sa iyang kaugalingon. Kung ipasulod ka sa nars o doktor sa pagtambal sa TB, himoon ang imong account gikan niana nga enrollment ug hatagan ka og claim code. Sa website, pilia ang \"I have a claim code\" ug isulod kini aron ablihan ang imong login. Awtomatiko nga mahimo ang iskedyul sa imong tambal gikan sa enrollment. Sa imong account, makita nimo ang iskedyul sa tambal, masubay ang imong mga dose, makabasa og health education, ug makapangutana sa personal nga health assistant bahin sa imong pagtambal. Kung nawala ang claim code, pangutana sa health worker o nars sa imong DOTS center.",
+    title: "Kinahanglan ba og account ang pasyente?",
+    body: "Dili. Ang mga account sa BANTAY-TB para lang sa mga health staff — dili kinahanglan nga mag-sign up o mag-log in ang mga pasyente ug residente. Abli sa website ang tanan para sa publiko: ang DOTS Center Locator, Health Education, ug kini nga assistant. Ang imong pagtambal girekord sa nars o doktor sa imong DOTS center, busa padayon lang sa pag-adto sa imong mga naka-iskedyul nga bisita ug didto kuhaa ang imong tambal.",
   },
 
   // ---------- Staff ----------

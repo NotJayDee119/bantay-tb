@@ -178,7 +178,7 @@ export function StaffRegister() {
 
     // The session was established by signUp, so the cached profile was read
     // back while the trigger's `patient` default was still on it. Without this
-    // re-read the app renders the patient dashboard for a health worker —
+    // re-read the app shows a health worker the "no staff access" screen —
     // the role only became correct once the RPC above ran.
     await reloadProfile();
 
@@ -510,24 +510,6 @@ export function StaffRegister() {
           >
             Sign in instead
           </Link>
-
-          {/* Patients don't create accounts — a nurse enrolls them and the
-              system generates one, which they claim with a code. */}
-          <div className="mt-6 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 lg:bg-white">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-50 text-accent-700 ring-1 ring-accent-100">
-              <Activity className="h-4 w-4" />
-            </span>
-            <p className="text-xs text-slate-500">
-              Are you a patient?{" "}
-              <Link
-                to="/claim"
-                className="font-semibold text-brand-700 transition hover:text-brand-800"
-              >
-                Claim your account
-              </Link>{" "}
-              with the code your health worker gave you.
-            </p>
-          </div>
         </div>
       </div>
     </div>

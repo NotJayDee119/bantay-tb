@@ -44,7 +44,7 @@ interface AuthContextValue {
   /**
    * Creates an auth user and its `patient` profile — nothing more. Role,
    * assigned barangay and facility posting are all granted server-side
-   * (`claim_staff_role` for staff, the claim flow for patients), because
+   * (`claim_staff_role` with an invite code), because
    * anything this function passed as metadata would be client-controlled.
    */
   signUp: (

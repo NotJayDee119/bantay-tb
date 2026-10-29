@@ -7,8 +7,10 @@ import {
   ZoomControl,
   useMap,
 } from "react-leaflet";
-import { Activity, MapPin, Search, X } from "lucide-react";
+import { DomEvent, LatLngBounds, point } from "leaflet";
+import { Activity, CircleHelp, MapPin, Search, X } from "lucide-react";
 import { OpenFreeMapLayer } from "./OpenFreeMapLayer";
+import { MAP_TOUR_STEP, MapTour, hasSeenMapTour, markSeen } from "./MapTour";
 import barangays from "../data/barangays.json";
 import { isCoarsePointer } from "../lib/pointer";
 import { usePublicYearlyCounts } from "../hooks/usePublicYearlyCounts";
@@ -32,9 +34,15 @@ import { LoadingSpinner } from "./LazyFallback";
  * the map behind it on each frame of a pan.
  */
 
-const DAVAO_CENTER: [number, number] = [7.0731, 125.6128];
-const DAVAO_ZOOM = 11;
 const FOCUS_ZOOM = 13.5;
+// Every barangay in the city. The map opens framed on this, so a visitor sees
+// all 182 at once, and "close" flies back to it.
+const CITY_EXTENT = new LatLngBounds([6.96, 125.22], [7.57, 125.68]);
+const CITY_PADDING: [number, number] = [24, 24];
+// Locked to Davao City, as on the admin hotspot map: a hard wall a little
+// beyond the city extent, so nobody drifts into Bukidnon or the gulf. The
+// zoom-out floor is the whole-city view itself (see MapResizeSync).
+const DAVAO_BOUNDS = new LatLngBounds([6.82, 125.05], [7.72, 125.83]);
 
 // One duration and easing for every camera move, matching the DOTS Locator,
 // so the two maps on the public site feel like the same instrument.
@@ -112,17 +120,30 @@ function CtrlScrollZoom() {
  *  measures its container once on init — it never notices the hero card
  *  being resized by a breakpoint change or the browser's own
  *  resize/orientation events, which otherwise leaves stale gray tile gaps
- *  until the next manual pan/zoom. */
+ *  until the next manual pan/zoom.
+ *
+ *  It also keeps the zoom-out floor at "the whole city fits", which depends
+ *  on the container's size, and frames the city on the first real
+ *  measurement — the size at mount can be a layout pass too early. */
 function MapResizeSync() {
   const map = useMap();
   useEffect(() => {
     const container = map.getContainer();
     let frame: number | null = null;
+    let framed = false;
     const sync = () => {
       if (frame !== null) return;
       frame = requestAnimationFrame(() => {
         frame = null;
         map.invalidateSize({ animate: false });
+        if (container.clientWidth === 0 || container.clientHeight === 0) return;
+        map.setMinZoom(
+          map.getBoundsZoom(CITY_EXTENT, false, point(CITY_PADDING))
+        );
+        if (!framed) {
+          framed = true;
+          map.fitBounds(CITY_EXTENT, { padding: CITY_PADDING, animate: false });
+        }
       });
     };
     const observer = new ResizeObserver(sync);
@@ -150,9 +171,26 @@ function FocusController({ target }: { target: BarangayPoint | null }) {
       map.flyTo([target.lat, target.lon], FOCUS_ZOOM, FLY);
     } else if (hadTarget.current) {
       hadTarget.current = false;
-      map.flyTo(DAVAO_CENTER, DAVAO_ZOOM, FLY);
+      map.flyToBounds(CITY_EXTENT, { ...FLY, padding: CITY_PADDING });
     }
   }, [target, map]);
+  return null;
+}
+
+/** While a barangay is open, a double-click / double-tap anywhere on the map
+ *  closes it — the same as the ✕ in the search box — instead of zooming in. */
+function DoubleClickExit({ active, onExit }: { active: boolean; onExit: () => void }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!active) return;
+    map.doubleClickZoom.disable();
+    const exit = () => onExit();
+    map.on("dblclick", exit);
+    return () => {
+      map.off("dblclick", exit);
+      map.doubleClickZoom.enable();
+    };
+  }, [active, map, onExit]);
   return null;
 }
 
@@ -216,6 +254,27 @@ export function PublicCaseMap({
     [points]
   );
 
+  // First-visit walkthrough. Opens by itself once, as soon as the totals are
+  // in (the tour quotes the top barangay). The visit counts as seen the moment
+  // it opens, so a returning visitor isn't walked through it again — the
+  // "how to read this map" button still reopens it on demand.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+  useEffect(() => {
+    if (status !== "ready" || hasSeenMapTour()) return;
+    markSeen();
+    setTourOpen(true);
+  }, [status]);
+  function openTour() {
+    setTourStep(0);
+    setTourOpen(true);
+  }
+  // On the "what red means" step the camera visits the top barangay; it
+  // flies back to the city when the step or the tour ends.
+  const tourOn = (s: number) => tourOpen && tourStep === s;
+  const tourFocus = tourOn(MAP_TOUR_STEP.high) ? topBarangays[0] ?? null : null;
+
   const normalizedQuery = query.trim().toLowerCase();
   const suggestions = useMemo(() => {
     if (!normalizedQuery) return [];
@@ -264,6 +323,7 @@ export function PublicCaseMap({
 
   return (
     <div
+      ref={cardRef}
       className={
         // `isolate` traps the map's internal z-indexes (Leaflet panes go up
         // to 1000) inside this element so nothing paints above the site's
@@ -273,10 +333,31 @@ export function PublicCaseMap({
       }
     >
       {/* ── Map ──────────────────────────────────────────────────────── */}
-      <div className={"relative min-h-0 min-w-0 " + mapClassName}>
+      <div
+        data-tour="map"
+        className={
+          "relative min-h-0 min-w-0 " +
+          mapClassName +
+          // On the wrapper, not MapContainer: react-leaflet only reads the
+          // map's className once, at creation.
+          (tourOn(MAP_TOUR_STEP.welcome) ? " tour-breathe" : "")
+        }
+      >
+        {!tourOpen && (
+          <button
+            type="button"
+            onClick={openTour}
+            className="absolute left-3 top-3 z-[1100] inline-flex h-9 items-center gap-1.5 rounded-full border border-white/10 bg-brand-950/85 px-3.5 text-xs font-semibold text-slate-200 shadow-soft backdrop-blur transition-colors hover:bg-brand-900 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60"
+          >
+            <CircleHelp className="h-4 w-4 text-accent-400" />
+            How to read this map
+          </button>
+        )}
         <MapContainer
-          center={DAVAO_CENTER}
-          zoom={DAVAO_ZOOM}
+          bounds={CITY_EXTENT}
+          boundsOptions={{ padding: CITY_PADDING }}
+          maxBounds={DAVAO_BOUNDS}
+          maxBoundsViscosity={1}
           zoomControl={false}
           scrollWheelZoom={false}
           // On a phone the map is most of the first screen. With one-finger
@@ -296,8 +377,9 @@ export function PublicCaseMap({
           <OpenFreeMapLayer styleName="dark" />
           <ZoomControl position="bottomright" />
           <MapResizeSync />
-          <FocusController target={selected} />
+          <FocusController target={selected ?? tourFocus} />
           <CtrlScrollZoom />
+          <DoubleClickExit active={filtering} onExit={clearFilter} />
 
           {points.map((p) => {
             const match = isMatch(p);
@@ -330,11 +412,23 @@ export function PublicCaseMap({
                     fillColor: fill,
                     fillOpacity: dim ? 0.08 : match && filtering ? 0.7 : 0.5,
                   }}
-                  eventHandlers={{ click: () => pick(p) }}
+                  eventHandlers={{
+                    click: () => pick(p),
+                    // Double-click / double-tap on a bubble steps back out to
+                    // the whole city. Stopped here so Leaflet's own
+                    // double-click zoom doesn't push further in instead.
+                    dblclick: (e) => {
+                      DomEvent.stop(e);
+                      clearFilter();
+                    },
+                  }}
                 >
+                  {/* A CircleMarker's tooltip anchors at the centre, not the
+                      top edge, so a fixed offset let big bubbles poke through
+                      the card. Clear the radius plus the r+7 halo instead. */}
                   <Tooltip
                     direction="top"
-                    offset={[0, -8]}
+                    offset={[0, -(r + 10)]}
                     opacity={1}
                     className="pcm-tooltip"
                   >
@@ -351,8 +445,8 @@ export function PublicCaseMap({
                           {p.name}
                         </span>
                       </div>
-                      <div className="mt-1 font-display text-3xl font-extrabold leading-none tracking-tight text-white">
-                        {p.count}
+                      <div className="mt-1 font-display text-3xl font-extrabold tabular-nums leading-none tracking-tight text-white">
+                        {p.count.toLocaleString()}
                       </div>
                       <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-slate-400">
                         case{p.count === 1 ? "" : "s"}
@@ -363,6 +457,23 @@ export function PublicCaseMap({
               </Fragment>
             );
           })}
+
+          {/* Tour, "what red means": a beacon over the top barangay while the
+              camera visits it. */}
+          {tourFocus && (
+            <CircleMarker
+              key={`beacon-${tourFocus.psgc}`}
+              center={[tourFocus.lat, tourFocus.lon]}
+              radius={radiusFor(tourFocus.count, maxCount) + 10}
+              interactive={false}
+              pathOptions={{
+                className: "tour-beacon",
+                color: "#f87171",
+                weight: 2.5,
+                fill: false,
+              }}
+            />
+          )}
         </MapContainer>
       </div>
 
@@ -373,6 +484,7 @@ export function PublicCaseMap({
           map's row — the site-wide smooth scroller otherwise swallows the
           wheel before it gets here. */}
       <aside
+        data-tour="panel"
         data-lenis-prevent
         className="flex min-h-0 flex-col border-t border-white/10 bg-brand-950 lg:overflow-y-auto lg:overscroll-contain lg:border-l lg:border-t-0"
       >
@@ -510,7 +622,7 @@ export function PublicCaseMap({
 
         {/* Most affected — tap a row to focus it */}
         {status !== "error" && (
-          <div className="flex-1 px-2 py-3">
+          <div data-tour="top" className="flex-1 px-2 py-3">
             <div className="flex items-center gap-1.5 px-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               <MapPin className="h-3.5 w-3.5 text-accent-400" />
               Most affected
@@ -526,7 +638,11 @@ export function PublicCaseMap({
                           aria-pressed={active}
                           className={
                             "flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 " +
-                            (active ? "bg-white/10" : "hover:bg-white/5")
+                            (active
+                              ? "bg-white/10"
+                              : tourFocus?.psgc === b.psgc
+                                ? "bg-red-500/10 ring-1 ring-inset ring-red-400/40"
+                                : "hover:bg-white/5")
                           }
                         >
                           <span
@@ -546,16 +662,20 @@ export function PublicCaseMap({
         )}
 
         {/* Legend */}
-        <div className="mt-auto border-t border-white/10 px-4 py-3">
+        <div data-tour="legend" className="mt-auto border-t border-white/10 px-4 py-3">
           <div className="font-mono text-[9px] font-semibold uppercase tracking-wider text-slate-400">
             Case density
           </div>
           <div className="mt-1.5 flex items-center gap-1">
-            {LEGEND_COLORS.map((color) => (
+            {LEGEND_COLORS.map((color, i) => (
               <span
                 key={color}
-                className="h-2 flex-1 first:rounded-l-full last:rounded-r-full"
-                style={{ background: color }}
+                className={
+                  "h-2 flex-1 first:rounded-l-full last:rounded-r-full" +
+                  (tourOn(MAP_TOUR_STEP.legend) ? " tour-legend-bar" : "")
+                }
+                // `color` feeds the sweep's drop-shadow via currentColor.
+                style={{ background: color, color, animationDelay: `${i * 140}ms` }}
               />
             ))}
           </div>
@@ -565,6 +685,17 @@ export function PublicCaseMap({
           </div>
         </div>
       </aside>
+
+      {tourOpen && (
+        <MapTour
+          containerRef={cardRef}
+          step={tourStep}
+          onStep={setTourStep}
+          onClose={() => setTourOpen(false)}
+          top={topBarangays[0] ?? null}
+          legendColors={LEGEND_COLORS}
+        />
+      )}
     </div>
   );
 }

@@ -37,8 +37,10 @@ export type TreatmentOutcome =
   | "died"
   | "lost_to_followup"
   | "not_evaluated";
-export type AdherenceStatus = "scheduled" | "taken" | "missed" | "late";
-/** Mirrors the `public.app_role` enum. `AppRole` in supabase.ts is the same set. */
+/**
+ * Mirrors the `public.app_role` enum. `AppRole` in supabase.ts is the same set.
+ * `patient` is only the pre-invite state of a fresh sign-up; it opens nothing.
+ */
 export type AppRoleName =
   | "barangay_admin"
   | "health_worker"
@@ -109,12 +111,7 @@ export interface Database {
            */
           given_name: string | null;
           family_name: string | null;
-          /**
-           * Number reminders go to. Lives here rather than only on the account
-           * because the nurse verifies it at enrollment, before any profile
-           * exists — and refill reminders need it whether or not the patient
-           * ever claims a login.
-           */
+          /** Patient's contact number, verified at enrollment. Staff-only. */
           contact_phone: string | null;
           /** Patient's street address. PII — staff-only, never on public pages. */
           address: string | null;
@@ -144,12 +141,6 @@ export interface Database {
           patient_code: string | null;
           diagnosis_date: string | null;
           source_file_path: string | null;
-          /**
-           * The account claimed for this case, once enrolled. Null for every
-           * case without a login — which is most of them, since presumptives
-           * never get one.
-           */
-          patient_profile_id: string | null;
           /** Health worker who verified the case and assigned treatment. */
           enrolled_by: string | null;
           enrolled_at: string | null;
@@ -321,63 +312,6 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["app_settings"]["Row"]>;
         Relationships: [];
       };
-      adherence_schedules: {
-        Row: {
-          id: string;
-          patient_id: string;
-          medication: string;
-          dose: string;
-          times_per_day: number;
-          start_date: string;
-          end_date: string;
-          notes: string | null;
-          created_by: string | null;
-          created_at: string;
-        };
-        Insert: Partial<
-          Database["public"]["Tables"]["adherence_schedules"]["Row"]
-        > & { patient_id: string; medication: string };
-        Update: Partial<
-          Database["public"]["Tables"]["adherence_schedules"]["Row"]
-        >;
-        Relationships: [];
-      };
-      adherence_logs: {
-        Row: {
-          id: string;
-          schedule_id: string;
-          patient_id: string;
-          scheduled_at: string;
-          taken_at: string | null;
-          status: AdherenceStatus;
-          notes: string | null;
-        };
-        Insert: Partial<
-          Database["public"]["Tables"]["adherence_logs"]["Row"]
-        > & { schedule_id: string; patient_id: string; scheduled_at: string };
-        Update: Partial<Database["public"]["Tables"]["adherence_logs"]["Row"]>;
-        Relationships: [];
-      };
-      sms_outbox: {
-        Row: {
-          id: string;
-          to_phone: string;
-          body: string;
-          status: "queued" | "sent" | "delivered" | "failed" | "mocked";
-          provider: string;
-          provider_response: Json | null;
-          patient_id: string | null;
-          schedule_id: string | null;
-          created_at: string;
-          sent_at: string | null;
-        };
-        Insert: Partial<Database["public"]["Tables"]["sms_outbox"]["Row"]> & {
-          to_phone: string;
-          body: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["sms_outbox"]["Row"]>;
-        Relationships: [];
-      };
       chatbot_messages: {
         Row: {
           id: string;
@@ -439,26 +373,6 @@ export interface Database {
         };
         Insert: Partial<Database["public"]["Tables"]["invite_codes"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["invite_codes"]["Row"]>;
-        Relationships: [];
-      };
-      /**
-       * Single-use codes that let an enrolled patient claim the account
-       * generated for their case. Written only by the definer functions —
-       * there is no direct insert path.
-       */
-      patient_claims: {
-        Row: {
-          id: string;
-          case_id: string;
-          code: string;
-          expires_at: string;
-          used_at: string | null;
-          used_by: string | null;
-          created_by: string | null;
-          created_at: string;
-        };
-        Insert: Partial<Database["public"]["Tables"]["patient_claims"]["Row"]>;
-        Update: Partial<Database["public"]["Tables"]["patient_claims"]["Row"]>;
         Relationships: [];
       };
       /**
@@ -583,34 +497,9 @@ export interface Database {
         Args: { p_case_id: string };
         Returns: { ok: boolean; reason: string }[];
       };
-      /** Marks a case enrolled and mints its claim slip, atomically. */
+      /** Marks a verified case as started on treatment. */
       enroll_patient: {
         Args: { p_case_id: string };
-        Returns: {
-          ok: boolean;
-          reason: string;
-          claim_code: string | null;
-          expires_at: string | null;
-        }[];
-      };
-      /** Reissues a claim slip, revoking any unclaimed one for the case. */
-      create_patient_claim: {
-        Args: { p_case_id: string };
-        Returns: Database["public"]["Tables"]["patient_claims"]["Row"];
-      };
-      /** Anonymous "Is this you?" pre-check. Discloses the bare minimum. */
-      validate_patient_claim: {
-        Args: { p_code: string };
-        Returns: {
-          valid: boolean;
-          reason: string;
-          display_name: string | null;
-          facility_name: string | null;
-        }[];
-      };
-      /** Binds the freshly-created account to the case the nurse verified. */
-      redeem_patient_claim: {
-        Args: { p_code: string };
         Returns: { ok: boolean; reason: string }[];
       };
       /**

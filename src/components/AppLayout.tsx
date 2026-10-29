@@ -4,20 +4,16 @@ import {
   AlertTriangle,
   BarChart3,
   Bell,
-  BookOpen,
   Bot,
   ClipboardList,
   Home,
-  KeyRound,
   LayoutDashboard,
   LogOut,
   MapPinned,
   Menu,
-  Pill,
   Settings,
   ScrollText,
   Share2,
-  Stethoscope,
   Ticket,
   Users,
   Upload,
@@ -66,9 +62,6 @@ const PLAIN_LABELS: Record<string, string> = {
   "/app": "Home",
   "/app/invites": "Invite Staff",
   "/app/cases": "Patients & Cases",
-  "/app/cds": "Check Symptoms",
-  "/app/adherence": "Medicine Tracking",
-  "/app/patient-codes": "Patient Login Codes",
   "/app/map": "Case Map",
   "/app/hotspots": "Hotspot Areas",
   "/app/alerts": "Alerts",
@@ -83,8 +76,8 @@ const PLAIN_LABELS: Record<string, string> = {
 //                     Analytics, DOTS Centers admin, Bulk Import, Chatbot,
 //                     Settings, Users.
 //   barangay_admin  : Active Case Finding (encode + trends), GIS Map, Alerts.
-//   health_worker   : CDS + Adherence/Alerts + GIS Heatmap + AI Analytics.
-//   patient         : Adherence (self-report) + Chatbot + Health Education.
+//   health_worker   : Cases + Alerts + GIS Heatmap + AI Analytics.
+//   patient         : no staff role yet (fresh sign-up) — no app access.
 const NAV: NavItem[] = [
   { to: "/app", label: "Dashboard", icon: Home, group: "Overview" },
   {
@@ -131,31 +124,10 @@ const NAV: NavItem[] = [
     group: "Surveillance",
   },
   {
-    to: "/app/cds",
-    label: "Decision Support",
-    icon: Stethoscope,
-    roles: ["health_worker"],
-    group: "Care",
-  },
-  {
     to: "/app/dots-admin",
     label: "DOTS Centers",
     icon: MapPinned,
     roles: ["system_admin"],
-    group: "Care",
-  },
-  {
-    to: "/app/adherence",
-    label: "Adherence",
-    icon: Pill,
-    roles: ["health_worker", "patient"],
-    group: "Care",
-  },
-  {
-    to: "/app/education",
-    label: "Health Education",
-    icon: BookOpen,
-    roles: ["patient"],
     group: "Care",
   },
   {
@@ -169,7 +141,7 @@ const NAV: NavItem[] = [
     to: "/app/chatbot",
     label: "Chatbot",
     icon: Bot,
-    roles: ["tb_coordinator", "barangay_admin", "health_worker", "patient"],
+    roles: ["tb_coordinator", "barangay_admin", "health_worker"],
     group: "Tools",
   },
   {
@@ -185,15 +157,6 @@ const NAV: NavItem[] = [
     icon: Ticket,
     roles: ["tb_coordinator", "system_admin"],
     group: "Admin",
-  },
-  {
-    // Sits under Care, not Admin: this is a counter task a nurse does with a
-    // patient in front of them, not account administration.
-    to: "/app/patient-codes",
-    label: "Patient Codes",
-    icon: KeyRound,
-    roles: ["health_worker", "tb_coordinator", "system_admin"],
-    group: "Care",
   },
   {
     to: "/app/interoperability",
@@ -335,6 +298,42 @@ export function AppLayout() {
     return <Navigate to="/login" replace />;
   }
 
+  // Every sign-up starts as `patient` until an invite code promotes it to a
+  // staff role. Patient accounts are no longer a product, so an account still
+  // in that state has nothing to open here.
+  if (profile.role === "patient") {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50 px-5">
+        <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-soft">
+          <p className="text-base font-semibold text-slate-900">
+            This account has no staff access
+          </p>
+          <p className="mt-1.5 text-sm text-slate-600">
+            BANTAY-TB is for health staff, and this account was never given
+            a staff role. Ask your system administrator to assign one. For TB
+            information and the nearest DOTS center, use the public site
+            &mdash; no account needed.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link
+              to="/"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:ring-offset-2"
+            >
+              Public site
+            </Link>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:ring-offset-2"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const plain = PLAIN_ROLES.includes(profile.role);
   const visibleNav = NAV.filter(
     (n) => !n.roles || n.roles.includes(profile.role)
@@ -348,7 +347,7 @@ export function AppLayout() {
     <>
       <div className="flex items-center justify-between pr-3">
         <Link
-          to="/app"
+          to="/"
           className="flex items-center gap-2.5 px-5 py-5"
           onClick={() => setMobileOpen(false)}
         >
@@ -472,7 +471,7 @@ export function AppLayout() {
     <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* Mobile top bar */}
       <div className="fixed inset-x-0 top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/85 px-4 py-3 backdrop-blur md:hidden">
-        <Link to="/app" className="flex items-center gap-2">
+        <Link to="/" className="flex items-center gap-2">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-accent-500 text-white">
             <Activity className="h-4 w-4" />
           </span>

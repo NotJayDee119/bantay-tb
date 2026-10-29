@@ -208,8 +208,8 @@ export function RecordDiagnosisPanel({
               }
             >
               {ruledOut
-                ? "The case stays on file as screening data. No account and no medication schedule are created."
-                : "Treatment opens and the Enroll action becomes available — that is where the account and claim code are generated."}
+                ? "The case stays on file as screening data. No treatment record is opened."
+                : "Treatment opens and the Start treatment action becomes available on the case."}
             </p>
           </div>
 

@@ -58,17 +58,6 @@ const built = buildCaseBundle({
     phone: "+63822345678",
     hours: "Mon-Fri 08:00-17:00",
   },
-  schedules: [
-    {
-      id: "a1a1a1a1-0000-4000-8000-000000000001",
-      medication: "HRZE fixed-dose combination (intensive phase)",
-      dose: "4 tablets",
-      times_per_day: 1,
-      start_date: "2026-08-15",
-      end_date: "2026-10-14",
-    },
-  ],
-  adherence: { total: 58, taken: 54, missed: 4 },
   disclosure: "pseudonymous",
   // The sample was produced against the HAPI public R4 test server, so it
   // carries the HTEST tag exactly as transmitted.
