@@ -1,37 +1,148 @@
-# bantay-tb
+# 🩺 BANTAY-TB
 
-Barangay-level TB surveillance and hotspot mapping system for Davao City.
+**Barangay-level tuberculosis surveillance and hotspot mapping for Davao City.**
 
-## HL7 FHIR interoperability
+BANTAY-TB helps health workers and TB coordinators record cases, see where TB is concentrated across the city's 182 barangays, and find the nearest DOTS center, all from one web app.
 
-The outbound interoperability pipeline — extract a case from PostgreSQL,
-serialise it to an HL7 FHIR R4 transaction bundle, transmit it over HTTPS to an
-external health information system, and record the disclosure in an
-append-only, hash-chained audit log.
+---
 
-| | |
+## ✨ Features
+
+- 🗺️ **GIS hotspot map**: barangay-level case map with Getis-Ord Gi\* hotspot detection
+- 📋 **Case management**: add, edit, and bulk-import TB cases from Excel
+- 📊 **Analytics dashboard**: trends and breakdowns by barangay and facility
+- 🏥 **DOTS center locator**: public page to find the nearest treatment facility
+- 🤖 **Health chatbot**: answers TB questions from a reviewed knowledge base
+- 📚 **Learn page**: plain-language health guides for residents
+- 👥 **Role-based access**: system admin, TB coordinator, barangay admin, and health worker
+
+## 🧰 Tech Stack
+
+| Layer | Tools |
 | --- | --- |
-| **Pipeline documentation** | [`docs/FHIR-INTEROP.md`](docs/FHIR-INTEROP.md) |
-| **Integration service** | [`supabase/functions/fhir-export/`](supabase/functions/fhir-export/) |
-| **FHIR R4 serializer** | [`supabase/functions/_shared/fhir.ts`](supabase/functions/_shared/fhir.ts) |
-| **Database layer** (endpoints, audit log, encryption) | [`supabase/migrations/20261019000000_fhir_interoperability.sql`](supabase/migrations/20261019000000_fhir_interoperability.sql) |
-| **Operator UI** | [`src/pages/app/Interoperability.tsx`](src/pages/app/Interoperability.tsx) → `/app/interoperability` |
-| **Sample payload** | [`docs/fhir-sample-payload.json`](docs/fhir-sample-payload.json) |
-| **Tests** | [`src/__tests__/fhirBundle.test.ts`](src/__tests__/fhirBundle.test.ts) |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS |
+| Maps | Leaflet, MapLibre GL |
+| Backend | Supabase (PostgreSQL, Auth, Edge Functions) |
+| Hosting | Firebase Hosting |
+| Testing | Vitest |
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+
+- [Node.js](https://nodejs.org/) 20 or newer
+- A [Supabase](https://supabase.com/) project (cloud or local through the Supabase CLI)
+
+### 2. Clone and install
 
 ```bash
-npm run fhir:sample   # regenerate the sample payload from the live serializer
-npm test              # 176 tests, 31 of them over the FHIR serializer
-```
-
-## Development
-
-```bash
+git clone https://github.com/NotJayDee119/bantay-tb.git
+cd bantay-tb
 npm install
-npm run dev           # Vite dev server on :5173
-npm run build         # tsc -b && vite build
-npm run lint
-npm run typecheck
 ```
 
-Requires `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in a local `.env`.
+### 3. Set up environment variables
+
+Create a `.env` file in the project root:
+
+```env
+# Used by the web app
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+
+# Used only by the scripts in /scripts (keep these secret)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+OPENAI_API_KEY=your-openai-key
+```
+
+> ⚠️ Never commit `.env` or expose the service role key in the frontend.
+
+### 4. Set up the database
+
+Apply the migrations in `supabase/migrations/` to your project:
+
+```bash
+npx supabase link --project-ref your-project-ref
+npx supabase db push
+```
+
+Then load the barangays, health articles, and sample data:
+
+```bash
+npm run seed        # barangays, health articles, and sample cases
+npm run kb:ingest   # builds the chatbot knowledge base (needs OPENAI_API_KEY)
+```
+
+### 5. Run the app
+
+```bash
+npm run dev
+```
+
+Open **http://localhost:5173** in your browser. 🎉
+
+---
+
+## 👤 Creating the First Admin
+
+1. Sign up for an account in the app.
+2. In the Supabase SQL editor, promote that account to system admin:
+
+   ```sql
+   update public.profiles set role = 'system_admin' where email = 'you@example.com';
+   ```
+
+3. Log in again. You can now create **invite codes** (under *Invite Codes*) so other staff can register at `/register/staff` with the right role.
+
+---
+
+## ☁️ Edge Functions
+
+The chatbot, hotspot detection, and FHIR export run as Supabase Edge Functions in `supabase/functions/`.
+
+Deploy them with:
+
+```bash
+SUPABASE_URL=... SUPABASE_ACCESS_TOKEN=... node scripts/deploy-functions.mjs
+```
+
+Set these secrets in **Supabase Dashboard → Project Settings → Edge Functions**:
+
+| Secret | Purpose |
+| --- | --- |
+| `OPENAI_API_KEY` | Chatbot replies and embeddings |
+| `OPENAI_BASE_URL` | *(optional)* Custom OpenAI-compatible endpoint |
+| `OPENAI_MODEL` | *(optional)* Chat model override |
+
+---
+
+## 📦 Build and Deploy
+
+```bash
+npm run build                  # production build in /dist
+npx firebase deploy --only hosting
+```
+
+---
+
+## 🛠️ Available Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the development server |
+| `npm run build` | Type-check and build for production |
+| `npm run preview` | Preview the production build locally |
+| `npm run lint` | Run ESLint |
+| `npm run typecheck` | Run the TypeScript compiler without emitting |
+| `npm test` | Run the test suite |
+| `npm run seed` | Seed the database with barangays and sample data |
+| `npm run kb:ingest` | Rebuild the chatbot knowledge base |
+
+---
+
+## 📄 License
+
+Developed as a capstone project at the University of the Immaculate Conception, Davao City.
