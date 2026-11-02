@@ -108,8 +108,7 @@ export function Login() {
               Welcome back
             </h1>
             <p className="mt-2 text-sm text-slate-500">
-              Health staff sign in here. Residents don&rsquo;t need an
-              account.
+              Health staff sign in here.
             </p>
           </div>
 
