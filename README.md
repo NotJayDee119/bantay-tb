@@ -14,7 +14,7 @@ BANTAY-TB helps health workers and TB coordinators record cases, see where TB is
 - 🏥 **DOTS center locator**: public page to find the nearest treatment facility
 - 🤖 **Health chatbot**: answers TB questions from a reviewed knowledge base
 - 📚 **Learn page**: plain-language health guides for residents
-- 👥 **Role-based access**: system admin, TB coordinator, barangay admin, and health worker
+- 👥 **Staff-only accounts**: invite-code registration with roles for system admin, TB coordinator, barangay admin, and health worker
 
 ## 🧰 Tech Stack
 
@@ -86,16 +86,21 @@ Open **http://localhost:5173** in your browser. 🎉
 
 ---
 
-## 👤 Creating the First Admin
+## 👤 Staff Accounts
 
-1. Sign up for an account in the app.
-2. In the Supabase SQL editor, promote that account to system admin:
+> 🔒 **Sign-in is for health staff only.** Residents use the public pages (Home, DOTS Locator, Health Education, chatbot) without an account.
+
+Staff can only register with an **invite code**, so the first admin has to be created by hand:
+
+1. In **Supabase Dashboard → Authentication → Users**, click **Add user** and create the admin's email and password.
+2. In the Supabase SQL editor, make that account a system admin:
 
    ```sql
-   update public.profiles set role = 'system_admin' where email = 'you@example.com';
+   update public.profiles set role = 'system_admin' where email = 'admin@example.com';
    ```
 
-3. Log in again. You can now create **invite codes** (under *Invite Codes*) so other staff can register at `/register/staff` with the right role.
+3. Sign in at `/login`. Go to **Invite Codes** to create codes for other staff (TB coordinators, barangay admins, health workers).
+4. Staff open **Register with an invite code** on the sign-in page (`/register/staff`) and enter their code. The code sets their role. Each code works once and expires after 24 hours.
 
 ---
 
