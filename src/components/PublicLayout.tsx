@@ -280,7 +280,7 @@ export function PublicLayout() {
               <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-vigil-400" />
             </span>
             <span className="flex min-w-0 flex-col leading-tight">
-              <span className="font-display text-lg font-extrabold tracking-tight text-slate-900">
+              <span className="font-display whitespace-nowrap text-lg font-extrabold tracking-tight text-slate-900">
                 BANTAY-TB
               </span>
               <span className="truncate font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
@@ -332,7 +332,7 @@ export function PublicLayout() {
           <div className="flex items-center gap-2 lg:hidden">
             <Link
               to={account.to}
-              className="inline-flex h-9 items-center rounded-full bg-brand-950 px-4 text-sm font-medium text-white shadow-soft transition hover:bg-brand-900"
+              className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full bg-brand-950 px-4 text-sm font-medium text-white shadow-soft transition hover:bg-brand-900"
             >
               {account.label}
             </Link>

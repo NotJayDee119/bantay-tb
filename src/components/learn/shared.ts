@@ -22,6 +22,15 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Category, Disease } from "../../data/healthContent";
+import type { Locale } from "../../lib/i18n";
+
+/** Language names short enough that the three-way switch stays on one line
+ *  on a phone. "Filipino (Tagalog)" wrapped to two. */
+export const LOCALE_SHORT: Record<Locale, string> = {
+  en: "English",
+  tl: "Filipino",
+  ceb: "Cebuano",
+};
 
 export const DISEASES: Disease[] = [
   "tb",

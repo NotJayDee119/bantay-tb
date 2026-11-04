@@ -70,6 +70,11 @@ export const UI = {
   zoomIn: { en: "Zoom in", tl: "Palakihin", ceb: "Padakua" },
   zoomOut: { en: "Zoom out", tl: "Paliitin", ceb: "Pagamya" },
   close: { en: "Close", tl: "Isara", ceb: "Isira" },
+  readImageText: {
+    en: "Read the text in this picture",
+    tl: "Basahin ang nakasulat sa larawan",
+    ceb: "Basaha ang nakasulat sa hulagway",
+  },
 
   // ── Guidebook ─────────────────────────────────────────────────────
   read: { en: "Read", tl: "Basahin", ceb: "Basaha" },

@@ -15,6 +15,7 @@ import {
   CATEGORIES,
   DISEASE_ICON,
   DISEASES,
+  LOCALE_SHORT,
 } from "../../components/learn/shared";
 
 /** A colour per condition, so a reader can find "the blue one" again. */
@@ -125,20 +126,21 @@ export function LearnPublic() {
             className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1"
           >
             <Languages className="ml-2 h-4 w-4 text-slate-400" aria-hidden />
-            {(Object.keys(LOCALE_LABEL) as Locale[]).map((l) => (
+            {(Object.keys(LOCALE_SHORT) as Locale[]).map((l) => (
               <button
                 key={l}
                 type="button"
                 onClick={() => setLocale(l)}
                 aria-pressed={locale === l}
+                title={LOCALE_LABEL[l]}
                 className={cn(
-                  "rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60",
+                  "min-h-9 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60",
                   locale === l
                     ? "bg-brand-950 text-white shadow-soft"
                     : "text-slate-600 hover:bg-white hover:text-slate-900",
                 )}
               >
-                {LOCALE_LABEL[l]}
+                {LOCALE_SHORT[l]}
               </button>
             ))}
           </div>

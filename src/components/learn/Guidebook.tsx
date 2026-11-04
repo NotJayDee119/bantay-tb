@@ -6,13 +6,17 @@ import {
   ArrowRight,
   BookMarked,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Expand,
   ExternalLink,
   Languages,
   Lightbulb,
+  ListOrdered,
   MapPin,
+  ScrollText,
   Siren,
+  X,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import {
@@ -39,6 +43,7 @@ import {
   CATEGORY_ICON,
   DISEASE_ICON,
   DISEASES,
+  LOCALE_SHORT,
   checklistMark,
   hostnameOf,
   readingMinutes,
@@ -50,6 +55,9 @@ import {
 export type Section = Category | "sources";
 
 const PROSE = "text-[17px] leading-[1.75] text-slate-700";
+
+/** Captions longer than this are folded away under the picture. */
+const LONG_CAPTION = 160;
 
 /** Height of the site header, which is sticky — the sidebar and the phone
  *  chapter bar sit just under it rather than behind it. */
@@ -152,6 +160,18 @@ function Figure({
   locale: Locale;
   onOpen: () => void;
 }) {
+  const credit = image.creditUrl ? (
+    <a
+      href={image.creditUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="hover:text-slate-700"
+    >
+      {image.credit}
+    </a>
+  ) : (
+    image.credit
+  );
   return (
     <figure>
       <button
@@ -180,24 +200,32 @@ function Figure({
           <Expand className="h-4 w-4" aria-hidden />
         </span>
       </button>
-      <figcaption className="mt-3 text-[13px] leading-relaxed text-slate-500">
-        {image.caption}{" "}
-        <span className="text-slate-400">
-          ·{" "}
-          {image.creditUrl ? (
-            <a
-              href={image.creditUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-slate-700"
-            >
-              {image.credit}
-            </a>
-          ) : (
-            image.credit
-          )}
-        </span>
-      </figcaption>
+      {image.caption.length > LONG_CAPTION ? (
+        // A long caption is the poster's own text written out — useful when
+        // the print is too small to read on a phone, but a wall of grey
+        // between the picture and the chapter otherwise. Folded, and named
+        // for what it is.
+        <figcaption className="mt-3">
+          <details className="group rounded-xl bg-white ring-1 ring-slate-200">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[15px] font-semibold text-slate-700 [&::-webkit-details-marker]:hidden">
+              <ScrollText className="h-4 w-4 shrink-0 text-accent-700" aria-hidden />
+              <span className="min-w-0 flex-1">{t("readImageText", locale)}</span>
+              <ChevronDown
+                className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180"
+                aria-hidden
+              />
+            </summary>
+            <p className="border-t border-slate-100 px-4 py-3 text-[15px] leading-relaxed text-slate-700">
+              {image.caption}
+            </p>
+          </details>
+          <p className="mt-2 text-[12px] text-slate-400">{credit}</p>
+        </figcaption>
+      ) : (
+        <figcaption className="mt-3 text-[13px] leading-relaxed text-slate-500">
+          {image.caption} <span className="text-slate-400">· {credit}</span>
+        </figcaption>
+      )}
     </figure>
   );
 }
@@ -231,8 +259,8 @@ export function Guidebook({
   const headerH = useHeaderHeight();
   const lenis = useLenis();
   const articleRef = useRef<HTMLDivElement>(null);
-  const chipsRef = useRef<HTMLDivElement>(null);
   const [lightbox, setLightbox] = useState<ResolvedArticleImage | null>(null);
+  const [contentsOpen, setContentsOpen] = useState(false);
 
   const articles = useMemo(
     () =>
@@ -272,15 +300,28 @@ export function Guidebook({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section, disease]);
 
+  // The phone's chapter list is a sheet over the page: hold the page still
+  // behind it and let Escape close it, like the site's own menu drawer.
   useEffect(() => {
-    const chip = chipsRef.current?.querySelector<HTMLElement>("[aria-current='page']");
-    chip?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
-  }, [section]);
+    if (!contentsOpen) return;
+    document.body.style.overflow = "hidden";
+    lenis?.stop();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContentsOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = "";
+      lenis?.start();
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [contentsOpen, lenis]);
 
   // ← → move between chapters, as they do in most readers.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (lightbox || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (lightbox || contentsOpen || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey)
+        return;
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.key === "ArrowRight" && nextSection) onSection(nextSection);
@@ -288,7 +329,7 @@ export function Guidebook({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [lightbox, nextSection, prevSection, onSection]);
+  }, [lightbox, contentsOpen, nextSection, prevSection, onSection]);
 
   const DiseaseIcon = DISEASE_ICON[disease];
   const others = [1, 2, 3].map(
@@ -302,20 +343,21 @@ export function Guidebook({
       className="flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1"
     >
       <Languages className="ml-1.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-      {(Object.keys(LOCALE_LABEL) as Locale[]).map((l) => (
+      {(Object.keys(LOCALE_SHORT) as Locale[]).map((l) => (
         <button
           key={l}
           type="button"
           onClick={() => onLocaleChange(l)}
           aria-pressed={locale === l}
+          title={LOCALE_LABEL[l]}
           className={cn(
-            "flex-1 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60",
+            "min-h-9 flex-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[13px] font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60",
             locale === l
               ? "bg-brand-950 text-white"
               : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
           )}
         >
-          {LOCALE_LABEL[l]}
+          {LOCALE_SHORT[l]}
         </button>
       ))}
     </div>
@@ -469,7 +511,10 @@ export function Guidebook({
       <li key={s}>
         <button
           type="button"
-          onClick={() => onSection(s)}
+          onClick={() => {
+            onSection(s);
+            setContentsOpen(false);
+          }}
           aria-current={active ? "page" : undefined}
           className={cn(
             "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60",
@@ -496,49 +541,124 @@ export function Guidebook({
 
   return (
     <div className="bg-slate-50">
-      {/* ── Phone: chapter chips under the header ── */}
+      {/* ── Phone and tablet: where you are, and the way to every chapter ──
+          A row of chips ran off the edge of a phone, so the reader couldn't
+          see how many chapters there were or which ones were left. Instead:
+          the guide's name, a progress bar with one step per chapter, and a
+          Contents button that lists them all. */}
       <div
-        className="sticky z-30 border-b border-slate-200 bg-white/90 backdrop-blur lg:hidden"
+        className="sticky z-30 border-b border-slate-200 bg-white/95 backdrop-blur lg:hidden"
         style={{ top: headerH }}
       >
-        <div className="flex items-center gap-2 px-4 pt-2.5 sm:px-6">
+        <div className="flex items-center gap-2 px-4 py-2 sm:px-6">
           <button
             type="button"
             onClick={onClose}
-            className="-ml-1.5 inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-sm font-medium text-slate-500 hover:text-slate-900"
+            aria-label={t("allGuides", locale)}
+            className="-ml-2 grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
           >
-            <ArrowLeft className="h-4 w-4" aria-hidden />
-            {t("allGuides", locale)}
+            <ArrowLeft className="h-5 w-5" aria-hidden />
           </button>
-          <span className="truncate text-sm font-semibold text-slate-900">
-            · {DISEASE_LABEL[disease][locale]}
-          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-bold leading-tight text-slate-900">
+              {DISEASE_LABEL[disease][locale]}
+            </p>
+            <p className="truncate text-[13px] leading-tight text-slate-500">
+              {section === "sources"
+                ? label(section)
+                : t("chapterOf", locale, { n: index + 1, total: CATEGORIES.length })}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setContentsOpen(true)}
+            aria-haspopup="dialog"
+            aria-expanded={contentsOpen}
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+          >
+            <ListOrdered className="h-4 w-4" aria-hidden />
+            {t("contents", locale)}
+          </button>
         </div>
-        <div
-          ref={chipsRef}
-          className="flex gap-2 overflow-x-auto px-4 py-2.5 [scrollbar-width:none] sm:px-6 [&::-webkit-scrollbar]:hidden"
-        >
-          {sections.map((s, i) => {
-            const active = s === section;
-            return (
+        <ol className="flex gap-1 px-4 pb-2.5 sm:px-6" aria-label={t("contents", locale)}>
+          {sections.map((s, i) => (
+            <li key={s} className="flex-1">
               <button
-                key={s}
                 type="button"
                 onClick={() => onSection(s)}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors duration-150",
-                  active
-                    ? "bg-brand-950 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200",
-                )}
+                aria-label={label(s)}
+                aria-current={s === section ? "page" : undefined}
+                // A tall, invisible hit area around a thin bar.
+                className="group block w-full py-1.5 focus-visible:outline-none"
               >
-                {s === "sources" ? label(s) : `${i + 1}. ${label(s)}`}
+                <span
+                  className={cn(
+                    "block h-1.5 rounded-full transition-colors duration-200 group-focus-visible:ring-2 group-focus-visible:ring-brand-500/60",
+                    i < index
+                      ? "bg-accent-500"
+                      : i === index
+                        ? "bg-brand-950"
+                        : "bg-slate-200",
+                  )}
+                />
               </button>
-            );
-          })}
-        </div>
+            </li>
+          ))}
+        </ol>
       </div>
+
+      {/* ── Phone and tablet: the contents, as a sheet ── */}
+      {contentsOpen && (
+        // Above the chatbot button (z-50), which would otherwise sit on the list.
+        <div className="fixed inset-0 z-[60] lg:hidden" role="dialog" aria-modal="true" aria-label={t("contents", locale)}>
+          <button
+            type="button"
+            aria-label={t("close", locale)}
+            onClick={() => setContentsOpen(false)}
+            className="absolute inset-0 bg-slate-950/40"
+          />
+          <div
+            data-lenis-prevent
+            className="learn-sheet-in absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-3xl bg-slate-50 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 shadow-lift sm:px-6"
+          >
+            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-300" aria-hidden />
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-950 text-accent-400">
+                <DiseaseIcon className="h-5 w-5" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-display truncate text-lg font-extrabold leading-tight tracking-tight text-slate-900">
+                  {DISEASE_LABEL[disease][locale]}
+                </p>
+                <p className="text-[13px] text-slate-500">
+                  {t("chapterCount", locale, { n: CATEGORIES.length })} ·{" "}
+                  {t("minRead", locale, { n: minutes })}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setContentsOpen(false)}
+                aria-label={t("close", locale)}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-200/70 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+              >
+                <X className="h-5 w-5" aria-hidden />
+              </button>
+            </div>
+            <ol className="mt-4 space-y-1">{sections.map(navRow)}</ol>
+            <button
+              type="button"
+              onClick={() => {
+                setContentsOpen(false);
+                onClose();
+              }}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+              {t("allGuides", locale)}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto grid max-w-6xl gap-10 px-4 pb-20 pt-6 sm:px-6 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-14 lg:px-8 lg:pt-10">
         {/* ── Desktop: the contents, down the side ── */}
@@ -600,7 +720,7 @@ export function Guidebook({
 
         {/* ── The chapter ── */}
         <main ref={articleRef} className="min-w-0">
-          <div className="mb-6 lg:hidden">{languageSwitch}</div>
+          <div className="mb-6 sm:max-w-sm lg:hidden">{languageSwitch}</div>
 
           <article
             key={`${disease}-${section}-${locale}`}
@@ -612,13 +732,13 @@ export function Guidebook({
           {/* Previous / Next */}
           <nav
             aria-label={t("contents", locale)}
-            className="mt-14 grid max-w-[44rem] gap-3 border-t border-slate-200 pt-8 sm:grid-cols-2"
+            className="mt-14 grid max-w-[44rem] grid-cols-2 gap-3 border-t border-slate-200 pt-8"
           >
             {prevSection ? (
               <button
                 type="button"
                 onClick={() => onSection(prevSection)}
-                className="group flex flex-col items-start rounded-2xl border border-slate-200 bg-white p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 motion-reduce:transform-none"
+                className="group flex min-w-0 flex-col items-start rounded-2xl border border-slate-200 bg-white p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 motion-reduce:transform-none"
               >
                 <span className="inline-flex items-center gap-1.5 text-[13px] text-slate-500">
                   <ArrowLeft
@@ -632,13 +752,13 @@ export function Guidebook({
                 </span>
               </button>
             ) : (
-              <span className="hidden sm:block" />
+              <span />
             )}
             {nextSection && (
               <button
                 type="button"
                 onClick={() => onSection(nextSection)}
-                className="group flex flex-col items-end rounded-2xl border border-brand-950 bg-brand-950 p-4 text-right text-white transition duration-200 hover:-translate-y-0.5 hover:bg-brand-900 hover:shadow-lift focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:ring-offset-2 motion-reduce:transform-none"
+                className="group flex min-w-0 flex-col items-end rounded-2xl border border-brand-950 bg-brand-950 p-4 text-right text-white transition duration-200 hover:-translate-y-0.5 hover:bg-brand-900 hover:shadow-lift focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:ring-offset-2 motion-reduce:transform-none"
               >
                 <span className="inline-flex items-center gap-1.5 text-[13px] text-slate-300">
                   {t("continueTo", locale)}

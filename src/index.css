@@ -766,8 +766,21 @@ body {
     transform: none;
   }
 }
+/* Learn guide, phone: the chapter list slides up from the bottom edge. */
+.learn-sheet-in {
+  animation: learn-sheet-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes learn-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .learn-chapter-in {
+  .learn-chapter-in,
+  .learn-sheet-in {
     animation: none;
   }
 }
