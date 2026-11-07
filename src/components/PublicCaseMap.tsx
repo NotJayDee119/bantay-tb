@@ -10,7 +10,8 @@ import {
 import { DomEvent, LatLngBounds, point } from "leaflet";
 import { Activity, CircleHelp, MapPin, Search, X } from "lucide-react";
 import { OpenFreeMapLayer } from "./OpenFreeMapLayer";
-import { MAP_TOUR_STEP, MapTour, hasSeenMapTour, markSeen } from "./MapTour";
+import { MapTour } from "./MapTour";
+import { MAP_TOUR_STEP, hasSeenMapTour, markSeen } from "../lib/mapTour";
 import barangays from "../data/barangays.json";
 import { isCoarsePointer } from "../lib/pointer";
 import { usePublicYearlyCounts } from "../hooks/usePublicYearlyCounts";

@@ -1,10 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
-import { AuthProvider } from "./hooks/useAuth";
+import { AuthProvider } from "./hooks/AuthProvider";
+import { ScrollToTop } from "./components/ScrollToTop";
 import App from "./App";
 import "./index.css";
 
@@ -19,14 +19,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-function ScrollToTop() {
-  const { pathname } = useLocation();
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
-  return null;
-}
 
 // Production only: in dev a worker would serve stale modules over Vite's HMR.
 // Registered after load so it never competes with the first paint. See

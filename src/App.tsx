@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AppLayout } from "./components/AppLayout";
@@ -6,6 +6,7 @@ import { PublicLayout } from "./components/PublicLayout";
 import { useAuth } from "./hooks/useAuth";
 import type { AppRole } from "./lib/supabase";
 import { LoadingSpinner } from "./components/LazyFallback";
+import { toast } from "sonner";
 import {
   Landing,
   About,
@@ -32,6 +33,7 @@ import {
   AdminDashboard,
   Interoperability,
   AuditLog,
+  AppNotFound,
 } from "./lib/lazyPages";
 
 function RequireRole({
@@ -46,9 +48,26 @@ function RequireRole({
     return <LoadingSpinner className="min-h-[60vh]" />;
   }
   if (!profile || !roles.includes(profile.role)) {
-    return <Navigate to="/app" replace />;
+    return <AccessDenied />;
   }
   return <>{children}</>;
+}
+
+/**
+ * A page this role can't open used to bounce silently to the dashboard, which
+ * looked like the link was broken. Say why, then go to the dashboard. The
+ * fixed toast id keeps StrictMode's double effect (and repeat clicks) from
+ * stacking copies.
+ */
+function AccessDenied() {
+  useEffect(() => {
+    toast.error("You don't have access to that page.", {
+      id: "route-access-denied",
+      description:
+        "It isn't part of your role. Ask your system administrator if you need it.",
+    });
+  }, []);
+  return <Navigate to="/app" replace />;
 }
 
 export default function App() {
@@ -66,8 +85,9 @@ export default function App() {
         <Route path="register/staff" element={<StaffRegister />} />
         <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="reset-password" element={<ResetPassword />} />
-        {/* Unknown addresses, public or under /app, get a real 404 rather
-            than a silent bounce to the homepage. */}
+        {/* Unknown public addresses get a real 404 rather than a silent
+            bounce to the homepage. Unknown /app addresses get the in-app 404
+            below, so signed-in staff keep their sidebar. */}
         <Route path="*" element={<NotFound />} />
       </Route>
 
@@ -236,6 +256,7 @@ export default function App() {
             </RequireRole>
           }
         />
+        <Route path="*" element={<AppNotFound />} />
       </Route>
     </Routes>
     </Suspense>

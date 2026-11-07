@@ -28,6 +28,7 @@ export const InviteCodes = lazyWithPreload(() => import("../pages/app/InviteCode
 export const AdminDashboard = lazyWithPreload(() => import("../pages/app/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
 export const Interoperability = lazyWithPreload(() => import("../pages/app/Interoperability").then(m => ({ default: m.Interoperability })));
 export const AuditLog = lazyWithPreload(() => import("../pages/app/AuditLog").then(m => ({ default: m.AuditLog })));
+export const AppNotFound = lazyWithPreload(() => import("../pages/app/AppNotFound").then(m => ({ default: m.AppNotFound })));
 
 /**
  * Maps a nav-link `to` path to the chunk that route renders, so hovering a

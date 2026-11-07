@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Loader2 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import {
   computeCasePins,
   computeFacilityFlows,
@@ -21,6 +22,10 @@ interface GISMapTabProps {
 
 export function GISMapTab({ focusBarangay = null }: GISMapTabProps) {
   const scope = useAreaScope();
+  // `?focus=<barangay name>` comes from the Dashboard's "View on map" button
+  // on each hotspot card. The prop still wins when a parent passes one.
+  const [params] = useSearchParams();
+  const urlFocus = params.get("focus")?.trim() || null;
 
   // For health_worker / barangay_admin this is the only area they can read,
   // so it doubles as the map's focus.
@@ -52,9 +57,10 @@ export function GISMapTab({ focusBarangay = null }: GISMapTabProps) {
 
   const resolvedFocus = useMemo(() => {
     if (focusBarangay) return focusBarangay;
+    if (urlFocus) return urlFocus;
     if (!assignedPsgc) return null;
     return barangays.find((b) => b.psgc === assignedPsgc)?.name ?? null;
-  }, [focusBarangay, assignedPsgc]);
+  }, [focusBarangay, urlFocus, assignedPsgc]);
   // Shared, cached copy of the register (same one the Dashboard reads), so
   // opening the map after the Dashboard doesn't download every case again.
   // No barangay filter on purpose: RLS scopes area staff to the union of

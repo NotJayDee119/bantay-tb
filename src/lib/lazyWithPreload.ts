@@ -1,6 +1,10 @@
-import { lazy, type ComponentType, type LazyExoticComponent } from "react";
+import { lazy, type LazyExoticComponent } from "react";
 
-type Importer = () => Promise<{ default: ComponentType<any> }>;
+// "Any component React.lazy accepts", read off lazy()'s own signature rather
+// than restated by hand. The generic C then keeps each component's real prop
+// types for its callers.
+type AnyComponent = Awaited<ReturnType<Parameters<typeof lazy>[0]>>["default"];
+type Importer<C extends AnyComponent> = () => Promise<{ default: C }>;
 
 /**
  * A `React.lazy` component that also exposes `.preload()` — call it to kick
@@ -9,7 +13,7 @@ type Importer = () => Promise<{ default: ComponentType<any> }>;
  * Repeated calls are cheap: the bundler/ESM layer caches the import promise,
  * so `preload()` after the chunk has loaded is effectively a no-op.
  */
-export type PreloadableComponent = LazyExoticComponent<ComponentType<any>> & {
+export type PreloadableComponent<C extends AnyComponent> = LazyExoticComponent<C> & {
   preload: () => Promise<unknown>;
 };
 
@@ -30,7 +34,7 @@ const RELOAD_COOLDOWN_MS = 30_000;
  * names. The cooldown stops a genuinely offline user from reload-looping; the
  * error then reaches the ErrorBoundary, which says what happened.
  */
-function resilient(importer: Importer): Importer {
+function resilient<C extends AnyComponent>(importer: Importer<C>): Importer<C> {
   return async () => {
     try {
       return await importer();
@@ -62,8 +66,10 @@ function resilient(importer: Importer): Importer {
   };
 }
 
-export function lazyWithPreload(importer: Importer): PreloadableComponent {
-  const Component = lazy(resilient(importer)) as PreloadableComponent;
+export function lazyWithPreload<C extends AnyComponent>(
+  importer: Importer<C>
+): PreloadableComponent<C> {
+  const Component = lazy(resilient(importer)) as PreloadableComponent<C>;
   // A hover warm-up is best effort: a failure here must never reload the page
   // under the user. The real navigation goes through the resilient loader.
   Component.preload = () => importer().catch(() => undefined);

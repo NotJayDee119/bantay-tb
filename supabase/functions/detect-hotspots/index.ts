@@ -27,11 +27,30 @@ import {
 } from "../_shared/db.ts";
 import { analyzeSpatial, isHotspotClass } from "../_shared/spatial.ts";
 
+// The request body names WHY a run happened, nothing else. Window and
+// permutations come only from app_settings (set by a system admin on the
+// Settings page), so a caller cannot shrink the window to rewrite the official
+// hotspot list, or ask for millions of permutations to tie up the function.
 interface Body {
   trigger?: string;
-  window_days?: number;
-  permutations?: number;
 }
+
+/** The triggers the app actually sends; anything else is recorded as "manual". */
+const TRIGGERS = new Set([
+  "manual",
+  "case_insert",
+  "bulk_import",
+  "auto_stale",
+  "auto_cases_changed",
+]);
+
+/** Only staff accounts may recompute the citywide hotspot list. */
+const STAFF_ROLES = new Set([
+  "tb_coordinator",
+  "barangay_admin",
+  "health_worker",
+  "system_admin",
+]);
 
 interface GiSettings {
   window_days: number;
@@ -39,6 +58,19 @@ interface GiSettings {
 }
 
 const SETTINGS_DEFAULTS: GiSettings = { window_days: 365, permutations: 999 };
+
+// Same bounds as src/lib/hotspotSettings.ts (RANGES). This function deploys
+// with --no-remote and cannot import that file, so change the two together.
+const RANGES = {
+  window_days: { min: 30, max: 1825 },
+  permutations: { min: 99, max: 9999 },
+};
+
+function clamp(value: unknown, range: { min: number; max: number }, fallback: number) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.round(Math.min(Math.max(n, range.min), range.max));
+}
 
 interface BarangayRow {
   psgc: number;
@@ -57,10 +89,49 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+  if (req.method !== "POST") {
+    return json({ error: "Use POST" }, 405);
+  }
 
-  const cfg = dbFromEnv();
+  const cfg = dbFromEnv({ requireServiceRole: true });
   if (!cfg) {
     return json({ error: "Supabase env not configured" }, 500);
+  }
+
+  // ── Authenticate + authorize ──────────────────────────────────────────────
+  // verify_jwt alone is not enough: the public anon key is itself a valid JWT,
+  // so it would let anyone holding the site's bundle run detection. Ask GoTrue
+  // who the caller is, then require a staff profile.
+  const token = (req.headers.get("Authorization") ?? "")
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+  if (!token) {
+    return json({ error: "Missing Authorization bearer token" }, 401);
+  }
+  try {
+    const userRes = await fetch(`${cfg.url}/auth/v1/user`, {
+      headers: {
+        apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? cfg.key,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!userRes.ok) {
+      return json({ error: "Sign in to run hotspot detection" }, 401);
+    }
+    const user = (await userRes.json()) as { id?: string };
+    if (!user.id) {
+      return json({ error: "Sign in to run hotspot detection" }, 401);
+    }
+    const [profile] = await dbSelect<{ role: string }>(
+      cfg,
+      "profiles",
+      `select=role&id=eq.${encodeURIComponent(user.id)}&limit=1`
+    );
+    if (!profile || !STAFF_ROLES.has(profile.role)) {
+      return json({ error: "Only staff accounts can run hotspot detection" }, 403);
+    }
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
   }
 
   let body: Body = {};
@@ -69,10 +140,15 @@ Deno.serve(async (req) => {
   } catch {
     body = {};
   }
+  const trigger =
+    typeof body.trigger === "string" && TRIGGERS.has(body.trigger)
+      ? body.trigger
+      : "manual";
 
   const started = Date.now();
 
-  // Resolve settings: explicit body overrides > app_settings.hotspot_gi > defaults.
+  // Resolve settings: app_settings.hotspot_gi > defaults, clamped to the same
+  // ranges the Settings page allows.
   let stored: GiSettings = SETTINGS_DEFAULTS;
   try {
     const rows = await dbSelect<{ value: Partial<GiSettings> }>(
@@ -84,8 +160,16 @@ Deno.serve(async (req) => {
   } catch (_err) {
     // Settings are optional; fall back to defaults.
   }
-  const windowDays = body.window_days ?? stored.window_days;
-  const permutations = body.permutations ?? stored.permutations;
+  const windowDays = clamp(
+    stored.window_days,
+    RANGES.window_days,
+    SETTINGS_DEFAULTS.window_days
+  );
+  const permutations = clamp(
+    stored.permutations,
+    RANGES.permutations,
+    SETTINGS_DEFAULTS.permutations
+  );
 
   const windowEnd = new Date();
   const since = new Date(windowEnd);
@@ -153,7 +237,7 @@ Deno.serve(async (req) => {
   let runId: string;
   try {
     const [run] = await dbInsert<{ id: string }>(cfg, "hotspot_runs", {
-      trigger: body.trigger ?? "manual",
+      trigger,
       window_start: since.toISOString(),
       window_end: windowEnd.toISOString(),
       metric: analysis.metric,
@@ -284,7 +368,7 @@ Deno.serve(async (req) => {
   }
 
   return json({
-    trigger: body.trigger ?? "manual",
+    trigger,
     run_id: runId,
     metric: analysis.metric,
     window_days: windowDays,
