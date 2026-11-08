@@ -85,7 +85,7 @@ async function deploy(slug) {
   throw new Error(`update ${slug} failed: ${update.status} ${await update.text()}`);
 }
 
-const slugs = ["chatbot", "detect-hotspots", "fhir-export"];
+const slugs = ["chatbot", "detect-hotspots", "staff-password"];
 for (const slug of slugs) {
   await deploy(slug);
 }

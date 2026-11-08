@@ -12,8 +12,6 @@ import {
   MapPinned,
   Menu,
   Settings,
-  ScrollText,
-  Share2,
   Ticket,
   Users,
   Upload,
@@ -33,6 +31,7 @@ import { preloadRoute } from "../lib/lazyPages";
 import { ROLE_LABELS, type AppRole } from "../lib/supabase";
 import { supabase } from "../lib/supabase";
 import { LazyFallback, LoadingSpinner } from "./LazyFallback";
+import { ForcePasswordChange } from "./ForcePasswordChange";
 
 interface NavItem {
   to: string;
@@ -61,6 +60,7 @@ const PLAIN_GROUP_LABELS: Record<string, string> = {
 const PLAIN_LABELS: Record<string, string> = {
   "/app": "Home",
   "/app/invites": "Invite Staff",
+  "/app/users": "Staff Accounts",
   "/app/cases": "Patients & Cases",
   "/app/map": "Case Map",
   "/app/hotspots": "Hotspot Areas",
@@ -74,7 +74,7 @@ const PLAIN_LABELS: Record<string, string> = {
 //   system_admin    : central admin dashboard, user management, settings.
 //   tb_coordinator  : city-wide surveillance — Map, Hotspots, Alerts, Cases,
 //                     Analytics, DOTS Centers admin, Bulk Import, Chatbot,
-//                     Settings, Users.
+//                     Settings, Users (read-only + password resets).
 //   barangay_admin  : Active Case Finding (encode + trends), GIS Map, Alerts.
 //   health_worker   : Cases + Alerts + GIS Heatmap + AI Analytics.
 //   patient         : no staff role yet (fresh sign-up) — no app access.
@@ -159,24 +159,12 @@ const NAV: NavItem[] = [
     group: "Admin",
   },
   {
-    to: "/app/interoperability",
-    label: "FHIR Interoperability",
-    icon: Share2,
-    roles: ["system_admin"],
-    group: "Admin",
-  },
-  {
-    to: "/app/audit-log",
-    label: "Audit Log",
-    icon: ScrollText,
-    roles: ["system_admin"],
-    group: "Admin",
-  },
-  {
     to: "/app/users",
     label: "Users",
     icon: Users,
-    roles: ["system_admin"],
+    // Coordinators see the directory read-only, plus password resets for
+    // their field staff. Role and area changes stay system_admin only.
+    roles: ["system_admin", "tb_coordinator"],
     group: "Admin",
   },
 ];
@@ -296,6 +284,12 @@ export function AppLayout() {
 
   if (!profile) {
     return <Navigate to="/login" replace />;
+  }
+
+  // On a temporary password issued from /app/users: nothing else until the
+  // user replaces it.
+  if (profile.must_change_password) {
+    return <ForcePasswordChange />;
   }
 
   // Every sign-up starts as `patient` until an invite code promotes it to a

@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   AlertCircle,
+  Check,
+  Copy,
+  KeyRound,
   Pencil,
   Save,
   SlidersHorizontal,
@@ -13,12 +16,15 @@ import {
   Badge,
   Button,
   Card,
+  ConfirmDialog,
   Input,
   ListSkeleton,
+  Modal,
   PageHeader,
   Select,
 } from "../../components/ui";
 import { supabase, ROLE_LABELS, type AppRole } from "../../lib/supabase";
+import { readFunctionError } from "../../lib/functionError";
 import { useAuth } from "../../hooks/useAuth";
 import { useDebounce } from "../../hooks/useDebounce";
 import { formatDate } from "../../lib/utils";
@@ -62,6 +68,16 @@ const ROLE_AVATAR: Record<AppRole, string> = {
 const MICRO_LABEL =
   "font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500";
 
+// Mirrors canReset() in supabase/functions/staff-password — the function is
+// the real check; this only decides which rows show the button.
+const COORDINATOR_CAN_RESET: AppRole[] = ["health_worker", "barangay_admin"];
+
+interface IssuedPassword {
+  name: string;
+  email: string;
+  password: string;
+}
+
 export function Users() {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
@@ -76,6 +92,45 @@ export function Users() {
   const [error, setError] = useState<string | null>(null);
 
   const canEdit = profile?.role === "system_admin";
+  const isCoordinator = profile?.role === "tb_coordinator";
+  const showActions = canEdit || isCoordinator;
+  const canResetRow = (r: Row) =>
+    r.id !== profile?.id &&
+    (canEdit || (isCoordinator && COORDINATOR_CAN_RESET.includes(r.role)));
+
+  const [resetTarget, setResetTarget] = useState<Row | null>(null);
+  const [issued, setIssued] = useState<IssuedPassword | null>(null);
+  const [copied, setCopied] = useState(false);
+  const closeIssued = useCallback(() => setIssued(null), []);
+
+  const resetMutation = useMutation({
+    mutationFn: async (row: Row) => {
+      const { data, error } = await supabase.functions.invoke("staff-password", {
+        body: { action: "reset", user_id: row.id },
+      });
+      if (error) throw new Error(await readFunctionError(error));
+      return { row, password: (data as { temporary_password: string }).temporary_password };
+    },
+    onSuccess: ({ row, password }) => {
+      setResetTarget(null);
+      setCopied(false);
+      setIssued({ name: row.full_name || row.email, email: row.email, password });
+    },
+    onError: (err: Error) => {
+      setResetTarget(null);
+      toast.error(err.message || "Could not reset the password");
+    },
+  });
+
+  async function copyIssued() {
+    if (!issued) return;
+    try {
+      await navigator.clipboard.writeText(issued.password);
+      setCopied(true);
+    } catch {
+      toast.error("Copy failed. Select the password and copy it by hand.");
+    }
+  }
   // Only a health centre account reads by facility (see areaScope.ts). The
   // column stays visible for everyone so the directory tells the whole story,
   // but it is only editable — and only meaningful — on that one role.
@@ -183,8 +238,10 @@ export function Users() {
         title="Users"
         subtitle={
           canEdit
-            ? "System users, their roles, and what each one can see: a barangay covers its residents, a health centre also covers its own facility's register. Click the pencil to reassign."
-            : "System users, their roles, and what each one can see: a barangay covers its residents, a health centre also covers its own facility's register. Contact the System Administrator to update a user's role, area, or facility."
+            ? "System users, their roles, and what each one can see: a barangay covers its residents, a health centre also covers its own facility's register. Click the pencil to reassign, or Reset password if someone is locked out."
+            : isCoordinator
+              ? "Staff accounts and their areas. If a health worker or barangay admin forgot their password, click Reset password and give them the temporary one. Contact the System Administrator to change a role, area, or facility."
+              : "System users, their roles, and what each one can see: a barangay covers its residents, a health centre also covers its own facility's register. Contact the System Administrator to update a user's role, area, or facility."
         }
       />
 
@@ -293,7 +350,11 @@ export function Users() {
                   <th className="px-3 py-2.5 text-left font-semibold">
                     Joined
                   </th>
-                  {canEdit && <th className="py-2.5 pl-3 pr-5"></th>}
+                  {showActions && (
+                    <th className="py-2.5 pl-3 pr-5">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
@@ -410,9 +471,19 @@ export function Users() {
                       <td className="whitespace-nowrap px-3 py-3 tabular-nums text-slate-500">
                         {formatDate(r.created_at)}
                       </td>
-                      {canEdit && (
-                        <td className="py-3 pl-3 pr-5 text-right">
-                          {isEditing ? (
+                      {showActions && (
+                        <td className="whitespace-nowrap py-3 pl-3 pr-5 text-right">
+                          {!canEdit ? (
+                            canResetRow(r) && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setResetTarget(r)}
+                              >
+                                <KeyRound className="h-3.5 w-3.5" /> Reset password
+                              </Button>
+                            )
+                          ) : isEditing ? (
                             <div className="flex justify-end gap-2">
                               <Button
                                 size="sm"
@@ -436,13 +507,24 @@ export function Users() {
                               </Button>
                             </div>
                           ) : (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => startEdit(r)}
-                            >
-                              <Pencil className="h-3.5 w-3.5" /> Edit
-                            </Button>
+                            <div className="flex justify-end gap-1">
+                              {canResetRow(r) && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setResetTarget(r)}
+                                >
+                                  <KeyRound className="h-3.5 w-3.5" /> Reset password
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => startEdit(r)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" /> Edit
+                              </Button>
+                            </div>
                           )}
                         </td>
                       )}
@@ -452,7 +534,7 @@ export function Users() {
                 {filtered.length === 0 && (
                   <tr>
                     <td
-                      colSpan={canEdit ? 7 : 6}
+                      colSpan={showActions ? 7 : 6}
                       className="px-4 py-10 text-center text-sm text-slate-500"
                     >
                       No users match your filters.
@@ -464,6 +546,66 @@ export function Users() {
           </div>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={resetTarget !== null}
+        title="Reset this password?"
+        description={
+          resetTarget && (
+            <>
+              <strong>{resetTarget.full_name || resetTarget.email}</strong>&apos;s
+              current password will stop working right away. You&apos;ll get a
+              temporary one to give them, and they must choose their own the
+              next time they sign in.
+            </>
+          )
+        }
+        confirmLabel="Reset password"
+        loading={resetMutation.isPending}
+        onConfirm={() => resetTarget && resetMutation.mutate(resetTarget)}
+        onCancel={() => setResetTarget(null)}
+      />
+
+      <Modal
+        open={issued !== null}
+        title="Temporary password"
+        icon={<KeyRound className="h-5 w-5" />}
+        description={issued ? `For ${issued.name}` : undefined}
+        onClose={closeIssued}
+        footer={
+          <Button variant="primary" size="sm" onClick={closeIssued}>
+            Done
+          </Button>
+        }
+      >
+        {issued && (
+          <div className="space-y-4 px-5 py-4 text-sm text-slate-600">
+            <div className="flex items-center gap-2">
+              <code className="flex-1 select-all rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-center font-mono text-lg font-semibold tracking-wide text-slate-900">
+                {issued.password}
+              </code>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void copyIssued()}
+                aria-label="Copy temporary password"
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </div>
+            <p>
+              Give this to {issued.name} in person or by text. They sign in
+              with <span className="font-medium text-slate-800">{issued.email}</span>{" "}
+              and this password, then choose a new one.
+            </p>
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
+              It&apos;s shown only once. If you close this before passing it on,
+              reset the password again.
+            </p>
+          </div>
+        )}
+      </Modal>
     </>
   );
 }

@@ -19,6 +19,11 @@ export interface Profile {
    */
   facility_id: string | null;
   phone: string | null;
+  /**
+   * An admin or coordinator issued a temporary password. Until the user picks
+   * their own, the app shows only the change-password screen.
+   */
+  must_change_password: boolean;
 }
 
 export interface AuthContextValue {

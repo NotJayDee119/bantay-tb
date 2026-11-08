@@ -6,11 +6,22 @@ export interface HotspotSettings {
   window_days: number;
   /** Random permutations for the Moran's I pseudo p-value. */
   permutations: number;
+  /**
+   * Count the synthetic demo rows (cases.source = 'synthetic_demo') in
+   * detection. Off by default: the statistics then run on real recorded cases
+   * only, so the Hotspots page reports the same Moran's I and Gi* as the
+   * manuscript. Turn on to demo citywide hotspots.
+   */
+  include_demo: boolean;
 }
+
+/** cases.source value of the synthetic demo rows. */
+export const DEMO_SOURCE = "synthetic_demo";
 
 export const HOTSPOT_DEFAULTS: HotspotSettings = {
   window_days: 365,
   permutations: 999,
+  include_demo: false,
 };
 
 const RANGES = {
@@ -34,6 +45,7 @@ export function clampHotspotSettings(s: Partial<HotspotSettings>): HotspotSettin
         RANGES.permutations.max
       )
     ),
+    include_demo: s.include_demo === true,
   };
 }
 

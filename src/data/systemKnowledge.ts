@@ -22,19 +22,19 @@ export const SYSTEM_KNOWLEDGE: SystemDoc[] = [
     slug: "about-en",
     locale: "en",
     title: "What is BANTAY-TB?",
-    body: "BANTAY-TB is Davao City's tuberculosis surveillance and care platform. It tracks TB cases at the barangay level, maps hotspots (areas with a high concentration of TB cases), helps health workers follow patients through their treatment, and can share case data securely with other health systems using the HL7 FHIR standard. The public website and this assistant are available in English, Filipino, and Cebuano.",
+    body: "BANTAY-TB is Davao City's tuberculosis surveillance and care platform. It tracks TB cases at the barangay level, maps hotspots (areas with a high concentration of TB cases), and helps health workers follow patients through their treatment. The public website and this assistant are available in English, Filipino, and Cebuano.",
   },
   {
     slug: "about-tl",
     locale: "tl",
     title: "Ano ang BANTAY-TB?",
-    body: "Ang BANTAY-TB ay plataporma ng Davao City para sa pagbabantay at pangangalaga sa tuberkulosis. Sinusubaybayan nito ang mga kaso ng TB sa antas ng barangay, ipinapakita sa mapa ang mga hotspot (mga lugar na maraming kaso ng TB), tinutulungan ang mga health worker na subaybayan ang paggamot ng pasyente, at ligtas na nakapagbabahagi ng datos sa ibang health system gamit ang HL7 FHIR. Ang website at ang assistant na ito ay nasa English, Filipino, at Cebuano.",
+    body: "Ang BANTAY-TB ay plataporma ng Davao City para sa pagbabantay at pangangalaga sa tuberkulosis. Sinusubaybayan nito ang mga kaso ng TB sa antas ng barangay, ipinapakita sa mapa ang mga hotspot (mga lugar na maraming kaso ng TB), at tinutulungan ang mga health worker na subaybayan ang paggamot ng pasyente. Ang website at ang assistant na ito ay nasa English, Filipino, at Cebuano.",
   },
   {
     slug: "about-ceb",
     locale: "ceb",
     title: "Unsa ang BANTAY-TB?",
-    body: "Ang BANTAY-TB mao ang plataporma sa Davao City alang sa pagbantay ug pag-atiman sa tuberkulosis. Gisubay niini ang mga kaso sa TB matag barangay, gipakita sa mapa ang mga hotspot (mga lugar nga daghang kaso sa TB), gitabangan ang mga health worker sa pagsubay sa pagtambal sa pasyente, ug luwas nga makapaambit og datos sa ubang health system gamit ang HL7 FHIR. Ang website ug kini nga assistant anaa sa English, Filipino, ug Cebuano.",
+    body: "Ang BANTAY-TB mao ang plataporma sa Davao City alang sa pagbantay ug pag-atiman sa tuberkulosis. Gisubay niini ang mga kaso sa TB matag barangay, gipakita sa mapa ang mga hotspot (mga lugar nga daghang kaso sa TB), ug gitabangan ang mga health worker sa pagsubay sa pagtambal sa pasyente. Ang website ug kini nga assistant anaa sa English, Filipino, ug Cebuano.",
   },
 
   // ---------- Public features ----------

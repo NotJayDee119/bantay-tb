@@ -6,6 +6,7 @@
 //
 //   1. Counts cases per barangay of RESIDENCE over the configured window
 //      (all 182 barangays; zero is an observation, not missing data).
+//      Synthetic demo rows are left out unless include_demo is on.
 //   2. Uses cases per 100,000 when every barangay has a population, otherwise
 //      the case count, and records which.
 //   3. Global Moran's I (row-standardised queen weights, 999 permutations).
@@ -55,9 +56,20 @@ const STAFF_ROLES = new Set([
 interface GiSettings {
   window_days: number;
   permutations: number;
+  /** Count the synthetic demo rows (source = 'synthetic_demo'). */
+  include_demo: boolean;
 }
 
-const SETTINGS_DEFAULTS: GiSettings = { window_days: 365, permutations: 999 };
+const SETTINGS_DEFAULTS: GiSettings = {
+  window_days: 365,
+  permutations: 999,
+  include_demo: false,
+};
+
+// cases.source of the synthetic demo rows — same value as DEMO_SOURCE in
+// src/lib/hotspotSettings.ts. Left out unless a system admin turns
+// include_demo on, so the official statistics run on real cases only.
+const DEMO_SOURCE = "synthetic_demo";
 
 // Same bounds as src/lib/hotspotSettings.ts (RANGES). This function deploys
 // with --no-remote and cannot import that file, so change the two together.
@@ -170,6 +182,8 @@ Deno.serve(async (req) => {
     RANGES.permutations,
     SETTINGS_DEFAULTS.permutations
   );
+  const includeDemo = stored.include_demo === true;
+  const sourceFilter = includeDemo ? "" : `&source=neq.${DEMO_SOURCE}`;
 
   const windowEnd = new Date();
   const since = new Date(windowEnd);
@@ -193,7 +207,7 @@ Deno.serve(async (req) => {
       dbSelectAll<CaseRow>(
         cfg,
         "cases",
-        `select=id,barangay_psgc&disease=eq.tb&reported_at=gte.${since.toISOString()}&order=id`
+        `select=id,barangay_psgc&disease=eq.tb&reported_at=gte.${since.toISOString()}${sourceFilter}&order=id`
       ),
     ]);
   } catch (err) {
@@ -372,6 +386,7 @@ Deno.serve(async (req) => {
     run_id: runId,
     metric: analysis.metric,
     window_days: windowDays,
+    include_demo: includeDemo,
     cases_considered: cases.length,
     moran: analysis.moran,
     hotspots: hot.map((u) => ({ psgc: u.psgc, z: u.giZ, p: u.giP, class: u.giClass })),

@@ -61,7 +61,8 @@ export function SettingsPage() {
 
   const dirty =
     draft.window_days !== settings.window_days ||
-    draft.permutations !== settings.permutations;
+    draft.permutations !== settings.permutations ||
+    draft.include_demo !== settings.include_demo;
 
   return (
     <>
@@ -130,6 +131,33 @@ export function SettingsPage() {
                 }
               />
             </Field>
+
+            <div className="block">
+              <span className="mb-1 flex flex-wrap items-baseline gap-x-2">
+                <span className="font-mono text-xs font-semibold text-brand-700">
+                  include_demo
+                </span>
+                <span className="text-sm font-medium text-slate-800">
+                  Count demo data
+                </span>
+              </span>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600"
+                  checked={draft.include_demo}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, include_demo: e.target.checked }))
+                  }
+                />
+                Include the synthetic demo cases in hotspot detection
+              </label>
+              <span className="mt-1 block text-xs text-slate-500">
+                Off: Moran&rsquo;s I and Gi* use real recorded cases only (the
+                figures reported in the manuscript). On: the demo rows are
+                counted too, which fills every barangay for demonstrations.
+              </span>
+            </div>
           </div>
 
           <div className="mt-6 flex items-center gap-2 border-t border-slate-100 pt-4">
@@ -149,7 +177,8 @@ export function SettingsPage() {
 
         <p className="border-t border-slate-100 bg-slate-50/40 px-5 py-3 font-mono text-[10px] uppercase tracking-wider text-slate-400">
           Defaults: window_days={HOTSPOT_DEFAULTS.window_days} · permutations=
-          {HOTSPOT_DEFAULTS.permutations} — applied on the next detection run
+          {HOTSPOT_DEFAULTS.permutations} · include_demo=
+          {String(HOTSPOT_DEFAULTS.include_demo)} — applied on the next detection run
         </p>
       </Card>
     </>

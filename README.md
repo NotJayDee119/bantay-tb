@@ -106,7 +106,7 @@ Staff can only register with an **invite code**, so the first admin has to be cr
 
 ## ☁️ Edge Functions
 
-The chatbot, hotspot detection, and FHIR export run as Supabase Edge Functions in `supabase/functions/`.
+The chatbot and hotspot detection run as Supabase Edge Functions in `supabase/functions/`.
 
 Deploy them with:
 

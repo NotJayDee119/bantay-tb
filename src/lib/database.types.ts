@@ -79,6 +79,10 @@ export interface Database {
           facility_id: string | null;
           phone: string | null;
           created_at: string;
+          /** Set when a temporary password was issued; cleared by the staff-password function. */
+          must_change_password: boolean;
+          password_reset_at: string | null;
+          password_reset_by: string | null;
         };
         Insert: Partial<Database["public"]["Tables"]["profiles"]["Row"]> & {
           id: string;
@@ -375,89 +379,6 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["invite_codes"]["Row"]>;
         Relationships: [];
       };
-      /**
-       * Allow-list of external interoperability targets. `base_url` is
-       * constrained to HTTPS by a check constraint, so "transmits securely"
-       * is a database invariant rather than application behaviour.
-       *
-       * `credential_cipher` is deliberately absent from this type: no API
-       * role is granted SELECT on that column, so selecting it fails. The
-       * credential is set through `interop_set_credential` and read only by
-       * the dispatch function inside the database.
-       */
-      interop_endpoints: {
-        Row: {
-          id: string;
-          name: string;
-          kind: "fhir_rest" | "mirth_channel";
-          base_url: string;
-          resource_path: string;
-          auth_scheme: "none" | "bearer" | "basic" | "apikey";
-          /** Last four characters of the stored secret, for confirmation only. */
-          credential_hint: string | null;
-          credential_header: string | null;
-          active: boolean;
-          notes: string | null;
-          created_by: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: Partial<Database["public"]["Tables"]["interop_endpoints"]["Row"]> & {
-          name: string;
-          base_url: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["interop_endpoints"]["Row"]>;
-        Relationships: [];
-      };
-      /**
-       * Append-only, hash-chained audit trail of every FHIR serialization,
-       * disclosure and transmission. There is no Insert or Update type on
-       * purpose: writes arrive only through the definer function
-       * `interop_log_event`, and UPDATE/DELETE/TRUNCATE raise at the database.
-       *
-       * `payload_cipher` is absent for the same reason as above — the
-       * ciphertext never leaves the database; `interop_payload` is the one
-       * read path, and it logs the read.
-       */
-      interop_audit_log: {
-        Row: {
-          id: string;
-          /** Chain position. Also the display number in the UI ("#14"). */
-          seq: number;
-          event:
-            | "payload_previewed"
-            | "transmit_success"
-            | "transmit_failure"
-            | "payload_viewed"
-            | "access_denied"
-            | "endpoint_credential_set";
-          case_id: string | null;
-          /** TB case code snapshotted at write time. Never a patient name. */
-          case_label: string | null;
-          endpoint_id: string | null;
-          endpoint_url: string | null;
-          actor_id: string | null;
-          actor_email: string | null;
-          actor_role: AppRoleName | null;
-          disclosure_scope: "pseudonymous" | "identified" | null;
-          fhir_bundle_id: string | null;
-          resource_count: number | null;
-          payload_bytes: number | null;
-          /** SHA-256 of the exact bytes transmitted. Carries no PHI. */
-          payload_sha256: string | null;
-          http_status: number | null;
-          response_summary: string | null;
-          latency_ms: number | null;
-          outcome: "ok" | "denied" | "error";
-          error_detail: string | null;
-          prev_hash: string | null;
-          record_hash: string;
-          created_at: string;
-        };
-        Insert: never;
-        Update: never;
-        Relationships: [];
-      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -501,38 +422,6 @@ export interface Database {
       enroll_patient: {
         Args: { p_case_id: string };
         Returns: { ok: boolean; reason: string }[];
-      };
-      /**
-       * Encrypts and stores an endpoint's transport credential. Coordinator
-       * and system admin only; the rotation itself is audited.
-       */
-      interop_set_credential: {
-        Args: { p_endpoint_id: string; p_secret: string };
-        Returns: boolean;
-      };
-      /**
-       * Decrypts the stored FHIR payload of one audit row. Returns null when
-       * the row kept no copy (previews do not). Every successful read appends
-       * a `payload_viewed` row of its own.
-       */
-      interop_payload: {
-        Args: { p_audit_id: string };
-        Returns: string | null;
-      };
-      /**
-       * Recomputes the audit log's hash chain. `ok: false` on any row means
-       * that row was edited, or a row before it was removed or reordered.
-       */
-      verify_interop_audit: {
-        Args: Record<string, never>;
-        Returns: {
-          audit_seq: number;
-          audit_id: string;
-          audit_event: string;
-          logged_at: string;
-          ok: boolean;
-          problem: string | null;
-        }[];
       };
     };
     Enums: Record<string, never>;

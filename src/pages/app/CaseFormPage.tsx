@@ -12,7 +12,7 @@ import {
   Textarea,
 } from "../../components/ui";
 import { supabase } from "../../lib/supabase";
-import { geocodeInDavao, type GeocodeHit } from "../../lib/geocode";
+import { geocodeNearBarangay } from "../../lib/geocode";
 import {
   barangayLockFor,
   checkCaseFiling,
@@ -306,10 +306,6 @@ export function CaseFormPage() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [facilities, setFacilities] = useState<FacilityOption[]>([]);
-  // Geocoded household position for the street address. Cleared whenever the
-  // address or barangay changes so a stale pin can't outlive its address.
-  const [located, setLocated] = useState<GeocodeHit | null>(null);
-  const [locating, setLocating] = useState(false);
   // A health centre account files against its own clinic and nothing else —
   // that is what lets it register a walk-in living in another barangay (the
   // "cases staff insert" policy keys on exactly this).
@@ -462,27 +458,6 @@ export function CaseFormPage() {
     }));
   }
 
-  function geocodeQuery(bgyName: string) {
-    return `${form.address.trim()}, ${bgyName}, Davao City, Philippines`;
-  }
-
-  async function locateAddress() {
-    const bgy = barangays.find((b) => b.psgc === Number(form.barangay_psgc));
-    if (!form.address.trim() || !bgy) {
-      toast.error("Enter a street address and select the barangay first.");
-      return;
-    }
-    setLocating(true);
-    const hit = await geocodeInDavao(geocodeQuery(bgy.name));
-    setLocating(false);
-    setLocated(hit);
-    if (!hit) {
-      toast.error(
-        "Couldn't find that address on the map — the case will use the barangay-level position."
-      );
-    }
-  }
-
   /** (16) as stored: blank cells dropped, null when nothing was counted. */
   function contactsPayload() {
     const out: Record<string, Record<string, number>> = {};
@@ -532,13 +507,11 @@ export function CaseFormPage() {
       setSubmitting(false);
       return;
     }
-    // Resolve the household position: an already-verified pin wins; otherwise
-    // try one silent geocode so encoders who skip "Find on map" still get a
-    // street-level point when the address resolves.
-    let residence = located;
-    if (!residence && form.address.trim()) {
-      residence = await geocodeInDavao(geocodeQuery(bgy.name));
-    }
+    // Pin the household from the street address when it resolves near the
+    // barangay; otherwise the case keeps the barangay-level position.
+    const residence = form.address.trim()
+      ? await geocodeNearBarangay(form.address, bgy)
+      : null;
     const angle = Math.random() * 2 * Math.PI;
     const r = 0.0008 + Math.random() * 0.002;
     const tbOnly = <T,>(v: T) => (isTb ? v : null);
@@ -931,32 +904,18 @@ export function CaseFormPage() {
               </div>
               <div className="grid gap-3 lg:grid-cols-2">
                 <div className="space-y-1.5">
-                  <div className="flex gap-2">
-                    <Input
-                      id="address"
-                      aria-label="House no. and street"
-                      className="flex-1"
-                      value={form.address}
-                      placeholder="House no., street, purok — 123 Mabini St., Purok 5"
-                      onChange={(e) => {
-                        set("address", e.target.value);
-                        setLocated(null);
-                      }}
-                      aria-describedby="address_hint"
-                    />
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={locating || !form.address.trim()}
-                      onClick={locateAddress}
-                    >
-                      {locating ? "Locating…" : "Find on map"}
-                    </Button>
-                  </div>
+                  <Input
+                    id="address"
+                    aria-label="House no. and street"
+                    value={form.address}
+                    placeholder="House no., street, purok — 123 Mabini St., Purok 5"
+                    onChange={(e) => set("address", e.target.value)}
+                    aria-describedby="address_hint"
+                  />
                   <p id="address_hint" className="text-xs text-slate-500">
-                    {located
-                      ? `Pinned: ${located.label}`
-                      : "Optional but recommended — the GIS map traces the case to the household for contact tracing. Never shown publicly."}
+                    Optional but recommended — on save, the address is pinned on
+                    the GIS map for contact tracing (the barangay position is
+                    used if it can't be found). Never shown publicly.
                   </p>
                 </div>
                 <div className="space-y-1.5">
@@ -983,10 +942,7 @@ export function CaseFormPage() {
                       aria-label="Barangay of residence"
                       required
                       value={form.barangay_psgc}
-                      onChange={(e) => {
-                        set("barangay_psgc", e.target.value);
-                        setLocated(null);
-                      }}
+                      onChange={(e) => set("barangay_psgc", e.target.value)}
                       aria-invalid={barangayRejected || undefined}
                       className={
                         barangayRejected

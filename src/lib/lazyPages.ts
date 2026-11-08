@@ -26,8 +26,6 @@ export const Analytics = lazyWithPreload(() => import("../pages/app/Analytics").
 export const Users = lazyWithPreload(() => import("../pages/app/Users").then(m => ({ default: m.Users })));
 export const InviteCodes = lazyWithPreload(() => import("../pages/app/InviteCodes").then(m => ({ default: m.InviteCodes })));
 export const AdminDashboard = lazyWithPreload(() => import("../pages/app/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
-export const Interoperability = lazyWithPreload(() => import("../pages/app/Interoperability").then(m => ({ default: m.Interoperability })));
-export const AuditLog = lazyWithPreload(() => import("../pages/app/AuditLog").then(m => ({ default: m.AuditLog })));
 export const AppNotFound = lazyWithPreload(() => import("../pages/app/AppNotFound").then(m => ({ default: m.AppNotFound })));
 
 /**
@@ -60,8 +58,6 @@ const PRELOAD_BY_PATH: Record<string, () => Promise<unknown>> = {
   "/app/settings": SettingsPage.preload,
   "/app/users": Users.preload,
   "/app/invites": InviteCodes.preload,
-  "/app/interoperability": Interoperability.preload,
-  "/app/audit-log": AuditLog.preload,
 };
 
 /**

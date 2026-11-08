@@ -19,11 +19,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadedUserRef = useRef<string | null>(null);
 
   async function loadProfile(userId: string) {
-    const { data, error } = await supabase
+    const BASE = "id, email, full_name, role, barangay_psgc, facility_id, phone";
+    let { data, error } = await supabase
       .from("profiles")
-      .select("id, email, full_name, role, barangay_psgc, facility_id, phone")
+      .select(`${BASE}, must_change_password`)
       .eq("id", userId)
       .maybeSingle();
+    // must_change_password comes from 20261108000000_staff_password_reset.sql.
+    // If the site is deployed ahead of that migration, Postgres answers 42703
+    // (undefined column) and every staff member would be locked out. Fall back
+    // to the base columns; the forced-change screen simply never triggers.
+    if (error?.code === "42703") {
+      ({ data, error } = await supabase
+        .from("profiles")
+        .select(BASE)
+        .eq("id", userId)
+        .maybeSingle());
+      if (data) data = { ...data, must_change_password: false };
+    }
     if (error) {
       console.warn("Failed to load profile:", error.message);
       loadedUserRef.current = null;

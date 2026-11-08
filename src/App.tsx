@@ -31,8 +31,6 @@ import {
   Users,
   InviteCodes,
   AdminDashboard,
-  Interoperability,
-  AuditLog,
   AppNotFound,
 } from "./lib/lazyPages";
 
@@ -222,7 +220,7 @@ export default function App() {
         <Route
           path="users"
           element={
-            <RequireRole roles={["system_admin"]}>
+            <RequireRole roles={["system_admin", "tb_coordinator"]}>
               <Users />
             </RequireRole>
           }
@@ -232,27 +230,6 @@ export default function App() {
           element={
             <RequireRole roles={["tb_coordinator", "system_admin"]}>
               <InviteCodes />
-            </RequireRole>
-          }
-        />
-        <Route
-          /* System admin only. This guard hides the page; the Edge Function
-             and the database refuse every other role independently, which is
-             the gate that actually counts. */
-          path="interoperability"
-          element={
-            <RequireRole roles={["system_admin"]}>
-              <Interoperability />
-            </RequireRole>
-          }
-        />
-        <Route
-          /* System admin only, enforced again by the database (RLS +
-             is_super_admin), so this guard is not the gate. */
-          path="audit-log"
-          element={
-            <RequireRole roles={["system_admin"]}>
-              <AuditLog />
             </RequireRole>
           }
         />

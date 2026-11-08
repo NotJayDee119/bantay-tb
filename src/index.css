@@ -888,23 +888,3 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
-
-/* Interoperability page: indeterminate "sending" bar. Slides a third-width
-   segment across the track so the user sees activity without the bar
-   claiming a percentage the server never reports. */
-@keyframes interop-slide {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(300%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-\[interop-slide_1\.2s_ease-in-out_infinite\] {
-    animation: none;
-    width: 100%;
-    opacity: 0.5;
-  }
-}

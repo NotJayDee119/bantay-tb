@@ -23,7 +23,7 @@ import { Activity, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, X } from
 import { Spinner } from "../../components/ui";
 import { OpenFreeMapLayer } from "../../components/OpenFreeMapLayer";
 import { supabase } from "../../lib/supabase";
-import { loadHotspotSettings } from "../../lib/hotspotSettings";
+import { DEMO_SOURCE, loadHotspotSettings } from "../../lib/hotspotSettings";
 import type { GiClass } from "../../lib/spatialStats";
 import {
   giDetail,
@@ -191,6 +191,8 @@ export function Hotspots() {
   // How many days of recent cases the detection considers (from Settings).
   // Shown to users so it's clear older cases aren't counted.
   const [windowDays, setWindowDays] = useState(365);
+  // Whether detection counts the synthetic demo rows (Settings, off by default).
+  const [includeDemo, setIncludeDemo] = useState(false);
   const [run, setRun] = useState<HotspotRun | null>(null);
   const [results, setResults] = useState<Map<number, GiResultRow>>(new Map());
   const [geo, setGeo] = useState<BarangayGeo | null>(null);
@@ -319,7 +321,10 @@ export function Hotspots() {
   useEffect(() => {
     disposed.current = false;
     load();
-    loadHotspotSettings().then((s) => setWindowDays(s.window_days));
+    loadHotspotSettings().then((s) => {
+      setWindowDays(s.window_days);
+      setIncludeDemo(s.include_demo);
+    });
 
     // On open: refresh anything gone stale. The detection window slides, so a
     // result can go out of date without a single new case being recorded.
@@ -650,7 +655,7 @@ export function Hotspots() {
           where the patients live.
         </p>
 
-        {run && canRecompute && <MoranCard run={run} />}
+        {run && canRecompute && <MoranCard run={run} includeDemo={includeDemo} />}
 
         {/* Live status. This panel used to claim detection ran "on a schedule",
             which was not true — there is no cron job. Now it says what is
@@ -843,6 +848,7 @@ export function Hotspots() {
         <BarangayCasesPanel
           psgc={selected}
           windowDays={windowDays}
+          includeDemo={includeDemo}
           ownPsgc={scope.psgc}
           scoped={scope.scoped}
           onClose={() => setSelected(null)}
@@ -899,7 +905,13 @@ export function Hotspots() {
  * Gi*, and a Gi* hotspot reads differently when the city as a whole shows no
  * significant clustering.
  */
-function MoranCard({ run }: { run: HotspotRun }) {
+function MoranCard({
+  run,
+  includeDemo,
+}: {
+  run: HotspotRun;
+  includeDemo: boolean;
+}) {
   const significant = run.moran_p_sim < 0.05;
   const verdict =
     significant && run.moran_i > run.moran_expected
@@ -958,6 +970,7 @@ function MoranCard({ run }: { run: HotspotRun }) {
           {run.permutations} permutations · {run.n_units} barangays ·{" "}
           {run.cases_considered.toLocaleString()} cases
           {run.metric === "case_count" ? " · case counts, not rates per 100,000" : ""}
+          {includeDemo ? " · includes demo data" : " · real cases only (demo data excluded)"}
         </p>
       </details>
     </div>
@@ -992,12 +1005,14 @@ const PANEL_LIMIT = 50;
 function BarangayCasesPanel({
   psgc,
   windowDays,
+  includeDemo,
   ownPsgc,
   scoped,
   onClose,
 }: {
   psgc: number;
   windowDays: number;
+  includeDemo: boolean;
   ownPsgc: number | null;
   scoped: boolean;
   onClose: () => void;
@@ -1010,7 +1025,7 @@ function BarangayCasesPanel({
     setRows(null);
     const since = new Date();
     since.setDate(since.getDate() - windowDays);
-    supabase
+    let query = supabase
       .from("cases")
       .select(
         "id, reported_at, diagnosis_status, treatment_outcome, age, sex, given_name, family_name, patient_code",
@@ -1018,7 +1033,10 @@ function BarangayCasesPanel({
       )
       .eq("barangay_psgc", psgc)
       .eq("disease", "tb")
-      .gte("reported_at", since.toISOString())
+      .gte("reported_at", since.toISOString());
+    // Same rows detection counted: demo rows only when detection used them.
+    if (!includeDemo) query = query.neq("source", DEMO_SOURCE);
+    query
       .order("reported_at", { ascending: false })
       .limit(PANEL_LIMIT)
       .then(({ data, count, error }) => {
@@ -1030,7 +1048,7 @@ function BarangayCasesPanel({
     return () => {
       cancelled = true;
     };
-  }, [psgc, windowDays]);
+  }, [psgc, windowDays, includeDemo]);
 
   const name = barangayName(psgc);
   const outsideArea = scoped && ownPsgc !== psgc;

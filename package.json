@@ -11,8 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "seed": "tsx scripts/seed-supabase.ts",
-    "kb:ingest": "tsx scripts/ingest-kb.ts",
-    "fhir:sample": "tsx scripts/sample-fhir-payload.ts"
+    "kb:ingest": "tsx scripts/ingest-kb.ts"
   },
   "dependencies": {
     "@maplibre/maplibre-gl-leaflet": "^0.1.3",
