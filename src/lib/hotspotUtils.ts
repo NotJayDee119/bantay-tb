@@ -29,6 +29,34 @@ export interface HotspotCaseRow {
   /** Geocoded household coordinates — real, unlike the jittered pair. */
   residence_lat?: number | null;
   residence_lon?: number | null;
+  /** Case details shown when a case dot is clicked on the map. */
+  id?: string | number;
+  age?: number | null;
+  sex?: string | null;
+  tb_site?: string | null;
+  diagnosis_status?: string | null;
+  lab_results?: Record<string, { result?: string | null; date?: string | null } | null> | null;
+}
+
+/**
+ * Drug-resistance axis of the ITIS classification.
+ *
+ * The drug-susceptibility answer recorded on the case form wins. Otherwise the
+ * Xpert MTB/RIF result from the register's column (21) decides: "RR"
+ * (rifampicin resistance detected) is drug-resistant, "T" (MTB detected,
+ * rifampicin resistance not detected) is drug-susceptible. Anything else —
+ * TI, N, no test — has no DST result.
+ */
+export function drugAxis(c: {
+  tb_classification?: string | null;
+  lab_results?: Record<string, { result?: string | null } | null> | null;
+}): "drug_sensitive" | "drug_resistant" | null {
+  if (c.tb_classification === "drug_resistant") return "drug_resistant";
+  if (c.tb_classification === "drug_sensitive") return "drug_sensitive";
+  const x = c.lab_results?.xpert?.result?.trim().toUpperCase() ?? "";
+  if (x === "RR" || x.startsWith("RR ") || x.includes("RIF RESIST")) return "drug_resistant";
+  if (x === "T") return "drug_sensitive";
+  return null;
 }
 
 interface BarangayMeta {
@@ -371,6 +399,13 @@ type FlowCaseRow = Pick<
   | "address"
   | "residence_lat"
   | "residence_lon"
+  | "id"
+  | "age"
+  | "sex"
+  | "tb_classification"
+  | "tb_site"
+  | "diagnosis_status"
+  | "lab_results"
 >;
 
 function finite(n: number | null | undefined): n is number {
@@ -433,6 +468,16 @@ export interface CasePin {
   facilityLon: number | null;
   /** Barangay the registering facility sits in — the "counted under" axis. */
   facilityBarangayPsgc: number | null;
+  /** Case details for the click card. */
+  caseId: string | null;
+  age: number | null;
+  sex: string | null;
+  /** ITIS: pulmonary / extra_pulmonary. */
+  site: string | null;
+  /** ITIS: bacteriologically_confirmed / clinically_diagnosed / presumptive. */
+  bact: string | null;
+  /** ITIS: drug_sensitive / drug_resistant, null when no DST result. */
+  drug: string | null;
 }
 
 export function computeCasePins(
@@ -457,6 +502,18 @@ export function computeCasePins(
       facilityLat: f?.lat ?? null,
       facilityLon: f?.lon ?? null,
       facilityBarangayPsgc: f?.barangay_psgc ?? null,
+      caseId: c.id != null ? String(c.id) : null,
+      age: c.age ?? null,
+      sex: c.sex ?? null,
+      site:
+        c.tb_site ??
+        (c.tb_classification === "pulmonary" || c.tb_classification === "extra_pulmonary"
+          ? c.tb_classification
+          : null),
+      bact:
+        c.diagnosis_status ??
+        (c.tb_classification === "presumptive" ? "presumptive" : null),
+      drug: drugAxis(c),
     });
   }
   return pins;

@@ -4,27 +4,34 @@ import {
   Activity,
   BarChart3,
   Download,
+  FileSpreadsheet,
   HeartPulse,
   Info,
   Lightbulb,
   MapPin,
   Maximize2,
+  Microscope,
   PieChart,
+  Printer,
+  ShieldAlert,
+  Stethoscope,
   TrendingDown,
   TrendingUp,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Button, Card, Modal, PageHeader, Skeleton } from "../../components/ui";
+import { Button, Card, Modal, PageHeader, Select, Skeleton } from "../../components/ui";
 import { ColumnChart, DonutChart } from "../../components/charts";
 import { NEUTRAL, SERIES, toSlices, type Slice } from "../../lib/chartPalette";
+import { downloadChartWorkbook } from "../../lib/chartWorkbook";
 import { YearFilter } from "../../components/YearFilter";
 import {
   useCaseYear,
   yearOptions,
   type CaseYear,
 } from "../../hooks/useCaseYear";
-import { useTbCases } from "../../hooks/useTbCases";
+import { useTbCases, type TbCaseRow } from "../../hooks/useTbCases";
+import { drugAxis } from "../../lib/hotspotUtils";
 import { useAreaScope } from "../../hooks/useAreaScope";
 import { areaSuffix, type AreaScope } from "../../lib/areaScope";
 import barangays from "../../data/barangays.json";
@@ -39,6 +46,11 @@ interface RawCase {
   age: number | null;
   sex: "male" | "female" | "other" | "unknown" | null;
   tb_classification: string | null;
+  /** ITIS anatomical site. */
+  tb_site: string | null;
+  /** ITIS bacteriological status. */
+  diagnosis_status: string | null;
+  lab_results: TbCaseRow["lab_results"];
   treatment_outcome: string | null;
   reported_at: string;
 }
@@ -61,7 +73,14 @@ interface AnalyticsData {
   byBarangay: AreaRow[];
   byAgeBand: { band: string; count: number }[];
   bySex: { label: string; count: number }[];
-  byClassification: { label: string; count: number }[];
+  /** ITIS axis 1 — anatomical site (pulmonary / extra-pulmonary). */
+  bySite: { label: string; count: number }[];
+  /** ITIS axis 2 — bacteriological status (BC / CD / presumptive). */
+  byBact: { label: string; count: number }[];
+  /** ITIS axis 3 — drug resistance (DS-TB / DR-TB / not tested). */
+  byDrug: { label: string; count: number }[];
+  /** Male and female counts per age band — the population pyramid. */
+  sexByAge: { band: string; male: number; female: number }[];
   byOutcome: { label: string; count: number }[];
 }
 
@@ -82,17 +101,35 @@ const SEX_COLORS: Record<string, string> = {
   other: SERIES[2],
   unknown: NEUTRAL,
 };
-// Mirrors the `tb_classification` DB enum, which still carries the legacy
-// drug-susceptibility values alongside the site ones — leaving any out folds
-// real cases into "Other".
-const CLASS_COLORS: Record<string, string> = {
-  drug_sensitive: SERIES[0],
-  drug_resistant: SERIES[1],
-  pulmonary: SERIES[2],
+// The three ITIS classification axes, each with its own fixed palette.
+// "Not recorded" stays neutral so it never competes with a real category.
+const SITE_COLORS: Record<string, string> = {
+  pulmonary: SERIES[0],
   extra_pulmonary: SERIES[4],
+  not_recorded: NEUTRAL,
+};
+const BACT_COLORS: Record<string, string> = {
+  bacteriologically_confirmed: SERIES[2],
+  clinically_diagnosed: SERIES[0],
   presumptive: SERIES[3],
-  unknown: NEUTRAL,
-  unspecified: NEUTRAL,
+  not_recorded: NEUTRAL,
+};
+const DRUG_COLORS: Record<string, string> = {
+  drug_sensitive: SERIES[2],
+  drug_resistant: SERIES[1],
+  not_tested: NEUTRAL,
+};
+// Readable names for the ITIS categories (legend, table and readouts).
+const CATEGORY_LABEL: Record<string, string> = {
+  pulmonary: "Pulmonary",
+  extra_pulmonary: "Extra-pulmonary",
+  bacteriologically_confirmed: "Bact. confirmed",
+  clinically_diagnosed: "Clinically diagnosed",
+  presumptive: "Presumptive",
+  drug_sensitive: "Drug-susceptible",
+  drug_resistant: "Drug-resistant",
+  not_tested: "No DST result",
+  not_recorded: "Not recorded",
 };
 // Outcomes read as status: greens are favourable, amber/red need follow-up.
 // Every slice is also labelled in the legend, so colour is never the only cue.
@@ -126,11 +163,16 @@ export function Analytics() {
   } | null>(null);
   const closeDetail = useCallback(() => setDetail(null), []);
   const [year, setYear] = useCaseYear();
+  // Barangay-level report: null = every barangay this account can see.
+  const [area, setArea] = useState<number | null>(null);
+  const areaName = area === null ? null : (BARANGAY_NAME.get(area) ?? `PSGC ${area}`);
   const periodLabel = year === "all" ? "All years" : String(year);
   // RLS limits area-scoped staff to their barangay, so these figures describe
   // that area rather than the city — say which one in the subtitle.
   const subtitle =
-    `TB cases only · ${periodLabel} · Where to focus screening and contact-tracing campaigns.` +
+    (areaName
+      ? `Barangay-level report for ${areaName} · TB cases only · ${periodLabel}.`
+      : `TB cases only · ${periodLabel} · Where to focus screening and contact-tracing campaigns.`) +
     areaSuffix(scope);
   // Reads the shared, cached register (the same copy the Dashboard and map
   // use) and filters by year here, so switching years is instant and opening
@@ -148,7 +190,7 @@ export function Analytics() {
     }
     return { earliest, latest };
   }, [casesQuery.data]);
-  const data = useMemo<AnalyticsData | null>(() => {
+  const yearRows = useMemo<RawCase[] | null>(() => {
     if (!casesQuery.data) return null;
     const rows: RawCase[] = [];
     for (const c of casesQuery.data) {
@@ -159,12 +201,35 @@ export function Analytics() {
         age: c.age,
         sex: c.sex,
         tb_classification: c.tb_classification,
+        tb_site: c.tb_site ?? null,
+        diagnosis_status: c.diagnosis_status ?? null,
+        lab_results: c.lab_results ?? null,
         treatment_outcome: c.treatment_outcome,
         reported_at: c.reported_at,
       });
     }
-    return summarize(rows, year);
+    return rows;
   }, [casesQuery.data, year]);
+  // Every chart below is recomputed for the chosen barangay, so the page
+  // doubles as a printable barangay-level report.
+  const data = useMemo<AnalyticsData | null>(() => {
+    if (!yearRows) return null;
+    return summarize(
+      area === null ? yearRows : yearRows.filter((r) => r.barangay_psgc === area),
+      year
+    );
+  }, [yearRows, area, year]);
+  // The barangay ranking always covers every barangay in the period, so the
+  // list stays a way to pick the next report.
+  const allAreas = useMemo<AreaRow[]>(
+    () => (yearRows ? summarize(yearRows, year).byBarangay : []),
+    [yearRows, year]
+  );
+  const yearTotal = yearRows?.length ?? 0;
+  const pickArea = useCallback((psgc: number | null) => {
+    setArea(psgc);
+    document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   const yearFilter = (
     <YearFilter
@@ -179,7 +244,7 @@ export function Analytics() {
     return (
       <>
         <PageHeader
-          title="AI Analytics for Outreach"
+          title="Analytics for Outreach"
           subtitle={subtitle}
         />
         {yearFilter}
@@ -283,14 +348,32 @@ export function Analytics() {
       note: "A strong skew toward one group is a cue to tailor health-promotion messaging and venues.",
       rows: sliceRows(toSlices(data.bySex, SEX_COLORS)),
     },
-    classification: {
-      title: "TB classification",
-      icon: PieChart,
+    site: {
+      title: "Anatomical site",
+      icon: Stethoscope,
       kind: "donut",
       description:
-        "Classification as recorded: drug susceptibility (sensitive / resistant) or site of disease, plus presumptive cases from screening.",
-      note: "Presumptive cases are screening yield awaiting diagnosis — they are not confirmed TB.",
-      rows: sliceRows(toSlices(data.byClassification, CLASS_COLORS)),
+        "ITIS classification by anatomical site: pulmonary (lungs) or extra-pulmonary (outside the lungs).",
+      note: "Pulmonary TB is the infectious form, so a high pulmonary share means contact tracing of households is the priority.",
+      rows: sliceRows(toSlices(data.bySite, SITE_COLORS)),
+    },
+    bact: {
+      title: "Bacteriological status",
+      icon: Microscope,
+      kind: "donut",
+      description:
+        "ITIS classification by how the case was diagnosed: bacteriologically confirmed (smear, culture or Xpert positive) or clinically diagnosed.",
+      note: "A low bacteriologically confirmed share points to limited access to GeneXpert or sputum testing — a budget item for diagnostics.",
+      rows: sliceRows(toSlices(data.byBact, BACT_COLORS)),
+    },
+    drug: {
+      title: "Drug resistance",
+      icon: ShieldAlert,
+      kind: "donut",
+      description:
+        "ITIS classification by drug susceptibility testing (DST): drug-susceptible (DS-TB) or drug-resistant (DR-TB).",
+      note: "DR-TB needs a longer, costlier regimen. Each DR-TB case should be budgeted separately from DS-TB cases.",
+      rows: sliceRows(toSlices(data.byDrug, DRUG_COLORS)),
     },
     age: {
       title: "Age distribution",
@@ -307,13 +390,33 @@ export function Analytics() {
     },
   };
 
+  const sexNote = sexIndication(data);
+
   return (
     <>
       <PageHeader
-        title="AI Analytics for Outreach"
+        title={areaName ? `Barangay Report · ${areaName}` : "Analytics for Outreach"}
         subtitle={subtitle}
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            className="print:hidden"
+            onClick={() => window.print()}
+          >
+            <Printer className="h-4 w-4" />
+            Print report
+          </Button>
+        }
       />
       {yearFilter}
+      <ReportScopeBar
+        areas={allAreas}
+        value={area}
+        onChange={pickArea}
+        total={data.total}
+        yearTotal={yearTotal}
+      />
 
       {/* ── Headline stats ───────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -329,18 +432,31 @@ export function Analytics() {
             )
           }
         />
-        <StatTile
-          icon={MapPin}
-          iconClass="bg-vigil-300/20 text-vigil-600"
-          accentClass="bg-vigil-400"
-          label="Barangays affected"
-          value={data.byBarangay.length.toLocaleString()}
-          footer={
-            data.byBarangay.length > 0
-              ? `Most affected: ${data.byBarangay[0].name}`
-              : undefined
-          }
-        />
+        {areaName ? (
+          <StatTile
+            icon={MapPin}
+            iconClass="bg-vigil-300/20 text-vigil-600"
+            accentClass="bg-vigil-400"
+            label="Share of all cases"
+            value={`${yearTotal === 0 ? 0 : Math.round((data.total / yearTotal) * 1000) / 10}%`}
+            footer={`${data.total.toLocaleString()} of ${yearTotal.toLocaleString()} cases · rank ${
+              allAreas.findIndex((a) => a.psgc === area) + 1
+            } of ${allAreas.length}`}
+          />
+        ) : (
+          <StatTile
+            icon={MapPin}
+            iconClass="bg-vigil-300/20 text-vigil-600"
+            accentClass="bg-vigil-400"
+            label="Barangays affected"
+            value={data.byBarangay.length.toLocaleString()}
+            footer={
+              data.byBarangay.length > 0
+                ? `Most affected: ${data.byBarangay[0].name}`
+                : undefined
+            }
+          />
+        )}
         <StatTile
           icon={Users}
           iconClass="bg-sky-50 text-sky-700"
@@ -384,16 +500,37 @@ export function Analytics() {
 
       {/* ── Who: demographics ────────────────────────────────────────── */}
       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Panel spec={specs.sex} onOpen={(focus) => setDetail({ id: "sex", focus })} />
+        <Panel spec={specs.sex} onOpen={(focus) => setDetail({ id: "sex", focus })}>
+          <SexIndication note={sexNote} />
+        </Panel>
         <Panel
-          spec={specs.classification}
-          onOpen={(focus) => setDetail({ id: "classification", focus })}
-        />
-        <Panel
-          className="md:col-span-2 xl:col-span-1"
           spec={specs.age}
           meta="Years"
           onOpen={(focus) => setDetail({ id: "age", focus })}
+        />
+        <SexAgePyramid
+          className="md:col-span-2 xl:col-span-1"
+          rows={data.sexByAge}
+        />
+      </div>
+
+      {/* ── ITIS case classification ─────────────────────────────────── */}
+      <div className="mt-6 flex items-end justify-between gap-3">
+        <div>
+          <div className={MICRO_LABEL}>Case classification · ITIS</div>
+          <p className="mt-0.5 text-sm text-slate-600">
+            Every TB case classified on the three ITIS axes: where the disease
+            is, how it was diagnosed, and whether it is drug-resistant.
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <Panel spec={specs.site} onOpen={(focus) => setDetail({ id: "site", focus })} />
+        <Panel spec={specs.bact} onOpen={(focus) => setDetail({ id: "bact", focus })} />
+        <Panel
+          className="md:col-span-2 xl:col-span-1"
+          spec={specs.drug}
+          onOpen={(focus) => setDetail({ id: "drug", focus })}
         />
       </div>
 
@@ -446,7 +583,13 @@ export function Analytics() {
       </Card>
 
       {/* ── Per-area breakdown ───────────────────────────────────────── */}
-      <AreaBreakdown rows={data.byBarangay} total={data.total} scope={scope} />
+      <AreaBreakdown
+        rows={allAreas}
+        total={yearTotal}
+        scope={scope}
+        selected={area}
+        onPick={pickArea}
+      />
     </>
   );
 }
@@ -495,7 +638,10 @@ function summarize(rows: RawCase[], year: CaseYear): AnalyticsData {
   const byBarangayMap = new Map<number, number>();
   const byAgeBand = AGE_BANDS.map((b) => ({ band: b.label, count: 0 }));
   const bySexMap = new Map<string, number>();
-  const byClassMap = new Map<string, number>();
+  const bySiteMap = new Map<string, number>();
+  const byBactMap = new Map<string, number>();
+  const byDrugMap = new Map<string, number>();
+  const sexByAge = AGE_BANDS.map((b) => ({ band: b.label, male: 0, female: 0 }));
   const byOutcomeMap = new Map<string, number>();
 
   for (const c of rows) {
@@ -512,13 +658,18 @@ function summarize(rows: RawCase[], year: CaseYear): AnalyticsData {
       if (band) {
         const e = byAgeBand.find((x) => x.band === band.label)!;
         e.count += 1;
+        const p = sexByAge.find((x) => x.band === band.label)!;
+        if (c.sex === "male") p.male += 1;
+        else if (c.sex === "female") p.female += 1;
       }
     }
     const sex = c.sex ?? "unknown";
     bySexMap.set(sex, (bySexMap.get(sex) ?? 0) + 1);
 
-    const cls = c.tb_classification ?? "unspecified";
-    byClassMap.set(cls, (byClassMap.get(cls) ?? 0) + 1);
+    const { site, bact, drug } = itisAxes(c);
+    bySiteMap.set(site, (bySiteMap.get(site) ?? 0) + 1);
+    byBactMap.set(bact, (byBactMap.get(bact) ?? 0) + 1);
+    byDrugMap.set(drug, (byDrugMap.get(drug) ?? 0) + 1);
 
     const out = c.treatment_outcome ?? "unknown";
     byOutcomeMap.set(out, (byOutcomeMap.get(out) ?? 0) + 1);
@@ -545,7 +696,10 @@ function summarize(rows: RawCase[], year: CaseYear): AnalyticsData {
     byBarangay,
     byAgeBand,
     bySex: toSorted(bySexMap),
-    byClassification: toSorted(byClassMap),
+    bySite: toSorted(bySiteMap),
+    byBact: toSorted(byBactMap),
+    byDrug: toSorted(byDrugMap),
+    sexByAge,
     byOutcome: toSorted(byOutcomeMap),
   };
 }
@@ -636,6 +790,242 @@ function buildInsights(d: AnalyticsData): string[] {
   return out;
 }
 
+/**
+ * A case on the three ITIS classification axes.
+ *
+ * The dedicated columns win. Rows written before they existed (bulk import,
+ * seed) only carry the legacy `tb_classification`, so each axis falls back to
+ * what that single value actually asserts and nothing more: a "drug_resistant"
+ * row had a DST result, so it is bacteriologically confirmed, but it says
+ * nothing about the site.
+ */
+function itisAxes(c: RawCase): { site: string; bact: string; drug: string } {
+  const legacy = c.tb_classification;
+  const site =
+    c.tb_site ??
+    (legacy === "pulmonary" || legacy === "extra_pulmonary" ? legacy : "not_recorded");
+  const bact =
+    c.diagnosis_status ??
+    (legacy === "presumptive"
+      ? "presumptive"
+      : legacy === "drug_sensitive" || legacy === "drug_resistant"
+        ? "bacteriologically_confirmed"
+        : legacy === "pulmonary" || legacy === "extra_pulmonary"
+          ? "clinically_diagnosed"
+          : "not_recorded");
+  const drug = drugAxis(c) ?? "not_tested";
+  return { site, bact, drug };
+}
+
+interface SexNote {
+  male: number;
+  female: number;
+  /** Male share of cases with a recorded sex, 0–100. */
+  malePct: number;
+  /** Men per woman, e.g. 1.8 → "1.8 : 1". Null when there are no women. */
+  ratio: number | null;
+  headline: string;
+  action: string;
+}
+
+/**
+ * What the male and female counts are telling the planner. A bare 62 / 38
+ * donut invites "so what?"; the ratio and the action it implies are what a
+ * budget or a screening schedule is decided on.
+ */
+function sexIndication(d: AnalyticsData): SexNote | null {
+  const male = d.bySex.find((s) => s.label === "male")?.count ?? 0;
+  const female = d.bySex.find((s) => s.label === "female")?.count ?? 0;
+  const known = male + female;
+  if (known === 0) return null;
+  const malePct = Math.round((male / known) * 100);
+  const ratio = female === 0 ? null : Math.round((male / female) * 10) / 10;
+  const ratioText = ratio === null ? "only men recorded" : `${ratio} : 1 (male : female)`;
+  if (malePct >= 55) {
+    return {
+      male,
+      female,
+      malePct,
+      ratio,
+      headline: `Men are ${malePct}% of cases · ${ratioText}.`,
+      action:
+        "Men are being notified more than women. Men are less likely to visit health centres on their own, so bring screening to them: workplaces, markets, terminals and evening or weekend schedules.",
+    };
+  }
+  if (malePct <= 45) {
+    return {
+      male,
+      female,
+      malePct,
+      ratio,
+      headline: `Women are ${100 - malePct}% of cases · ${ratioText}.`,
+      action:
+        "Women are being notified more than men. Check whether men are being missed, and use prenatal, family-planning and household visits to reach women early.",
+    };
+  }
+  return {
+    male,
+    female,
+    malePct,
+    ratio,
+    headline: `Cases are split almost evenly · ${ratioText}.`,
+    action:
+      "No strong sex skew. Plan household-based screening that reaches both men and women.",
+  };
+}
+
+function SexIndication({ note }: { note: SexNote | null }) {
+  if (!note) return null;
+  return (
+    <div className="border-t border-slate-100 bg-slate-50/40 px-4 py-2.5">
+      <p className="text-xs font-semibold text-slate-800">{note.headline}</p>
+      <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{note.action}</p>
+    </div>
+  );
+}
+
+/**
+ * Population pyramid: men to the left, women to the right, one row per age
+ * band. Shows which sex AND age group to target in the same glance — the
+ * question a separate sex donut and age chart leave the reader to combine.
+ */
+function SexAgePyramid({
+  rows,
+  className = "",
+}: {
+  rows: { band: string; male: number; female: number }[];
+  className?: string;
+}) {
+  const max = Math.max(1, ...rows.flatMap((r) => [r.male, r.female]));
+  const top = rows.reduce<{ band: string; sex: string; n: number } | null>((best, r) => {
+    const cand =
+      r.male >= r.female
+        ? { band: r.band, sex: "men", n: r.male }
+        : { band: r.band, sex: "women", n: r.female };
+    return best === null || cand.n > best.n ? cand : best;
+  }, null);
+  return (
+    <Card className={"flex flex-col overflow-hidden p-0 " + className}>
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-2">
+        <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
+          <Users className="h-3.5 w-3.5 text-brand-600" />
+          Sex by age group
+        </div>
+        <span className="font-mono text-[10px] text-slate-500">Cases</span>
+      </div>
+      <div className="flex-1 px-4 py-4">
+        <div className="mb-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-[11px] font-semibold">
+          <span className="text-right" style={{ color: SEX_COLORS.male }}>Male</span>
+          <span className="w-12" />
+          <span style={{ color: SEX_COLORS.female }}>Female</span>
+        </div>
+        <ul className="space-y-2.5">
+          {[...rows].reverse().map((r) => (
+            <li key={r.band} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+              <div className="flex items-center justify-end gap-1.5">
+                <span className="font-mono text-[11px] tabular-nums text-slate-600">{r.male}</span>
+                <div className="h-4 w-full overflow-hidden rounded-l-md bg-slate-100">
+                  <div
+                    className="ml-auto h-full rounded-l-md"
+                    style={{ width: `${(r.male / max) * 100}%`, background: SEX_COLORS.male }}
+                  />
+                </div>
+              </div>
+              <span className="w-12 text-center font-mono text-[11px] font-semibold text-slate-700">
+                {r.band}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <div className="h-4 w-full overflow-hidden rounded-r-md bg-slate-100">
+                  <div
+                    className="h-full rounded-r-md"
+                    style={{ width: `${(r.female / max) * 100}%`, background: SEX_COLORS.female }}
+                  />
+                </div>
+                <span className="font-mono text-[11px] tabular-nums text-slate-600">{r.female}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {top && top.n > 0 && (
+        <p className="border-t border-slate-100 bg-slate-50/40 px-4 py-2.5 text-xs leading-relaxed text-slate-500">
+          Largest group:{" "}
+          <strong className="text-slate-800">
+            {top.sex} aged {top.band}
+          </strong>{" "}
+          ({top.n.toLocaleString()} cases). Target this group first when
+          scheduling screening.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * Chooses what the page reports on: every barangay, or one barangay. Picking
+ * one turns every chart into that barangay's report.
+ */
+function ReportScopeBar({
+  areas,
+  value,
+  onChange,
+  total,
+  yearTotal,
+}: {
+  areas: AreaRow[];
+  value: number | null;
+  onChange: (psgc: number | null) => void;
+  total: number;
+  yearTotal: number;
+}) {
+  const sorted = [...areas].sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    <Card className="mb-5 flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
+          <MapPin className="h-4 w-4" />
+        </span>
+        <div>
+          <div className={MICRO_LABEL}>Report for</div>
+          <div className="text-sm font-semibold text-slate-900">
+            {value === null ? "All barangays" : (BARANGAY_NAME.get(value) ?? value)}
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
+        <Select
+          aria-label="Choose a barangay for the report"
+          className="w-full sm:w-64 print:hidden"
+          value={value === null ? "" : String(value)}
+          onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+        >
+          <option value="">All barangays ({yearTotal.toLocaleString()} cases)</option>
+          {sorted.map((a) => (
+            <option key={a.psgc} value={a.psgc}>
+              {a.name} ({a.count.toLocaleString()})
+            </option>
+          ))}
+        </Select>
+        {value !== null && (
+          <>
+            <span className="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 font-mono text-[11px] font-semibold tabular-nums text-brand-700">
+              {total.toLocaleString()} case{total === 1 ? "" : "s"}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="print:hidden"
+              onClick={() => onChange(null)}
+            >
+              Back to all barangays
+            </Button>
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 const AREAS_COLLAPSED = 8;
 
 /**
@@ -655,10 +1045,14 @@ function AreaBreakdown({
   rows,
   total,
   scope,
+  selected,
+  onPick,
 }: {
   rows: AreaRow[];
   total: number;
   scope: AreaScope;
+  selected: number | null;
+  onPick: (psgc: number | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? rows : rows.slice(0, AREAS_COLLAPSED);
@@ -669,7 +1063,7 @@ function AreaBreakdown({
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
         <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
           <MapPin className="h-3.5 w-3.5 text-vigil-500" />
-          Cases by barangay · where patients live
+          Cases by barangay · where patients live · click one for its report
         </div>
         {rows.length > 0 && (
           <span className="font-mono text-[10px] tabular-nums text-slate-500">
@@ -688,8 +1082,17 @@ function AreaBreakdown({
             {shown.map((r, i) => {
               const share = total === 0 ? 0 : (r.count / total) * 100;
               const mine = scope.scoped && r.psgc === scope.psgc;
+              const on = selected === r.psgc;
               return (
-                <li key={r.psgc} className="px-4 py-3">
+                <li
+                  key={r.psgc}
+                  onClick={() => onPick(on ? null : r.psgc)}
+                  title={on ? "Back to all barangays" : `Open the ${r.name} report`}
+                  className={
+                    "cursor-pointer px-4 py-3 transition-colors " +
+                    (on ? "bg-brand-50" : "hover:bg-slate-50")
+                  }
+                >
                   <div className="flex items-baseline justify-between gap-3 text-sm">
                     <span className="flex min-w-0 items-baseline gap-2">
                       <span className="font-mono text-[11px] tabular-nums text-slate-400">
@@ -777,7 +1180,7 @@ function StatTile({
   );
 }
 
-type ChartId = "trend" | "outcome" | "sex" | "classification" | "age";
+type ChartId = "trend" | "outcome" | "sex" | "site" | "bact" | "drug" | "age";
 
 interface ChartRow {
   /** Short label (axis / legend). */
@@ -819,6 +1222,7 @@ function sliceRows(slices: Slice[]): ChartRow[] {
 }
 
 function humanize(label: string) {
+  if (CATEGORY_LABEL[label]) return CATEGORY_LABEL[label];
   const s = label.replace(/_/g, " ");
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -843,6 +1247,7 @@ function SpecChart({
           color: r.color,
         }))}
         centerLabel="Cases"
+        formatLabel={(l) => spec.rows.find((r) => r.label === l)?.title ?? l}
         size={size}
         selected={selected}
         onSelect={onSelect}
@@ -956,6 +1361,29 @@ function ChartDetailModal({
   const rank =
     sel == null ? 0 : rows.filter((r) => r.value > sel.value).length + 1;
 
+  const fileStem = `bantay-tb-${id}-${new Date().toISOString().slice(0, 10)}`;
+
+  // Excel file with the same chart as the panel already drawn in it, so
+  // nobody has to build the pie/column chart by hand after exporting.
+  function exportExcel() {
+    downloadChartWorkbook(
+      {
+        title: spec.title,
+        description: spec.description,
+        note: spec.note,
+        kind: spec.kind,
+        sequential: spec.sequential,
+        color: spec.columnProps?.color ?? "#486581",
+        rows: rows.map((r) => ({
+          label: r.title ?? r.label,
+          value: r.value,
+          color: r.color,
+        })),
+      },
+      `${fileStem}.xlsx`
+    );
+  }
+
   function exportCsv() {
     const head = spec.sequential
       ? "Month,Cases,% of cases,Change vs previous month"
@@ -975,7 +1403,7 @@ function ChartDetailModal({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `bantay-tb-${id}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `${fileStem}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -990,9 +1418,23 @@ function ChartDetailModal({
       className="sm:max-w-4xl"
       footer={
         <>
-          <Button variant="secondary" size="sm" onClick={exportCsv}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={exportCsv}
+            title="Numbers only — CSV files cannot hold a chart"
+          >
             <Download className="h-4 w-4" />
-            Export CSV
+            CSV
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={exportExcel}
+            title="Excel file with the chart already drawn"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            Export Excel + chart
           </Button>
           <Button size="sm" onClick={onClose}>
             Close

@@ -888,3 +888,24 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Printing a report (Analytics → Print report): drop the app chrome and let
+   the page flow onto paper instead of staying inside the scroll container. */
+@media print {
+  aside,
+  [data-sonner-toaster],
+  .print\:hidden {
+    display: none !important;
+  }
+  html,
+  body,
+  #root,
+  .h-screen,
+  main {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  main {
+    padding-top: 0 !important;
+  }
+}

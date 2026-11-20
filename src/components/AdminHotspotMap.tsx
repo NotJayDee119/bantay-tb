@@ -117,10 +117,51 @@ const SEVERITY_LABEL: Record<HotspotSeverity, string> = {
 const SEVERITY_ORDER: HotspotSeverity[] = ["high", "urgent"];
 
 const DENSITY_RAMP = ["#bae6fd", "#7dd3fc", "#0ea5e9", "#f97316", "#dc2626"];
+// Plain name of each colour step, read together with its case range.
+const DENSITY_NAME = ["Very low", "Low", "Moderate", "High", "Very high"];
+
+/**
+ * The case range each colour covers, from the same 20% steps barangayFill()
+ * uses. With 50 cases in the busiest barangay: 1–9, 10–19, 20–29, 30–39,
+ * 40–50. Stated as real numbers so "light blue" and "dark blue" never have to
+ * be guessed.
+ */
+function densityBands(max: number): { min: number; max: number }[] {
+  if (max <= 0) return DENSITY_RAMP.map(() => ({ min: 0, max: 0 }));
+  const bands: { min: number; max: number }[] = [];
+  let lo = 1;
+  for (let i = 0; i < DENSITY_RAMP.length; i++) {
+    // Largest count whose ratio is still below the next 20% step.
+    const hi = i === DENSITY_RAMP.length - 1 ? max : Math.ceil(((i + 1) / 5) * max) - 1;
+    bands.push({ min: lo, max: Math.max(lo - 1, hi) });
+    lo = Math.max(lo, hi + 1);
+  }
+  return bands;
+}
+
+const SEX_LABEL: Record<string, string> = {
+  male: "Male",
+  female: "Female",
+  other: "Other",
+  unknown: "Not recorded",
+};
+const SITE_LABEL: Record<string, string> = {
+  pulmonary: "Pulmonary",
+  extra_pulmonary: "Extra-pulmonary",
+};
+const BACT_LABEL: Record<string, string> = {
+  bacteriologically_confirmed: "Bacteriologically confirmed",
+  clinically_diagnosed: "Clinically diagnosed",
+  presumptive: "Presumptive",
+};
+const DRUG_LABEL: Record<string, string> = {
+  drug_sensitive: "Drug-susceptible",
+  drug_resistant: "Drug-resistant",
+};
 // The share of the busiest barangay's count each colour covers — the same
 // 20% steps barangayFill() uses. The middle three drop their "%" to fit
 // under a ~30px swatch.
-const DENSITY_BAND_LABEL = ["<20%", "20–40", "40–60", "60–80", "≥80%"];
+
 
 // Shared chrome for every floating panel — the dark glass console language
 // established by the public hero map (PublicCaseMap).
@@ -753,6 +794,9 @@ export function AdminHotspotMap({
             center={[p.lat, p.lon]}
             radius={p.exact ? 5.5 : 4.5}
             pane="flow-origins"
+            eventHandlers={{
+              popupopen: (e) => e.target.closeTooltip(),
+            }}
             pathOptions={{
               color: "#042f2e",
               weight: 1,
@@ -773,6 +817,9 @@ export function AdminHotspotMap({
                   addresses that wrap over two lines, and centred wrapped
                   text is markedly harder to scan than a flush-left block. */}
               <div className="pcm-tooltip-inner text-left">
+                <div className="mb-1 text-[11px] font-semibold text-white">
+                  {caseHeadline(p)}
+                </div>
                 <div className="font-mono text-[9px] uppercase tracking-wider text-slate-400">
                   Lives at
                 </div>
@@ -795,8 +842,14 @@ export function AdminHotspotMap({
                     {p.facilityName ?? "Not yet registered"}
                   </div>
                 </div>
+                <div className="mt-1.5 border-t border-white/10 pt-1 font-mono text-[9px] uppercase tracking-wider text-accent-300">
+                  Click for case details
+                </div>
               </div>
             </Tooltip>
+            <Popup className="ghm-popup" pane="popupPane">
+              <CaseCard pin={p} />
+            </Popup>
           </CircleMarker>
         ))}
 
@@ -946,6 +999,8 @@ export function AdminHotspotMap({
               </div>
             </div>
           </div>
+
+          <SexAgeStrip pins={spreadPins} />
 
           {/* Barangay drill-down, facility axis: the origins of the cases
               registered here. This is the panel's "still indicate where the
@@ -1302,7 +1357,7 @@ export function AdminHotspotMap({
       {/* ── Legend — collapsible, bottom-left ───────────────────────── */}
       <div
         className={
-          "pointer-events-auto absolute bottom-3 left-3 z-[500] w-48 sm:bottom-4 sm:left-4 " +
+          "pointer-events-auto absolute bottom-3 left-3 z-[500] w-56 sm:bottom-4 sm:left-4 " +
           GLASS
         }
       >
@@ -1345,26 +1400,35 @@ export function AdminHotspotMap({
                   ? "Cases registered"
                   : "Cases by residence"}
               </div>
-              <div className="mt-1 grid grid-cols-5 gap-1">
-                {DENSITY_RAMP.map((color, i) => (
-                  <div key={color}>
-                    <span
-                      className={
-                        "block h-2 " +
-                        (i === 0 ? "rounded-l-full " : "") +
-                        (i === DENSITY_RAMP.length - 1 ? "rounded-r-full" : "")
-                      }
-                      style={{ background: color }}
-                    />
-                    <span className="mt-1 block text-center font-mono text-[9px] text-slate-400">
-                      {DENSITY_BAND_LABEL[i]}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <ul className="mt-1 space-y-0.5">
+                {densityBands(maxCount)
+                  .map((b, i) => ({ ...b, i }))
+                  .reverse()
+                  .filter((b) => b.max >= b.min)
+                  .map((b) => (
+                    <li key={b.i} className="flex items-center gap-1.5 text-[10px] text-slate-300">
+                      <span
+                        className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: DENSITY_RAMP[b.i] }}
+                      />
+                      <span className="w-14 shrink-0">{DENSITY_NAME[b.i]}</span>
+                      <span className="font-mono tabular-nums text-white">
+                        {b.min === b.max ? b.min : `${b.min}–${b.max}`}
+                      </span>
+                      <span className="text-slate-500">cases</span>
+                    </li>
+                  ))}
+                <li className="flex items-center gap-1.5 text-[10px] text-slate-300">
+                  <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#cbd5e1]" />
+                  <span className="w-14 shrink-0">None</span>
+                  <span className="font-mono tabular-nums text-white">0</span>
+                  <span className="text-slate-500">cases</span>
+                </li>
+              </ul>
               <div className="mt-1 text-[10px] text-slate-500">
-                Percent of the busiest barangay
-                {maxCount > 0 && <> ({maxCount.toLocaleString()} cases = 100%)</>}.
+                Ranges follow the busiest barangay
+                {maxCount > 0 && <> ({maxCount.toLocaleString()} cases)</>}, so they
+                adjust with the year and filters.
               </div>
               <div className="mt-1.5 text-[10px] text-slate-500">
                 {attribution === "facility"
@@ -1391,6 +1455,86 @@ export function AdminHotspotMap({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Male / female split and median age of the drilled-into cases. */
+function SexAgeStrip({ pins }: { pins: CasePin[] }) {
+  if (pins.length === 0) return null;
+  const male = pins.filter((p) => p.sex === "male").length;
+  const female = pins.filter((p) => p.sex === "female").length;
+  const ages = pins
+    .map((p) => p.age)
+    .filter((a): a is number => a !== null)
+    .sort((a, b) => a - b);
+  const median = ages.length === 0 ? null : ages[Math.floor(ages.length / 2)];
+  const known = male + female;
+  const malePct = known === 0 ? 0 : Math.round((male / known) * 100);
+  return (
+    <div className="mx-3 mt-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">
+      <div className="flex items-center justify-between text-[10px] font-semibold">
+        <span className="text-sky-300">Male {male}</span>
+        <span className="text-pink-300">Female {female}</span>
+      </div>
+      <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div className="h-full bg-sky-400" style={{ width: `${malePct}%` }} />
+        <div className="h-full bg-pink-400" style={{ width: `${known === 0 ? 0 : 100 - malePct}%` }} />
+      </div>
+      <div className="mt-1 text-[10px] text-slate-400">
+        {median !== null ? `Median age ${median} yrs` : "Age not recorded"} · click a dot
+        for age and sex
+      </div>
+    </div>
+  );
+}
+
+/** "Male, 42 yrs" — the first thing read about a case dot. */
+function caseHeadline(p: CasePin): string {
+  const sex = p.sex ? (SEX_LABEL[p.sex] ?? p.sex) : "Sex not recorded";
+  const age = p.age !== null ? `${p.age} yrs` : "age not recorded";
+  return `${sex}, ${age}`;
+}
+
+/** Click card for one case: age, sex and ITIS classification. */
+function CaseCard({ pin }: { pin: CasePin }) {
+  const rows: [string, string][] = [
+    ["Age", pin.age !== null ? `${pin.age} years old` : "Not recorded"],
+    ["Sex", pin.sex ? (SEX_LABEL[pin.sex] ?? pin.sex) : "Not recorded"],
+    ["Anatomical site", pin.site ? (SITE_LABEL[pin.site] ?? pin.site) : "Not recorded"],
+    ["Bacteriological status", pin.bact ? (BACT_LABEL[pin.bact] ?? pin.bact) : "Not recorded"],
+    ["Drug resistance", pin.drug ? (DRUG_LABEL[pin.drug] ?? pin.drug) : "No DST result"],
+    ["Barangay", pin.barangayName ?? "—"],
+    ["Registered at", pin.facilityName ?? "Not yet registered"],
+  ];
+  return (
+    <div className="min-w-[220px]">
+      <div className="font-mono text-[9px] uppercase tracking-wider text-slate-400">
+        TB case
+      </div>
+      <div className="mt-0.5 text-sm font-semibold text-white">{caseHeadline(pin)}</div>
+      <dl className="mt-2 space-y-1 border-t border-white/10 pt-2">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex items-baseline justify-between gap-3 text-[11px]">
+            <dt className="text-slate-400">{k}</dt>
+            <dd
+              className={
+                "text-right font-semibold " +
+                (k === "Drug resistance" && pin.drug === "drug_resistant"
+                  ? "text-rose-300"
+                  : "text-slate-100")
+              }
+            >
+              {v}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {pin.address && (
+        <p className="mt-2 border-t border-white/10 pt-1.5 text-[10px] leading-snug text-slate-400">
+          {pin.address}
+        </p>
+      )}
     </div>
   );
 }

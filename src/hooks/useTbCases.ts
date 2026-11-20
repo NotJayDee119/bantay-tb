@@ -29,12 +29,18 @@ export interface TbCaseRow extends HotspotCaseRow {
   treatment_outcome: string | null;
   age: number | null;
   sex: "male" | "female" | "other" | "unknown" | null;
+  /** ITIS anatomical site: pulmonary / extra_pulmonary. */
+  tb_site?: string | null;
+  /** ITIS bacteriological status: bacteriologically_confirmed / clinically_diagnosed / presumptive. */
+  diagnosis_status?: string | null;
+  /** Form 6a (21) labs; `xpert.result` T / RR / TI / N carries rifampicin resistance. */
+  lab_results?: Record<string, { result?: string | null; date?: string | null } | null> | null;
 }
 
 // Union of what the Dashboard, the home screens, the map and Reports &
 // Charts read — one download serves all four.
 const COLUMNS =
-  "id, barangay_psgc, facility_id, address, residence_lat, residence_lon, reported_at, created_at, tb_classification, treatment_outcome, age, sex, jitter_lat, jitter_lon";
+  "id, barangay_psgc, facility_id, address, residence_lat, residence_lon, reported_at, created_at, tb_classification, tb_site, diagnosis_status, lab_results, treatment_outcome, age, sex, jitter_lat, jitter_lon";
 
 const FIVE_MIN = 5 * 60_000;
 

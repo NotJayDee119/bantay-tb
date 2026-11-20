@@ -63,7 +63,15 @@ export function DonutChart({
   };
 
   return (
-    <div className="flex flex-col items-center gap-5 p-4 sm:flex-row sm:items-center">
+    <div
+      className={
+        "flex flex-col items-center gap-5 p-4 " +
+        // A dashboard card is often a third of the page; side by side, the
+        // legend names got truncated to nothing. Stack there, sit side by
+        // side only in the wide detail view.
+        (size === "lg" ? "sm:flex-row sm:items-center" : "")
+      }
+    >
       <div className={"relative shrink-0 " + (size === "lg" ? "h-56 w-56" : "h-40 w-40")}>
         <svg
           viewBox="0 0 100 100"
@@ -128,7 +136,7 @@ export function DonutChart({
               className="h-2.5 w-2.5 shrink-0 rounded-sm"
               style={{ background: arcs[i].color }}
             />
-            <span className="min-w-0 flex-1 truncate font-medium capitalize text-slate-700">
+            <span className="min-w-0 flex-1 truncate font-medium text-slate-700">
               {formatLabel(s.label)}
             </span>
             <span className="font-mono text-[11px] tabular-nums text-slate-500">
