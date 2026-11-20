@@ -11,7 +11,7 @@ import {
   useMap,
   useMapEvents,
 } from "react-leaflet";
-import { divIcon } from "leaflet";
+import { divIcon, geoJSON as leafletGeoJSON } from "leaflet";
 import type {
   CircleMarker as LeafletCircleMarker,
   Map as LeafletMap,
@@ -19,7 +19,15 @@ import type {
   PathOptions,
 } from "leaflet";
 import { Link } from "react-router-dom";
-import { Activity, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, X } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  MapPin,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import { Spinner } from "../../components/ui";
 import { OpenFreeMapLayer } from "../../components/OpenFreeMapLayer";
 import { supabase } from "../../lib/supabase";
@@ -41,7 +49,18 @@ import {
 } from "../../lib/hotspotRefresh";
 import { formatDate, formatDateTime } from "../../lib/utils";
 import { useAreaScope } from "../../hooks/useAreaScope";
+import { useAuth } from "../../hooks/useAuth";
+import { ROLE_LABELS } from "../../lib/supabase";
+import {
+  TRAFFIC,
+  TRAFFIC_ORDER,
+  caseRanges,
+  formatRange,
+  trafficLightFor,
+  type TrafficLight,
+} from "../../lib/trafficLight";
 import barangays from "../../data/barangays.json";
+import barangayNeighbors from "../../data/barangayNeighbors.json";
 import { toast } from "sonner";
 
 type Severity = "watch" | "moderate" | "high" | "urgent" | "low" | "medium";
@@ -106,6 +125,23 @@ const GI_LABEL: Record<GiClass, string> = {
   not_significant: "No clear pattern",
   coldspot_95: "Low-TB area — 95% confidence",
   coldspot_99: "Low-TB area — 99% confidence",
+};
+
+// Plain-language name of each swatch, so "light blue" is never a guess.
+const GI_SWATCH_NAME: Record<GiClass, string> = {
+  hotspot_99: "Red",
+  hotspot_95: "Orange",
+  not_significant: "No colour",
+  coldspot_95: "Light blue",
+  coldspot_99: "Dark blue",
+};
+
+const GI_RULE: Record<GiClass, string> = {
+  hotspot_99: "Gi* z ≥ 2.58",
+  hotspot_95: "Gi* z 1.96 to 2.57",
+  not_significant: "Gi* z between −1.96 and 1.96",
+  coldspot_95: "Gi* z −1.96 to −2.57 — fewer cases than expected",
+  coldspot_99: "Gi* z ≤ −2.58 — far fewer cases than expected",
 };
 
 const GI_ORDER: GiClass[] = [
@@ -181,6 +217,23 @@ export function Hotspots() {
   // Area staff see where the hotspots are, not how many patients sit behind
   // them — case figures stay with citywide accounts.
   const showCaseCounts = !scope.scoped;
+  const { profile } = useAuth();
+  // How the map is coloured. Traffic light (red / yellow / green) is the
+  // default reading; the Gi* classes stay one click away for coordinators.
+  const [colorMode, setColorMode] = useState<"traffic" | "gi">("traffic");
+  // Jurisdiction. Area staff open on their own barangay and the barangays
+  // around it — the neighbours are what Gi* compares them with — and can
+  // widen to the whole city. Citywide roles have the whole city as theirs.
+  const [view, setView] = useState<"mine" | "city">(scope.scoped ? "mine" : "city");
+  const [railTab, setRailTab] = useState<"hotspots" | "barangays">(
+    scope.scoped ? "barangays" : "hotspots"
+  );
+  const [lightFilter, setLightFilter] = useState<TrafficLight | "all">("all");
+  const jurisdiction = useMemo<Set<number> | null>(() => {
+    if (view === "city" || scope.psgc === null) return null;
+    const nbrs = (barangayNeighbors as Record<string, number[]>)[String(scope.psgc)] ?? [];
+    return new Set([scope.psgc, ...nbrs]);
+  }, [view, scope.psgc]);
   const [list, setList] = useState<Hotspot[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
@@ -390,6 +443,12 @@ export function Hotspots() {
   }, []);
 
   const center = useMemo<[number, number]>(() => [7.0731, 125.6128], []);
+  // In "My area" the circles follow the jurisdiction too, not just the fill.
+  const visibleList = useMemo(
+    () =>
+      jurisdiction === null ? list : list.filter((h) => jurisdiction.has(Number(h.barangay_psgc))),
+    [list, jurisdiction]
+  );
   const urgentCount = useMemo(
     () => list.filter((h) => h.severity === "urgent" || h.severity === "high").length,
     [list]
@@ -398,16 +457,45 @@ export function Hotspots() {
   // honest "last checked" time; the newest hotspot row is the fallback.
   const lastChecked = run?.run_at ?? (list.length > 0 ? list[0].detected_at : null);
 
+  const ranges = useMemo(() => caseRanges(results.values()), [results]);
+  // Same idea for the detailed Gi* classes: what each colour covered this run.
+  const giRanges = useMemo(() => {
+    const out = new Map<GiClass, { barangays: number; min: number; max: number }>();
+    for (const r of results.values()) {
+      const cur = out.get(r.gi_class);
+      if (!cur) out.set(r.gi_class, { barangays: 1, min: r.case_count, max: r.case_count });
+      else {
+        cur.barangays += 1;
+        cur.min = Math.min(cur.min, r.case_count);
+        cur.max = Math.max(cur.max, r.case_count);
+      }
+    }
+    return out;
+  }, [results]);
+
   const geoStyle = (feature?: GeoJSON.Feature): PathOptions => {
     const psgc = Number(feature?.properties?.psgc);
     const r = results.get(psgc);
-    const fill = r ? GI_FILL[r.gi_class] : null;
+    const outside = jurisdiction !== null && !jurisdiction.has(psgc);
+    const own = scope.psgc !== null && psgc === scope.psgc;
+    let fill: string | null;
+    let opacity: number;
+    if (colorMode === "traffic") {
+      const light = trafficLightFor(r?.gi_z);
+      fill = TRAFFIC[light].color;
+      opacity = light === "red" ? 0.5 : light === "yellow" ? 0.45 : 0.32;
+    } else {
+      fill = r ? GI_FILL[r.gi_class] : null;
+      opacity = fill ? 0.38 : 0;
+    }
     return {
-      color: "#94a3b8",
-      weight: 0.6,
-      opacity: 0.35,
+      color: own ? "#ffffff" : "#94a3b8",
+      weight: own ? 2.4 : 0.6,
+      opacity: own ? 0.95 : 0.35,
       fillColor: fill ?? "#0f172a",
-      fillOpacity: fill ? 0.38 : 0,
+      // Outside the jurisdiction the colour is kept, just faded, so the
+      // neighbouring context is still readable.
+      fillOpacity: outside ? opacity * 0.3 : opacity,
     };
   };
 
@@ -432,11 +520,15 @@ export function Hotspots() {
             <OpenFreeMapLayer styleName="dark" />
             <ZoomControl position="bottomleft" />
             <ZoomWatcher onZoom={setZoom} />
-            <FitToHotspots hotspots={list} />
+            {jurisdiction === null ? (
+              <FitToHotspots hotspots={list} />
+            ) : (
+              <FitToJurisdiction geo={geo} psgcs={jurisdiction} />
+            )}
             {geo && (
               // Keyed on the run so Leaflet restyles when a new run lands.
               <GeoJSON
-                key={run?.id ?? "no-run"}
+                key={`${run?.id ?? "no-run"}-${colorMode}-${view}`}
                 data={geo}
                 style={geoStyle}
                 onEachFeature={(feature, layer) => {
@@ -447,8 +539,12 @@ export function Hotspots() {
                   const name = escapeHtml(String(feature.properties?.ADM4_EN ?? ""));
                   const dot = GI_FILL[r.gi_class] ?? "#94a3b8";
                   const cases = r.case_count;
+                  const light = TRAFFIC[trafficLightFor(r.gi_z)];
                   const card =
                     `<div style="font-size:12px;font-weight:600;color:#fff">${name}</div>` +
+                    `<div style="margin-top:3px;display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:${light.color}">` +
+                    `<span style="width:9px;height:9px;border-radius:9999px;background:${light.color};flex-shrink:0"></span>` +
+                    `${light.label}</div>` +
                     `<div style="margin-top:2px;display:flex;align-items:center;gap:6px;font-size:11px;color:#cbd5e1">` +
                     `<span style="width:8px;height:8px;border-radius:9999px;background:${dot};flex-shrink:0"></span>` +
                     `${GI_LABEL[r.gi_class]}</div>` +
@@ -482,7 +578,7 @@ export function Hotspots() {
                 otherwise be drawn over them — swallowing every click and
                 hover meant for a hotspot. */}
             <Pane name="hotspot-circles" style={{ zIndex: 450 }}>
-            {list.map((h) => {
+            {visibleList.map((h) => {
               const color = SEVERITY_COLOR[h.severity];
               const r = Math.min(30, 10 + Math.max(0, h.gi_z ?? 0) * 3);
               return (
@@ -622,7 +718,7 @@ export function Hotspots() {
                 name="hotspot-labels"
                 style={{ zIndex: 460, pointerEvents: "none" }}
               >
-                {list.map((h) => (
+                {visibleList.map((h) => (
                   <Marker
                     key={h.id}
                     position={[h.centroid_lat, h.centroid_lon]}
@@ -707,19 +803,21 @@ export function Hotspots() {
           )}
         </button>
         )}
-        {scope.scoped && (
-          <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
-            Showing hotspots for{" "}
-            <span className="font-semibold text-slate-300">
-              {scope.name ?? "your assigned area"}
-            </span>
-            . Detection itself runs city-wide, so your barangay is always
-            compared against its real neighbours.
-          </p>
-        )}
+        <JurisdictionBlock
+          roleLabel={profile ? ROLE_LABELS[profile.role] : "Staff"}
+          scoped={scope.scoped}
+          areaName={scope.name}
+          hasArea={scope.psgc !== null}
+          view={view}
+          onView={setView}
+          ownLight={
+            scope.psgc !== null ? trafficLightFor(results.get(scope.psgc)?.gi_z) : null
+          }
+          neighbourCount={jurisdiction ? jurisdiction.size - 1 : 0}
+        />
       </div>
 
-      {showHotspotList && (
+      {(showHotspotList || results.size > 0) && (
       <>
       {/* ── Detections chip — compact, only while the rail is hidden ─── */}
       <div className="pointer-events-none absolute right-3 top-3 z-[500] md:hidden">
@@ -745,9 +843,23 @@ export function Hotspots() {
         }
       >
         <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
-          <div className={"flex items-center gap-1.5 " + PANEL_TITLE}>
-            <AlertTriangle className="h-4 w-4 text-vigil-400" />
-            Hotspot areas
+          <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-0.5">
+            {(showHotspotList
+              ? (["hotspots", "barangays"] as const)
+              : (["barangays"] as const)
+            ).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setRailTab(t)}
+                className={
+                  "rounded-md px-2 py-1 text-[11px] font-semibold transition " +
+                  (railTab === t ? "bg-white/15 text-white" : "text-slate-400 hover:text-white")
+                }
+              >
+                {t === "hotspots" ? "Hotspot areas" : "Traffic light"}
+              </button>
+            ))}
           </div>
           <div className="flex items-center gap-2">
             {list.length > 0 && (
@@ -766,6 +878,22 @@ export function Hotspots() {
             </button>
           </div>
         </div>
+        {railTab === "barangays" ? (
+          <TrafficLightList
+            results={results}
+            jurisdiction={jurisdiction}
+            ownPsgc={scope.psgc}
+            showCounts={showCaseCounts}
+            filter={lightFilter}
+            onFilter={setLightFilter}
+            onPick={(psgc) => {
+              const b = barangays.find((x) => x.psgc === psgc);
+              if (b) mapRef.current?.flyTo([b.lat, b.lon], 14, { duration: 0.8 });
+              setSelected(psgc);
+            }}
+          />
+        ) : (
+        <>
         <div className="border-b border-white/10 px-4 py-2">
           <p className="text-[11px] leading-snug text-slate-400">
             Hotspot barangays over the last {windowDays} days, strongest
@@ -824,6 +952,8 @@ export function Hotspots() {
             ))}
           </ul>
         )}
+        </>
+        )}
       </div>
 
       {/* ── Reopen tab — only on desktop while the rail is hidden ────── */}
@@ -855,28 +985,87 @@ export function Hotspots() {
         />
       )}
 
-      {/* ── Severity legend — bottom-left, clear of the zoom control ── */}
-      <div className={"absolute bottom-3 left-14 z-[500] px-3 py-2 sm:bottom-4 sm:left-16 " + GLASS}>
-        <div className="text-[11px] font-semibold text-slate-200">
-          What the colours mean
+      {/* ── Legend — bottom-left, clear of the zoom control ─────────── */}
+      {/* Docked left of the right rail on desktop so it never sits on top of
+          the tall title panel. */}
+      <div
+        className={
+          "absolute bottom-3 left-14 z-[500] w-[19rem] px-3 py-2.5 sm:bottom-4 sm:left-16 md:left-auto " +
+          (railOpen && (showHotspotList || results.size > 0) ? "md:right-[19.5rem] " : "md:right-4 ") +
+          GLASS
+        }
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[11px] font-semibold text-slate-200">
+            What the colours mean
+          </div>
+          <div className="flex items-center gap-0.5 rounded-md border border-white/10 bg-white/5 p-0.5">
+            {(["traffic", "gi"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setColorMode(m)}
+                className={
+                  "rounded px-1.5 py-0.5 text-[10px] font-semibold transition " +
+                  (colorMode === m ? "bg-white/15 text-white" : "text-slate-400 hover:text-white")
+                }
+              >
+                {m === "traffic" ? "Traffic light" : "Detailed"}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
-          {GI_ORDER.map((c) => (
-            <span
-              key={c}
-              className="inline-flex items-center gap-1 text-[11px] text-slate-300"
-            >
-              <span
-                className="inline-block h-2.5 w-2.5 rounded-sm"
-                style={{ background: GI_FILL[c] ?? undefined }}
-              />
-              {GI_LABEL[c]}
-            </span>
-          ))}
-        </div>
-        <div className="mt-1 text-[10px] text-slate-500">
-          Barangays with no colour show no clear pattern.
-        </div>
+        {colorMode === "traffic" ? (
+          <ul className="mt-2 space-y-1.5">
+            {TRAFFIC_ORDER.map((t) => (
+              <li key={t} className="flex items-start gap-2">
+                <span
+                  className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded-full"
+                  style={{ background: TRAFFIC[t].color, boxShadow: `0 0 6px ${TRAFFIC[t].color}` }}
+                />
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold text-white">{TRAFFIC[t].label}</div>
+                  <div className="text-[10px] leading-snug text-slate-400">
+                    {TRAFFIC[t].rule}
+                    {showCaseCounts && <> · this run: {formatRange(ranges[t])}</>}
+                    {!showCaseCounts && ranges[t] && (
+                      <> · {ranges[t]!.barangays} barangay{ranges[t]!.barangays === 1 ? "" : "s"}</>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <ul className="mt-2 space-y-1">
+            {GI_ORDER.map((c) => (
+              <li key={c} className="flex items-start gap-2 text-[11px] text-slate-300">
+                <span
+                  className="mt-0.5 inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                  style={{ background: GI_FILL[c] ?? undefined }}
+                />
+                <span>
+                  <span className="font-semibold text-white">{GI_SWATCH_NAME[c]}</span> ={" "}
+                  {GI_LABEL[c]}
+                  <span className="block text-[10px] text-slate-500">
+                    {GI_RULE[c]}
+                    {showCaseCounts
+                      ? ` · this run: ${formatRange(giRanges.get(c) ?? null)}`
+                      : giRanges.get(c)
+                        ? ` · ${giRanges.get(c)!.barangays} barangays`
+                        : ""}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-2 border-t border-white/10 pt-1.5 text-[10px] leading-snug text-slate-500">
+          The colour is not a fixed number of cases. A barangay turns red when it
+          and its neighbouring barangays together have significantly more TB
+          than the city average (Getis-Ord Gi*).
+          {showCaseCounts && " The case ranges show how many cases each colour covered in the latest run."}
+        </p>
         <ConfidenceExplainer tone="dark" className="mt-1.5 max-w-xs" />
       </div>
 
@@ -1209,4 +1398,231 @@ function hotspotLabelIcon(name: string, r: number) {
     // Anchor at the circle's centre; the pill is pushed below the halo.
     iconAnchor: [0, -(r + 9)],
   });
+}
+
+/**
+ * Whose area this view covers. Area staff (barangay admin, health worker)
+ * see their assigned barangay and its neighbours by default; citywide roles
+ * (TB coordinator, system admin) have the whole city as their jurisdiction.
+ */
+function JurisdictionBlock({
+  roleLabel,
+  scoped,
+  areaName,
+  hasArea,
+  view,
+  onView,
+  ownLight,
+  neighbourCount,
+}: {
+  roleLabel: string;
+  scoped: boolean;
+  areaName: string | null;
+  hasArea: boolean;
+  view: "mine" | "city";
+  onView: (v: "mine" | "city") => void;
+  ownLight: TrafficLight | null;
+  neighbourCount: number;
+}) {
+  return (
+    <div className="mt-3 border-t border-white/10 pt-2.5">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-200">
+        <MapPin className="h-3.5 w-3.5 text-accent-400" />
+        Your jurisdiction
+      </div>
+      {!scoped ? (
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+          <span className="font-semibold text-slate-200">Whole city</span> — all
+          182 barangays, as {roleLabel}.
+        </p>
+      ) : !hasArea ? (
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+          No barangay is assigned to your account yet, so the whole city is
+          shown. Ask the System Admin to set your area.
+        </p>
+      ) : (
+        <>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+            <span className="font-semibold text-slate-200">{areaName}</span>{" "}
+            ({roleLabel})
+            {ownLight && (
+              <>
+                {" "}is{" "}
+                <span className="font-semibold" style={{ color: TRAFFIC[ownLight].color }}>
+                  {TRAFFIC[ownLight].label}
+                </span>
+              </>
+            )}
+            .
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg border border-white/10 bg-white/5 p-0.5">
+            {(["mine", "city"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => onView(v)}
+                className={
+                  "rounded-md px-2 py-1 text-[11px] font-semibold transition " +
+                  (view === v ? "bg-white/15 text-white" : "text-slate-400 hover:text-white")
+                }
+              >
+                {v === "mine" ? "My area" : "Whole city"}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] leading-snug text-slate-500">
+            {view === "mine"
+              ? `Showing ${areaName} and its ${neighbourCount} neighbouring barangays. Detection still runs city-wide, so your area is compared with its real neighbours.`
+              : "Showing the whole city for context. Case details stay limited to your assigned area."}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Every barangay with its traffic-light colour, red first. */
+function TrafficLightList({
+  results,
+  jurisdiction,
+  ownPsgc,
+  showCounts,
+  filter,
+  onFilter,
+  onPick,
+}: {
+  results: Map<number, GiResultRow>;
+  jurisdiction: Set<number> | null;
+  ownPsgc: number | null;
+  showCounts: boolean;
+  filter: TrafficLight | "all";
+  onFilter: (f: TrafficLight | "all") => void;
+  onPick: (psgc: number) => void;
+}) {
+  const rows = useMemo(() => {
+    const rank: Record<TrafficLight, number> = { red: 0, yellow: 1, green: 2 };
+    return [...results.values()]
+      .filter((r) => jurisdiction === null || jurisdiction.has(Number(r.barangay_psgc)))
+      .map((r) => ({
+        psgc: Number(r.barangay_psgc),
+        name: barangayName(Number(r.barangay_psgc)),
+        light: trafficLightFor(r.gi_z),
+        cases: r.case_count,
+        z: r.gi_z,
+      }))
+      .sort(
+        (a, b) =>
+          rank[a.light] - rank[b.light] || b.z - a.z || a.name.localeCompare(b.name)
+      );
+  }, [results, jurisdiction]);
+  const counts = useMemo(() => {
+    const c: Record<TrafficLight, number> = { red: 0, yellow: 0, green: 0 };
+    for (const r of rows) c[r.light] += 1;
+    return c;
+  }, [rows]);
+  const shown = filter === "all" ? rows : rows.filter((r) => r.light === filter);
+
+  return (
+    <>
+      <div className="border-b border-white/10 px-4 py-2">
+        <p className="text-[11px] leading-snug text-slate-400">
+          {jurisdiction === null ? "Every barangay" : "Your area and its neighbours"},
+          coloured by the latest detection run. Tap one to open it.
+        </p>
+        <div className="mt-2 grid grid-cols-4 gap-1">
+          {(["all", ...TRAFFIC_ORDER] as const).map((f) => {
+            const on = filter === f;
+            const color = f === "all" ? "#cbd5e1" : TRAFFIC[f].color;
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => onFilter(f)}
+                className={
+                  "flex flex-col items-center rounded-md border px-1 py-1 transition " +
+                  (on ? "border-white/30 bg-white/15" : "border-white/10 hover:bg-white/5")
+                }
+              >
+                <span className="font-display text-sm font-extrabold tabular-nums" style={{ color }}>
+                  {f === "all" ? rows.length : counts[f]}
+                </span>
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                  {f === "all" ? "All" : TRAFFIC[f].short}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {shown.length === 0 ? (
+        <p className="px-4 py-10 text-center text-sm text-slate-400">
+          No barangay in this colour right now.
+        </p>
+      ) : (
+        <ul className="flex-1 divide-y divide-white/5 overflow-y-auto">
+          {shown.map((r) => (
+            <li key={r.psgc}>
+              <button
+                type="button"
+                onClick={() => onPick(r.psgc)}
+                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left transition hover:bg-white/5"
+                title={giDetail(r.z, null)}
+              >
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{
+                    background: TRAFFIC[r.light].color,
+                    boxShadow: `0 0 6px ${TRAFFIC[r.light].color}`,
+                  }}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-[13px] font-medium text-white">{r.name}</span>
+                    {r.psgc === ownPsgc && (
+                      <span className="shrink-0 rounded-full border border-accent-400/40 px-1.5 text-[9px] font-semibold uppercase tracking-wider text-accent-300">
+                        Yours
+                      </span>
+                    )}
+                  </span>
+                  <span className="block text-[10px] text-slate-400">
+                    {TRAFFIC[r.light].short}
+                    {showCounts && ` · ${r.cases} case${r.cases === 1 ? "" : "s"}`}
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/** Frames the map on the jurisdiction (own barangay + neighbours). */
+function FitToJurisdiction({
+  geo,
+  psgcs,
+}: {
+  geo: BarangayGeo | null;
+  psgcs: Set<number>;
+}) {
+  const map = useMap();
+  const key = [...psgcs].sort().join(",");
+  useEffect(() => {
+    if (!geo) return;
+    const features = geo.features.filter((f) => psgcs.has(Number(f.properties?.psgc)));
+    if (features.length === 0) return;
+    const bounds = leafletGeoJSON({ type: "FeatureCollection", features } as GeoJSON.FeatureCollection).getBounds();
+    if (bounds.isValid()) {
+      // Keep the area clear of the title panel (left) and the list (right).
+      map.fitBounds(bounds, {
+        paddingTopLeft: [300, 40],
+        paddingBottomRight: [320, 40],
+        animate: false,
+      });
+      map.fire("zoomend");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geo, key, map]);
+  return null;
 }

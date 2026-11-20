@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   MapContainer,
   Marker,
@@ -91,6 +92,18 @@ export function DotsCentersAdmin() {
     load();
   }, []);
 
+  // `?new=1` (from the Central Dashboard's "Add new facility") opens the
+  // form straight away.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (params.get("new") === "1") {
+      setForm({ ...EMPTY });
+      params.delete("new");
+      setParams(params, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function openNew() {
     setForm({ ...EMPTY });
   }
@@ -142,7 +155,7 @@ export function DotsCentersAdmin() {
       toast.error(error.message);
       return;
     }
-    toast.success(form.id ? "Center updated" : "Center added");
+    toast.success(form.id ? "Facility updated" : "Facility added — it is now live in the system");
     setForm(null);
     load();
   }
@@ -162,24 +175,42 @@ export function DotsCentersAdmin() {
   return (
     <>
       <PageHeader
-        title="DOTS Centers"
-        subtitle="Maintain the public DOTS Center Locator listing."
+        title="Health Facilities"
+        subtitle="Add a newly built or newly accredited facility, or update an existing one. A facility saved here appears right away in the DOTS Locator, the case form, staff assignment and the GIS map."
         actions={
-          <Button onClick={openNew}>
-            <Plus className="h-4 w-4" /> Add center
+          <Button onClick={openNew} className="whitespace-nowrap">
+            <Plus className="h-4 w-4" /> Add new facility
           </Button>
         }
       />
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+        {[
+          ["1", "Add the facility", "Name, address, barangay, contact and hours."],
+          ["2", "Pin it on the map", "Click the map to place it at its real location."],
+          ["3", "It goes live", "Staff can be assigned to it and cases registered there."],
+        ].map(([n, t, d]) => (
+          <div key={n} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-soft">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-600 font-mono text-xs font-bold text-white">
+              {n}
+            </span>
+            <div>
+              <div className="text-sm font-semibold text-slate-900">{t}</div>
+              <div className="text-xs text-slate-500">{d}</div>
+            </div>
+          </div>
+        ))}
+      </div>
 
       <Card className="overflow-hidden p-0">
         <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3">
           <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
             <MapPin className="h-3.5 w-3.5 text-accent-600" />
-            Registered centers
+            Registered facilities
           </div>
           {!loading && list.length > 0 && (
             <span className="font-mono text-[10px] tabular-nums text-slate-500">
-              {list.length} center{list.length === 1 ? "" : "s"}
+              {list.length} facilit{list.length === 1 ? "y" : "ies"}
             </span>
           )}
         </div>
@@ -190,8 +221,8 @@ export function DotsCentersAdmin() {
           <div className="px-4 py-14 text-center">
             <MapPinOff className="mx-auto h-6 w-6 text-slate-300" />
             <p className="mt-3 text-sm text-slate-500">
-              No DOTS centers yet. Click{" "}
-              <span className="font-semibold text-slate-700">Add center</span>{" "}
+              No facilities yet. Click{" "}
+              <span className="font-semibold text-slate-700">Add new facility</span>{" "}
               to publish the first location.
             </p>
           </div>
@@ -264,7 +295,7 @@ export function DotsCentersAdmin() {
             <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/95 px-5 py-3 backdrop-blur">
               <div className={"flex items-center gap-1.5 " + MICRO_LABEL}>
                 <MapPin className="h-3.5 w-3.5 text-accent-600" />
-                {form.id ? "Edit DOTS Center" : "Add DOTS Center"}
+                {form.id ? "Edit facility" : "Add new facility"}
               </div>
               <Button
                 variant="ghost"
@@ -381,7 +412,7 @@ export function DotsCentersAdmin() {
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
-                  {form.id ? "Save changes" : "Add center"}
+                  {form.id ? "Save changes" : "Add facility"}
                 </Button>
               </div>
             </div>

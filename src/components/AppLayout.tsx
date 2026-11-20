@@ -76,7 +76,7 @@ const PLAIN_LABELS: Record<string, string> = {
 //                     Analytics, DOTS Centers admin, Bulk Import, Chatbot,
 //                     Settings, Users (read-only + password resets).
 //   barangay_admin  : Active Case Finding (encode + trends), GIS Map, Alerts.
-//   health_worker   : Cases + Alerts + GIS Heatmap + AI Analytics.
+//   health_worker   : Cases + Alerts + GIS Heatmap + Analytics.
 //   patient         : no staff role yet (fresh sign-up) — no app access.
 const NAV: NavItem[] = [
   { to: "/app", label: "Dashboard", icon: Home, group: "Overview" },
@@ -125,7 +125,7 @@ const NAV: NavItem[] = [
   },
   {
     to: "/app/dots-admin",
-    label: "DOTS Centers",
+    label: "Health Facilities",
     icon: MapPinned,
     roles: ["system_admin"],
     group: "Care",

@@ -9,6 +9,7 @@ import {
   MapPinned,
   Settings2,
   Users as UsersIcon,
+  Building2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Card, PageHeader, Spinner } from "../../components/ui";
@@ -41,6 +42,7 @@ const MICRO_LABEL =
 
 const QUICK_ACTIONS: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/app/users", label: "Manage users", icon: UsersIcon },
+  { to: "/app/dots-admin?new=1", label: "Add new facility", icon: Building2 },
   { to: "/app/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/app/settings", label: "Settings", icon: Settings2 },
 ];
