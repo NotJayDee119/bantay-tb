@@ -4,6 +4,7 @@ import {
   Activity,
   BarChart3,
   Download,
+  FileSpreadsheet,
   HeartPulse,
   Info,
   Lightbulb,
@@ -22,6 +23,7 @@ import type { LucideIcon } from "lucide-react";
 import { Button, Card, Modal, PageHeader, Select, Skeleton } from "../../components/ui";
 import { ColumnChart, DonutChart } from "../../components/charts";
 import { NEUTRAL, SERIES, toSlices, type Slice } from "../../lib/chartPalette";
+import { downloadChartWorkbook } from "../../lib/chartWorkbook";
 import { YearFilter } from "../../components/YearFilter";
 import {
   useCaseYear,
@@ -1359,6 +1361,29 @@ function ChartDetailModal({
   const rank =
     sel == null ? 0 : rows.filter((r) => r.value > sel.value).length + 1;
 
+  const fileStem = `bantay-tb-${id}-${new Date().toISOString().slice(0, 10)}`;
+
+  // Excel file with the same chart as the panel already drawn in it, so
+  // nobody has to build the pie/column chart by hand after exporting.
+  function exportExcel() {
+    downloadChartWorkbook(
+      {
+        title: spec.title,
+        description: spec.description,
+        note: spec.note,
+        kind: spec.kind,
+        sequential: spec.sequential,
+        color: spec.columnProps?.color ?? "#486581",
+        rows: rows.map((r) => ({
+          label: r.title ?? r.label,
+          value: r.value,
+          color: r.color,
+        })),
+      },
+      `${fileStem}.xlsx`
+    );
+  }
+
   function exportCsv() {
     const head = spec.sequential
       ? "Month,Cases,% of cases,Change vs previous month"
@@ -1378,7 +1403,7 @@ function ChartDetailModal({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `bantay-tb-${id}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `${fileStem}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -1393,9 +1418,23 @@ function ChartDetailModal({
       className="sm:max-w-4xl"
       footer={
         <>
-          <Button variant="secondary" size="sm" onClick={exportCsv}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={exportCsv}
+            title="Numbers only — CSV files cannot hold a chart"
+          >
             <Download className="h-4 w-4" />
-            Export CSV
+            CSV
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={exportExcel}
+            title="Excel file with the chart already drawn"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            Export Excel + chart
           </Button>
           <Button size="sm" onClick={onClose}>
             Close
